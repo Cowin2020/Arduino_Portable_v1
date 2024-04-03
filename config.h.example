@@ -1,0 +1,17 @@
+#ifndef INCLUDE_CONFIG_H
+#define INCLUDE_CONFIG_H
+
+bool const use_AP_mode = false;
+unsigned int measure_interval = 60000;
+char const AP_SSID[] = "My SSID";
+char const AP_PASS[] = "My password";
+char const STA_SSID[] = "Use this SSID";
+char const STA_PASS[] = "and password";
+
+unsigned int const start_wait_time = 6000;
+unsigned int const WiFi_wait_time = 20000;
+unsigned int const WiFi_check_interval = 10000;
+unsigned int const serial_baudrate = 115200;
+unsigned int const reinitialize_interval = 15000;
+
+#endif /* INCLUDE_CONFIG_H */

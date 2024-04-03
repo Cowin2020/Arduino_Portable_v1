@@ -1,0 +1,638 @@
+#include <deque>
+#include <chrono>
+#include <thread>
+#include <mutex>
+#include <Arduino.h>
+#include <esp_pthread.h>
+#include <WiFi.h>
+#include <DNSServer.h>
+#include <WebServer.h>
+#include <SD.h>
+#include <RTClib.h>
+#include <Adafruit_SSD1306.h>
+#include <Adafruit_BME280.h>
+
+#include "config.h"
+
+// static SPIClass SPI_1(HSPI);
+static bool has_SD_card;
+
+static std::mutex mutex_1;
+#define DISPLAY_MUTEX mutex_1
+#define HTTP_MUTEX mutex_1
+#define MEASURE_MUTEX mutex_1
+
+/*****************************************************************************/
+/* Real-time clock */
+
+static RTC_Millis internal_clock;
+static bool internal_clock_available = false;
+static RTC_DS3231 external_clock;
+static bool external_clock_available = false;
+
+static bool clock_available(void) {
+	return external_clock_available || internal_clock_available;
+}
+
+static void set_time(DateTime const datetime) {
+	if (external_clock_available) {
+		std::lock_guard<std::mutex> display_lock(DISPLAY_MUTEX);
+		external_clock.adjust(datetime);
+	}
+	else {
+		internal_clock.adjust(datetime);
+		internal_clock_available = true;
+	}
+}
+
+static DateTime get_time(void) {
+	if (external_clock_available) {
+		std::lock_guard<std::mutex> display_lock(DISPLAY_MUTEX);
+		return external_clock.now();
+	}
+	else {
+		return internal_clock.now();
+	}
+}
+
+/*****************************************************************************/
+/* Measurement */
+
+Adafruit_BME280 BME280;
+
+struct Data {
+	DateTime time;
+	float temperature;
+	float pressure;
+	float humidity;
+};
+
+size_t const records_max_size = 60;
+std::deque<Data> records;
+
+inline static String show_time(DateTime const datetime) {
+	if (datetime.isValid())
+		return datetime.timestamp();
+	else
+		return String("?");
+}
+
+static void measure(void) {
+	Data data;
+	if (clock_available())
+		data.time = get_time();
+	else
+		data.time = DateTime(0, 0, 0);
+	std::lock_guard<std::mutex> device_lock(MEASURE_MUTEX);
+	data.temperature = BME280.readTemperature();
+	data.pressure = BME280.readPressure();
+	data.humidity = BME280.readHumidity();
+
+	Serial.printf(
+		"Measure %s,%f,%f,%f\r\n",
+		show_time(data.time).c_str(), data.temperature, data.pressure, data.humidity
+	);
+
+	if (records.size() >= records_max_size) records.pop_back();
+	records.push_front(data);
+
+	if (has_SD_card) {
+		File file = SD.open("/all.csv", "a", true);
+		file.printf(
+			"%s,%f,%f,%f\r\n",
+			show_time(data.time).c_str(), data.temperature, data.pressure, data.humidity
+		);
+		file.close();
+	}
+}
+
+static void measure_thread(void) {
+	for (;;)
+		try {
+			measure();
+			// delay(measure_interval);
+			std::this_thread::sleep_for(std::chrono::duration<unsigned long int, std::milli>(measure_interval));
+		}
+		catch (...) {
+			std::lock_guard<std::mutex> display_lock(DISPLAY_MUTEX);
+			Serial.println("ERROR: exception in measurement");
+		}
+}
+
+/*****************************************************************************/
+/* WiFi */
+
+// static DNSServer DNSd;
+static WebServer HTTPd(80);
+static Adafruit_SSD1306 Monitor(128, 64);
+static IPAddress addr;
+
+static void handle_WiFi_event(WiFiEvent_t const event) {
+	switch (event) {
+	case ARDUINO_EVENT_WIFI_READY:
+		Serial.println("WiFi interface ready");
+		break;
+	case ARDUINO_EVENT_WIFI_SCAN_DONE:
+		Serial.println("Completed scan for access points");
+		break;
+	case ARDUINO_EVENT_WIFI_STA_START:
+		Serial.println("WiFi client started");
+		break;
+	case ARDUINO_EVENT_WIFI_STA_STOP:
+		Serial.println("WiFi clients stopped");
+		break;
+	case ARDUINO_EVENT_WIFI_STA_CONNECTED:
+		Serial.println("Connected to access point");
+		break;
+	case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
+		Serial.println("Disconnected from WiFi access point");
+		break;
+	case ARDUINO_EVENT_WIFI_STA_AUTHMODE_CHANGE:
+		Serial.println("Authentication mode of access point has changed");
+		break;
+	case ARDUINO_EVENT_WIFI_STA_GOT_IP:
+		Serial.print("Obtained IP address: ");
+		Serial.println(WiFi.localIP());
+		break;
+	case ARDUINO_EVENT_WIFI_STA_LOST_IP:
+		Serial.println("Lost IP address and IP address is reset to 0");
+		break;
+	case ARDUINO_EVENT_WPS_ER_SUCCESS:
+		Serial.println("WiFi Protected Setup (WPS): succeeded in enrollee mode");
+		break;
+	case ARDUINO_EVENT_WPS_ER_FAILED:
+		Serial.println("WiFi Protected Setup (WPS): failed in enrollee mode");
+		break;
+	case ARDUINO_EVENT_WPS_ER_TIMEOUT:
+		Serial.println("WiFi Protected Setup (WPS): timeout in enrollee mode");
+		break;
+	case ARDUINO_EVENT_WPS_ER_PIN:
+		Serial.println("WiFi Protected Setup (WPS): pin code in enrollee mode");
+		break;
+	case ARDUINO_EVENT_WIFI_AP_START:
+		Serial.println("WiFi access point started");
+		break;
+	case ARDUINO_EVENT_WIFI_AP_STOP:
+		Serial.println("WiFi access point  stopped");
+		break;
+	case ARDUINO_EVENT_WIFI_AP_STACONNECTED:
+		Serial.println("Client connected");
+		break;
+	case ARDUINO_EVENT_WIFI_AP_STADISCONNECTED:
+		Serial.println("Client disconnected");
+		break;
+	case ARDUINO_EVENT_WIFI_AP_STAIPASSIGNED:
+		Serial.println("Assigned IP address to client");
+		break;
+	case ARDUINO_EVENT_WIFI_AP_PROBEREQRECVED:
+		Serial.println("Received probe request");
+		break;
+	case ARDUINO_EVENT_WIFI_AP_GOT_IP6:
+		Serial.println("AP IPv6 is preferred");
+		break;
+	case ARDUINO_EVENT_WIFI_STA_GOT_IP6:
+		Serial.println("STA IPv6 is preferred");
+		break;
+	case ARDUINO_EVENT_ETH_GOT_IP6:
+		Serial.println("Ethernet IPv6 is preferred");
+		break;
+	case ARDUINO_EVENT_ETH_START:
+		Serial.println("Ethernet started");
+		break;
+	case ARDUINO_EVENT_ETH_STOP:
+		Serial.println("Ethernet stopped");
+		break;
+	case ARDUINO_EVENT_ETH_CONNECTED:
+		Serial.println("Ethernet connected");
+		break;
+	case ARDUINO_EVENT_ETH_DISCONNECTED:
+		Serial.println("Ethernet disconnected");
+		break;
+	case ARDUINO_EVENT_ETH_GOT_IP:
+		Serial.println("Obtained IP address");
+		break;
+	default:
+		Serial.print("Unknown WiFi event ");
+		Serial.println(event);
+		break;
+	}
+}
+
+static char const *status_message(signed int const WiFi_status) {
+	switch (WiFi_status) {
+	case WL_NO_SHIELD:
+		return "WiFi no shield";
+	case WL_IDLE_STATUS:
+		return "WiFi idle";
+	case WL_NO_SSID_AVAIL:
+		return "WiFi no SSID";
+	case WL_SCAN_COMPLETED:
+		return "WiFi scan completed";
+	case WL_CONNECTED:
+		return "WiFi connected";
+	case WL_CONNECT_FAILED:
+		return "WiFi connect failed";
+	case WL_CONNECTION_LOST:
+		return "WiFi connection lost";
+	case WL_DISCONNECTED:
+		return "WiFi disconnected";
+	default:
+		return "WiFi Status: " + WiFi_status;
+	}
+}
+
+static signed int check_WiFi_status(void) {
+	static signed int last_status = WL_NO_SHIELD;
+	signed int status = WiFi.status();
+	if (status != last_status) {
+		last_status = status;
+		String const message = status_message(status);
+		Serial.println(message);
+		Monitor.clearDisplay();
+		Monitor.setCursor(0, 0);
+		Monitor.println(message);
+		if (status == WL_CONNECTED) {
+			String const SSID = WiFi.SSID();
+			Serial.print("WiFi SSID: ");
+			Serial.println(SSID);
+			Monitor.println("WiFi SSID:");
+			Monitor.println(SSID);
+			addr = WiFi.localIP();
+			Serial.print("IP address: ");
+			Serial.println(addr);
+			Monitor.println("IP address:");
+			Monitor.println(addr);
+		}
+		Monitor.display();
+	}
+	return status;
+}
+
+static void wifi_thread(void) {
+	for (;;)
+		try {
+			delay(WiFi_check_interval);
+			check_WiFi_status();
+		}
+		catch (...) {
+			std::lock_guard<std::mutex> display_lock(DISPLAY_MUTEX);
+			Serial.println("ERROR: exception in WiFi checking");
+		}
+}
+
+static void setup_wifi(void) {
+	WiFi.disconnect();
+	WiFi.onEvent(handle_WiFi_event);
+
+	if (use_AP_mode) {
+		/* WiFi access-point */
+		WiFi.disconnect();
+		WiFi.mode(WIFI_AP);
+		WiFi.setHostname("WeatherStation");
+		// addr = IPAddress(8, 8, 8, 8);
+		// WiFi.softAPConfig(addr, addr, IPAddress(255, 255, 255, 0));
+		while (!WiFi.softAP(AP_SSID, AP_PASS, 1, 0, 2)) {
+			Serial.println("ERROR: failed to create soft AP");
+			Monitor.println("ERROR: WiFi AP");
+			Monitor.display();
+			delay(reinitialize_interval);
+		}
+		addr = WiFi.softAPIP();
+		String const SSID = WiFi.softAPSSID();
+		Serial.print("WiFi SSID: ");
+		Serial.println(SSID);
+		Monitor.println("WiFi SSID:");
+		Monitor.println(SSID);
+		Serial.print("IP address: ");
+		Serial.println(addr);
+		Monitor.println("IP address:");
+		Monitor.println(addr);
+		Monitor.display();
+
+		/* DNS server */
+		// static uint16_t const DNS_port = 53;
+		// static String const DNS_domain("*");
+		// while (!DNSd.start(DNS_port, DNS_domain, addr)) {
+		// 	Serial.println("ERROR: failed to create DNS server");
+		// 	Monitor.println("ERROR: DNS server");
+		// 	delay(reinitialize_interval);
+		// }
+	}
+	else {
+		/* WiFi stationary */
+		WiFi.mode(WIFI_STA);
+		WiFi.begin(STA_SSID, STA_PASS);
+		while (WiFi.status() == WL_NO_SHIELD) {
+			Serial.println("ERROR: no WiFi shield");
+			Monitor.println("ERROR: WiFi shield");
+			Monitor.display();
+			delay(reinitialize_interval);
+		}
+		while (millis() < WiFi_wait_time) {
+			delay(2);
+			if (WiFi.status() == WL_CONNECTED) {
+				addr = WiFi.localIP();
+				break;
+			}
+		}
+		std::thread(wifi_thread).detach();
+	}
+}
+
+/*****************************************************************************/
+/* Web server */
+
+static PROGMEM char const web_html[] =
+R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
+	<head>
+		<meta content-type='application/xhtml+xml; charset=UTF-8' />
+		<meta charset='UTF-8' />
+		<meta name='viewport' content='width=device-width, initial-scale=1' />
+		<title>Weather data</title>
+		<link rel='stylesheet' type='text/css' href='style.css' />
+	</head>
+	<body>
+		<noscript>Javascript is required for this webpage.</noscript>
+		<script type='text/javascript'>
+			(function(p){document.readyState!=='loading'?p():document.addEventListener('DOMContentLoaded',p)})(function(){
+				'use strict';
+				var records = new Array();
+				function $T(string) {
+					return document.createTextNode(string);
+				}
+				function $E(name) {
+					return document.createElementNS(document.documentElement.namespaceURI, name);
+				}
+				void function () {
+					var $p, $a;
+					$p = $E('p');
+					$p.style['text-align'] = 'center';
+					$a = $E('a');
+					$a.style['margin-right'] = '2ex';
+					$a.style['border'] = 'solid thin gray';
+					$a.style['padding'] = '1ex';
+					$a.setAttribute('href', 'recent.csv');
+					$a.setAttribute('download', '');
+					$a.appendChild($T('Download recent data'));
+					$p.appendChild($a);
+					$a = $E('a');
+					$a.style['margin-left'] = '2ex';
+					$a.style['padding'] = '1ex';
+					$a.style['border'] = 'solid thin gray';
+					$a.setAttribute('href', 'all.csv');
+					$a.setAttribute('download', '');
+					$a.appendChild($T('Download all data'));
+					$p.appendChild($a);
+					document.body.appendChild($p);
+				}();
+				var $reflesh, $auto;
+				void function () {
+					var $form, $button, $label, $input;
+					$reflesh = $form = $E('form');
+					$form.style['margin-top'] = '2ex';
+					$form.style['margin-bottom'] = '2ex';
+					$button = $E('button');
+					$button.setAttribute('type', 'submit');
+					$button.appendChild($T('Reflesh now'));
+					$form.appendChild($button);
+					$label = $E('label');
+					$label.style['margin-left'] = '2ex';
+					$label.style['padding'] = '1ex';
+					$label.style['border'] = 'solid thin gray';
+					$auto = $input = $E('input');
+					$input.setAttribute('type', 'checkbox');
+					$label.appendChild($input);
+					$label.appendChild($T('Auto reflesh'));
+					$form.appendChild($label);
+					document.body.appendChild($form);
+				}();
+				var $list;
+				void function () {
+					var $table, $thead, $th, $tbody;
+					$table = $E('table');
+					$table.style['width'] = '100%';
+					$table.style['border-collapse'] = 'collapse';
+					$thead = $E('thead');
+					$th = $E('th');
+					$th.appendChild($T('Time'));
+					$thead.appendChild($th);
+					$th = $E('th');
+					$th.appendChild($T('Temperature'));
+					$thead.appendChild($th);
+					$th = $E('th');
+					$th.appendChild($T('Pressure'));
+					$thead.appendChild($th);
+					$th = $E('th');
+					$th.appendChild($T('Humidity'));
+					$thead.appendChild($th);
+					$table.appendChild($thead);
+					$list = $tbody = $E('tbody');
+					$table.appendChild($tbody);
+					document.body.appendChild($table);
+					return $tbody;
+				}();
+				function load() {
+					var xhr = new XMLHttpRequest();
+					xhr.onloadend = function (event) {
+						var text = xhr.responseText;
+						if (text == null || xhr.status !== 200) {
+							alert('Failed to load data');
+							return;
+						}
+						var lines = text.split('\r\n');
+						if (!lines || !(lines.length > 0)) return;
+						$list.textContent = null;
+						for (var i = 1; lines.length > i; ++i) {
+							if (!lines[i] || typeof lines[i] !== 'string') continue;
+							var fields = lines[i].split(',');
+							var $tr = $E('tr');
+							for (var j = 0; fields.length > j; ++j) {
+								var $td = $E('td');
+								$td.style['border-style'] = 'solid';
+								$td.style['border-width'] = 'thin';
+								$td.style['text-align'] = 'center';
+								$td.appendChild($T(fields[j]));
+								$tr.appendChild($td);
+							}
+							$list.appendChild($tr);
+						}
+					};
+					xhr.open('GET', '/recent.csv', true);
+					xhr.send(null);
+				}
+				$reflesh.addEventListener(
+					'submit',
+					function (event) {
+						event.preventDefault();
+						load();
+					}
+				);
+				var timer = null;
+				$auto.addEventListener(
+					'change',
+					function (event) {
+						if ($auto.checked) {
+							if (timer !== null) return;
+							timer = setInterval(load, 30000);
+						}
+						else {
+							if (timer === null) return;
+							clearInterval(timer);
+							timer = null;
+						}
+					}
+				);
+				return new Promise(
+					function (resolve) {
+						return import('./script.js')
+							.then(function () {}, load)
+							.then(resolve);
+					}
+				);
+			});
+		</script>
+	</body>
+</html>
+)HTML";
+
+static void respond_web_html(void) {
+	HTTPd.send(200, "application/xhtml+xml", web_html);
+}
+
+static PROGMEM char const web_icon[] = {
+	/* PNG signature */
+	0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+	/* data length */
+	0x00, 0x00, 0x00, 0x0D,
+	/* "IHDR" as ASCII */
+	0x49, 0x48, 0x44, 0x52,
+	/* width */
+	0x00, 0x00, 0x00, 0x01,
+	/* height */
+	0x00, 0x00, 0x00, 0x01,
+	/* bit depth */
+	0x01,
+	/* colour type */
+	0x00,
+	/* compression method */
+	0x00,
+	/* filter method */
+	0x00,
+	/* interlace method */
+	0x00,
+	/* checksum */
+	0x37, 0x6E, 0xF9, 0x24
+};
+
+static void respond_web_icon(void) {
+	HTTPd.send(200, "image/png", web_icon);
+}
+
+static void respond_web_data(void) {
+	// HTTPd.setContentLength(CONTENT_LENGTH_UNKNOWN);
+	String content("time,temperature,pressure,humidity\r\n");
+	for (Data data: records) {
+		content =
+			content
+				+ show_time(data.time) + ","
+				+ data.temperature + ","
+				+ data.pressure + ","
+				+ data.humidity + "\r\n";
+	}
+	HTTPd.send(200, "text/csv", content);
+}
+
+static class FileHandler : public RequestHandler {
+	public:
+		bool canHandle(HTTPMethod method, String link) override;
+		bool handle(WebServer &server, HTTPMethod method, String link) override;
+} file_handler;
+
+bool FileHandler::canHandle(HTTPMethod const method, String const link) {
+	Serial.print("HTTP can handle: ");
+	Serial.println(link);
+	return method == HTTP_GET;
+}
+
+bool FileHandler::handle([[unused]] WebServer &server, [[unused]] HTTPMethod const method, String const link) {
+	Serial.print("HTTP: ");
+	Serial.println(link);
+	return false;
+}
+
+// static void respond_web_not_found(void) {
+// 	HTTPd.sendHeader("Location", String("http://") + addr + "/");
+// 	HTTPd.send(303, "text/plain", "Redirect...");
+// }
+
+static void setup_webserver(void) {
+	HTTPd.enableCORS(true);
+	HTTPd.enableCrossOrigin(true);
+	HTTPd.on("/", HTTP_GET, respond_web_html);
+	HTTPd.on("/favicon.ico", HTTP_GET, respond_web_icon);
+	HTTPd.on("/recent.csv", respond_web_data);
+	HTTPd.addHandler(&file_handler);
+	if (has_SD_card) HTTPd.serveStatic("/", SD, "/");
+	// HTTPd.onNotFound(respond_web_not_found);
+	HTTPd.begin();
+}
+
+/*****************************************************************************/
+/* Main procedures */
+
+void loop(void) {
+	delay(2);
+	// if (use_AP_mode) DNSd.processNextRequest();
+	std::lock_guard<std::mutex> lock(HTTP_MUTEX);
+	HTTPd.handleClient();
+}
+
+void setup(void) {
+	/* Serial port */
+	Serial.begin(serial_baudrate);
+	delay(start_wait_time);
+
+	/* OLED display */
+	Monitor.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+	Monitor.setRotation(2);
+	Monitor.setTextColor(SSD1306_WHITE, SSD1306_BLACK);
+	Monitor.clearDisplay();
+	Monitor.display();
+	Monitor.setCursor(0, 0);
+
+	/* SD */
+	pinMode(SD_MISO, INPUT_PULLUP);
+	SPI.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
+	has_SD_card = SD.begin(SD_CS, SPI);
+	if (!has_SD_card) {
+		Serial.println("WARN: SD card not found");
+		Monitor.println("No SD card");
+		Monitor.display();
+	}
+
+	/* Clock */
+	external_clock_available = external_clock.begin();
+
+	/* Sensor */
+	while (!BME280.begin()) {
+		Serial.println("ERROR: BME280 not found");
+		Monitor.println("ERROR: BME280");
+		Monitor.display();
+		delay(reinitialize_interval);
+	}
+
+	/* WiFi */
+	setup_wifi();
+
+	/* Web server */
+	setup_webserver();
+
+	/* Spawn measurement thread */
+	static esp_pthread_cfg_t esp_pthread_cfg = esp_pthread_get_default_config();
+	esp_pthread_cfg.stack_size = 4096;
+	esp_pthread_cfg.inherit_cfg = true;
+	esp_pthread_set_cfg(&esp_pthread_cfg);
+	std::thread(measure_thread).detach();
+}
+
+/*****************************************************************************/
