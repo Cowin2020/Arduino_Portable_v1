@@ -353,160 +353,171 @@ static void setup_wifi(void) {
 
 static PROGMEM char const home_html[] =
 R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
-	<head>
-		<meta content-type='application/xhtml+xml; charset=UTF-8' />
-		<meta charset='UTF-8' />
-		<meta name='viewport' content='width=device-width, initial-scale=1' />
-		<title>Weather data</title>
-		<link rel='stylesheet' type='text/css' href='style.css' />
-	</head>
-	<body>
-		<noscript>Javascript is required for this webpage.</noscript>
-		<script type='text/javascript'>
-			(function(p){document.readyState!=='loading'?p():document.addEventListener('DOMContentLoaded',p)})(function(){
-				'use strict';
-				var records = new Array();
-				function $T(string) {
-					return document.createTextNode(string);
+<head>
+<meta content-type='application/xhtml+xml; charset=UTF-8' />
+<meta charset='UTF-8' />
+<meta name='viewport' content='width=device-width, initial-scale=1' />
+<title>Weather data</title>
+<link rel='stylesheet' type='text/css' href='style.css' />
+</head>
+<body>
+<noscript>Javascript is required for this webpage.</noscript>
+<script type='text/javascript'>
+	(function(p){document.readyState!=='loading'?p():document.addEventListener('DOMContentLoaded',p)})(function(){
+		'use strict';
+		var records = new Array();
+		function $T(string) {
+			return document.createTextNode(string);
+		}
+		function $E(name) {
+			return document.createElementNS(document.documentElement.namespaceURI, name);
+		}
+		function c_(parent, child) {
+			return parent.appendChild(child);
+		}
+		function s_(element, name, value) {
+			return element.style[name] = value;
+		}
+		function a_(element, name, value) {
+			return element.setAttribute(name, value);
+		}
+		void function () {
+			var $p, $a;
+			$p = $E('p');
+			s_($p, 'text-align', 'center');
+			$a = $E('a');
+			s_($a, 'margin', '1ex');
+			s_($a, 'border', 'solid thin gray');
+			s_($a, 'padding', '1ex');
+			a_($a, 'href', 'setting.html');
+			c_($a, $T('Settings'));
+			c_($p, $a);
+			$a = $E('a');
+			s_($a, 'margin', '1ex');
+			s_($a, 'border', 'solid thin gray');
+			s_($a, 'padding', '1ex');
+			a_($a, 'href', 'recent.csv');
+			a_($a, 'download', '');
+			c_($a, $T('Download recent data'));
+			c_($p, $a);
+			$a = $E('a');
+			s_($a, 'margin', '1ex');
+			s_($a, 'border', 'solid thin gray');
+			s_($a, 'padding', '1ex');
+			a_($a, 'href', 'all.csv');
+			a_($a, 'download', '');
+			c_($a, $T('Download all data'));
+			c_($p, $a);
+			c_(document.body, $p);
+		}();
+		var $reflesh, $auto;
+		void function () {
+			var $form, $button, $label, $input;
+			$reflesh = $form = $E('form');
+			s_($form, 'margin-top', '2ex');
+			s_($form, 'margin-bottom', '2ex');
+			$button = $E('button');
+			a_($button, 'type', 'submit');
+			c_($button, $T('Reflesh now'));
+			c_($form, $button);
+			$label = $E('label');
+			s_($label, 'margin-left', '2ex');
+			s_($label, 'padding', '1ex');
+			$auto = $input = $E('input');
+			a_($input, 'type', 'checkbox');
+			c_($label, $input);
+			c_($label, $T('Auto reflesh'));
+			c_($form, $label);
+			c_(document.body, $form);
+		}();
+		var $list;
+		void function () {
+			var $table, $thead, $tr, $th, $tbody;
+			$table = $E('table');
+			s_($table, 'width', '100%');
+			s_($table, 'border-collapse', 'collapse');
+			$thead = $E('thead');
+			$tr = $E('tr');
+			$th = $E('th');
+			c_($th, $T('Time'));
+			c_($tr, $th);
+			$th = $E('th');
+			c_($th, $T('Temperature'));
+			c_($tr, $th);
+			$th = $E('th');
+			c_($th, $T('Pressure'));
+			c_($tr, $th);
+			$th = $E('th');
+			c_($th, $T('Humidity'));
+			c_($tr, $th);
+			c_($thead, $tr);
+			c_($table, $thead);
+			$list = $tbody = $E('tbody');
+			c_($table, $tbody);
+			c_(document.body, $table);
+			return $tbody;
+		}();
+		function load() {
+			var xhr = new XMLHttpRequest();
+			xhr.onloadend = function (event) {
+				var text = xhr.responseText;
+				if (text == null || xhr.status !== 200) {
+					alert('Failed to load data');
+					return;
 				}
-				function $E(name) {
-					return document.createElementNS(document.documentElement.namespaceURI, name);
+				var lines = text.split('\r\n');
+				if (!lines || !(lines.length > 0)) return;
+				$list.textContent = null;
+				for (var i = 1; lines.length > i; ++i) {
+					if (!lines[i] || typeof lines[i] !== 'string') continue;
+					var fields = lines[i].split(',');
+					var $tr = $E('tr');
+					for (var j = 0; fields.length > j; ++j) {
+						var $td = $E('td');
+						s_($td, 'border-style', 'solid');
+						s_($td, 'border-width', 'thin');
+						s_($td, 'text-align', 'center');
+						c_($td, $T(fields[j]));
+						c_($tr, $td);
+					}
+					c_($list, $tr);
 				}
-				void function () {
-					var $p, $a;
-					$p = $E('p');
-					$p.style['text-align'] = 'center';
-					$a = $E('a');
-					$a.style['margin'] = '1ex';
-					$a.style['border'] = 'solid thin gray';
-					$a.style['padding'] = '1ex';
-					$a.setAttribute('href', 'setting.html');
-					$a.appendChild($T('Settings'));
-					$p.appendChild($a);
-					$a = $E('a');
-					$a.style['margin'] = '1ex';
-					$a.style['border'] = 'solid thin gray';
-					$a.style['padding'] = '1ex';
-					$a.setAttribute('href', 'recent.csv');
-					$a.setAttribute('download', '');
-					$a.appendChild($T('Download recent data'));
-					$p.appendChild($a);
-					$a = $E('a');
-					$a.style['margin'] = '1ex';
-					$a.style['border'] = 'solid thin gray';
-					$a.style['padding'] = '1ex';
-					$a.setAttribute('href', 'all.csv');
-					$a.setAttribute('download', '');
-					$a.appendChild($T('Download all data'));
-					$p.appendChild($a);
-					document.body.appendChild($p);
-				}();
-				var $reflesh, $auto;
-				void function () {
-					var $form, $button, $label, $input;
-					$reflesh = $form = $E('form');
-					$form.style['margin-top'] = '2ex';
-					$form.style['margin-bottom'] = '2ex';
-					$button = $E('button');
-					$button.setAttribute('type', 'submit');
-					$button.appendChild($T('Reflesh now'));
-					$form.appendChild($button);
-					$label = $E('label');
-					$label.style['margin-left'] = '2ex';
-					$label.style['padding'] = '1ex';
-					$auto = $input = $E('input');
-					$input.setAttribute('type', 'checkbox');
-					$label.appendChild($input);
-					$label.appendChild($T('Auto reflesh'));
-					$form.appendChild($label);
-					document.body.appendChild($form);
-				}();
-				var $list;
-				void function () {
-					var $table, $thead, $th, $tbody;
-					$table = $E('table');
-					$table.style['width'] = '100%';
-					$table.style['border-collapse'] = 'collapse';
-					$thead = $E('thead');
-					$th = $E('th');
-					$th.appendChild($T('Time'));
-					$thead.appendChild($th);
-					$th = $E('th');
-					$th.appendChild($T('Temperature'));
-					$thead.appendChild($th);
-					$th = $E('th');
-					$th.appendChild($T('Pressure'));
-					$thead.appendChild($th);
-					$th = $E('th');
-					$th.appendChild($T('Humidity'));
-					$thead.appendChild($th);
-					$table.appendChild($thead);
-					$list = $tbody = $E('tbody');
-					$table.appendChild($tbody);
-					document.body.appendChild($table);
-					return $tbody;
-				}();
-				function load() {
-					var xhr = new XMLHttpRequest();
-					xhr.onloadend = function (event) {
-						var text = xhr.responseText;
-						if (text == null || xhr.status !== 200) {
-							alert('Failed to load data');
-							return;
-						}
-						var lines = text.split('\r\n');
-						if (!lines || !(lines.length > 0)) return;
-						$list.textContent = null;
-						for (var i = 1; lines.length > i; ++i) {
-							if (!lines[i] || typeof lines[i] !== 'string') continue;
-							var fields = lines[i].split(',');
-							var $tr = $E('tr');
-							for (var j = 0; fields.length > j; ++j) {
-								var $td = $E('td');
-								$td.style['border-style'] = 'solid';
-								$td.style['border-width'] = 'thin';
-								$td.style['text-align'] = 'center';
-								$td.appendChild($T(fields[j]));
-								$tr.appendChild($td);
-							}
-							$list.appendChild($tr);
-						}
-					};
-					xhr.open('GET', '/recent.csv', true);
-					xhr.send(null);
+			};
+			xhr.open('GET', '/recent.csv', true);
+			xhr.send(null);
+		}
+		$reflesh.addEventListener(
+			'submit',
+			function (event) {
+				event.preventDefault();
+				load();
+			}
+		);
+		var timer = null;
+		$auto.addEventListener(
+			'change',
+			function (event) {
+				if ($auto.checked) {
+					if (timer !== null) return;
+					timer = setInterval(load, 30000);
 				}
-				$reflesh.addEventListener(
-					'submit',
-					function (event) {
-						event.preventDefault();
-						load();
-					}
-				);
-				var timer = null;
-				$auto.addEventListener(
-					'change',
-					function (event) {
-						if ($auto.checked) {
-							if (timer !== null) return;
-							timer = setInterval(load, 30000);
-						}
-						else {
-							if (timer === null) return;
-							clearInterval(timer);
-							timer = null;
-						}
-					}
-				);
-				return new Promise(
-					function (resolve) {
-						return import('./script.js')
-							.then(function () {}, load)
-							.then(resolve);
-					}
-				);
-			});
-		</script>
-	</body>
+				else {
+					if (timer === null) return;
+					clearInterval(timer);
+					timer = null;
+				}
+			}
+		);
+		return new Promise(
+			function (resolve) {
+				return import('./script.js')
+					.then(function () {}, load)
+					.then(resolve);
+			}
+		);
+	});
+</script>
+</body>
 </html>
 )HTML";
 
