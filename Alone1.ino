@@ -20,15 +20,63 @@ static std::mutex mutex_1;
 #define HTTP_MUTEX mutex_1
 #define MEASURE_MUTEX mutex_1
 
+static bool need_save = false;
+static bool need_reboot = false;
+
 /*****************************************************************************/
 /* SD card */
+
+static char const setting_filename[] = "/setting.txt";
 
 // static SPIClass SPI_1(HSPI);
 static bool has_SD_card;
 
 static void save_settings(void) {
 	if (!has_SD_card) return;
-	/* TODO */
+	File file = SD.open(setting_filename, "w", true);
+	if (!file) {
+		Serial.println("Failed to open setting file");
+		return;
+	}
+	file.println(measure_interval / 1000);
+	file.println(int(use_AP_mode));
+	file.println(AP_SSID);
+	file.println(AP_PASS);
+	file.println(STA_SSID);
+	file.println(STA_PASS);
+	file.close();
+}
+
+static void load_settings(void) {
+	char *e;
+	String s;
+	unsigned long int u;
+
+	if (!has_SD_card) return;
+	File file = SD.open(setting_filename, "r", false);
+	if (!file) {
+		Serial.println("Failed to open setting file");
+		return;
+	}
+
+	s = file.readStringUntil('\n');
+	s.trim();
+	u = strtoul(s.c_str(), &e, 10);
+	if (!*e && u >= 15 && u <= 900) measure_interval = u * 1000;
+	s = file.readStringUntil('\n');
+	s.trim();
+	u = strtoul(s.c_str(), &e, 10);
+	if (!*e) use_AP_mode = bool(u);
+	AP_SSID = file.readStringUntil('\n');
+	AP_SSID.trim();
+	AP_PASS = file.readStringUntil('\n');
+	AP_PASS.trim();
+	STA_SSID = file.readStringUntil('\n');
+	STA_SSID.trim();
+	STA_PASS = file.readStringUntil('\n');
+	STA_PASS.trim();
+
+	file.close();
 }
 
 /*****************************************************************************/
@@ -76,8 +124,8 @@ struct Data {
 	float humidity;
 };
 
-size_t const records_max_size = 60;
-std::deque<Data> records;
+static size_t const records_max_size = 60;
+static std::deque<Data> records;
 
 inline static String show_time(DateTime const datetime) {
 	if (datetime.isValid())
@@ -423,10 +471,10 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 			$label = $E('label');
 			s_($label, 'margin-left', '2ex');
 			s_($label, 'padding', '1ex');
+			c_($label, $T('Auto reflesh'));
 			$auto = $input = $E('input');
 			a_($input, 'type', 'checkbox');
 			c_($label, $input);
-			c_($label, $T('Auto reflesh'));
 			c_($form, $label);
 			c_(document.body, $form);
 		}();
@@ -591,17 +639,42 @@ R"HTML(
 )HTML";
 
 static void respond_setting_html(void) {
+	static char const form_start[] =
+		"\t\t<form action='command.exe' method='POST' style='margin: 1ex; border: solid thin; padding: 1ex'>";
 	HTTPd.setContentLength(CONTENT_LENGTH_UNKNOWN);
 	HTTPd.send(200, "application/xhtml+xml", web_setting_head);
-	HTTPd.sendContent("		<form action='command' method='POST'>\
-<label>Current time \
-<input type='number' name='time' required='' /></label>\
+
+	HTTPd.sendContent(form_start);
+	HTTPd.sendContent("<label>Current time \
+<input type='datetime-local' name='time' required='' /></label>\
 <button type='submit'>Set</button></form>\r\n");
-	HTTPd.sendContent("		<form action='command' method='POST'>\
-<label>Measure interval / seconds \
-<input type='datetime-local' name='time' min='15' max='900' required='' value='");
+
+	HTTPd.sendContent(form_start);
+	HTTPd.sendContent("<label>Measure interval / seconds \
+<input type='number' name='measure' min='15' max='900' required='' value='");
 	HTTPd.sendContent(String(measure_interval / 1000));
 	HTTPd.sendContent("' /></label><button type='submit'>Set</button></form>\r\n");
+
+	HTTPd.sendContent(form_start);
+	HTTPd.sendContent("\r\n\t\t\t<label style='display: block'>Provide WiFi \
+<input type='checkbox' name='useAP'");
+	if (use_AP_mode) HTTPd.sendContent(" checked");
+	HTTPd.sendContent(" /></label>\r\n\
+\t\t\t<button type='submit'>Set</button>\r\n\
+\t\t</form>\r\n");
+
+	HTTPd.sendContent(form_start);
+	HTTPd.sendContent("\r\n\t\t\t<label style='display: block'>Confirm \
+<input type='checkbox' name='delete' /></label>\r\n\
+\t\t\t<button type='submit'>Delete all data</button>\r\n\
+\t\t</form>\r\n");
+
+	HTTPd.sendContent(form_start);
+	HTTPd.sendContent("\r\n\t\t\t<label style='display: block'>Confirm \
+<input type='checkbox' name='reboot' /></label>\r\n\
+\t\t\t<button type='submit' name='reboot'>Reboot</button>\r\n\
+\t\t</form>\r\n");
+
 	HTTPd.sendContent(web_setting_tail);
 }
 
@@ -621,7 +694,6 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 )HTML";
 
 static void respond_command(void) {
-	bool updated = false;
 	if (HTTPd.hasArg("time")) {
 		String const arg = HTTPd.arg("time");
 		Serial.print("command time = ");
@@ -629,7 +701,10 @@ static void respond_command(void) {
 		DateTime const datetime(arg.c_str());
 		if (datetime.isValid()) {
 			set_time(datetime);
-			updated = true;
+			need_save = true;
+		} else {
+			Serial.print("WARN: incorrect command time = ");
+			Serial.println(arg);
 		}
 	}
 	if (HTTPd.hasArg("measure")) {
@@ -640,34 +715,26 @@ static void respond_command(void) {
 		unsigned long int value = strtoul(arg.c_str(), &end, 10);
 		if (*end == 0 && value >= 15 && value <= 900) {
 			measure_interval = value * 1000;
-			updated = true;
+			need_save = true;
 		} else {
-			Serial.print("WARN: incorrect command measure=");
+			Serial.print("WARN: incorrect command measure = ");
 			Serial.println(arg);
 		}
 	}
+	if (HTTPd.hasArg("delete")) {
+		Serial.println("command delete");
+		SD.remove(setting_filename);
+		records.clear();
+	}
+	if (HTTPd.hasArg("reboot")) {
+		Serial.println("command reboot");
+		Serial.flush();
+		need_reboot = true;
+		need_save = false;
+	}
 	HTTPd.sendHeader("Location", "/");
 	HTTPd.send(303, "application/xhtml+xml", command_html);
-	if (updated) save_settings();
 }
-
-// static class FileHandler : public RequestHandler {
-// 	public:
-// 		bool canHandle(HTTPMethod method, String link) override;
-// 		bool handle(WebServer &server, HTTPMethod method, String link) override;
-// } file_handler;
-
-// bool FileHandler::canHandle(HTTPMethod const method, String const link) {
-// 	Serial.print("HTTP can handle: ");
-// 	Serial.println(link);
-// 	return method == HTTP_GET && link == "/set";
-// }
-
-// bool FileHandler::handle([[unused]] WebServer &server, [[unused]] HTTPMethod const method, String const link) {
-// 	Serial.print("HTTP: ");
-// 	Serial.println(link);
-// 	return false;
-// }
 
 // static void respond_web_not_found(void) {
 // 	HTTPd.sendHeader("Location", String("http://") + my_IP_address.toString() + "/");
@@ -681,8 +748,7 @@ static void setup_webserver(void) {
 	HTTPd.on("/favicon.ico", HTTP_GET, respond_web_icon);
 	HTTPd.on("/recent.csv", respond_data);
 	HTTPd.on("/setting.html", HTTP_GET, respond_setting_html);
-	HTTPd.on("/command", HTTP_POST, respond_command);
-	// HTTPd.addHandler(&file_handler);
+	HTTPd.on("/command.exe", HTTP_POST, respond_command);
 	if (has_SD_card) HTTPd.serveStatic("/", SD, "/");
 	// HTTPd.onNotFound(respond_web_not_found);
 	HTTPd.begin();
@@ -696,6 +762,15 @@ void loop(void) {
 	// if (use_AP_mode) DNSd.processNextRequest();
 	std::lock_guard<std::mutex> lock(HTTP_MUTEX);
 	HTTPd.handleClient();
+	if (need_save) {
+		need_save = false;
+		save_settings();
+	}
+	if (need_reboot) {
+		need_reboot = false;
+		delay(1000);
+		esp_restart();
+	}
 }
 
 void setup(void) {
@@ -715,7 +790,9 @@ void setup(void) {
 	pinMode(SD_MISO, INPUT_PULLUP);
 	SPI.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
 	has_SD_card = SD.begin(SD_CS, SPI);
-	if (!has_SD_card) {
+	if (has_SD_card)
+		load_settings();
+	else {
 		Serial.println("WARN: SD card not found");
 		Monitor.println("No SD card");
 		Monitor.display();

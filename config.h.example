@@ -1,7 +1,7 @@
 #ifndef INCLUDE_CONFIG_H
 #define INCLUDE_CONFIG_H
 
-static bool const use_AP_mode = false;
+static bool use_AP_mode = false;
 static unsigned int measure_interval = 60000;
 static String AP_SSID = "My SSID";
 static String AP_PASS = "My password";
