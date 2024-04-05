@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include <deque>
 #include <chrono>
 #include <thread>
@@ -14,13 +15,21 @@
 
 #include "config.h"
 
-// static SPIClass SPI_1(HSPI);
-static bool has_SD_card;
-
 static std::mutex mutex_1;
 #define DISPLAY_MUTEX mutex_1
 #define HTTP_MUTEX mutex_1
 #define MEASURE_MUTEX mutex_1
+
+/*****************************************************************************/
+/* SD card */
+
+// static SPIClass SPI_1(HSPI);
+static bool has_SD_card;
+
+static void save_settings(void) {
+	if (!has_SD_card) return;
+	/* TODO */
+}
 
 /*****************************************************************************/
 /* Real-time clock */
@@ -125,7 +134,7 @@ static void measure_thread(void) {
 // static DNSServer DNSd;
 static WebServer HTTPd(80);
 static Adafruit_SSD1306 Monitor(128, 64);
-static IPAddress addr;
+static IPAddress my_IP_address;
 
 static void handle_WiFi_event(WiFiEvent_t const event) {
 	switch (event) {
@@ -257,11 +266,11 @@ static signed int check_WiFi_status(void) {
 			Serial.println(SSID);
 			Monitor.println("WiFi SSID:");
 			Monitor.println(SSID);
-			addr = WiFi.localIP();
+			my_IP_address = WiFi.localIP();
 			Serial.print("IP address: ");
-			Serial.println(addr);
+			Serial.println(my_IP_address.toString());
 			Monitor.println("IP address:");
-			Monitor.println(addr);
+			Monitor.println(my_IP_address.toString());
 		}
 		Monitor.display();
 	}
@@ -289,30 +298,30 @@ static void setup_wifi(void) {
 		WiFi.disconnect();
 		WiFi.mode(WIFI_AP);
 		WiFi.setHostname("WeatherStation");
-		// addr = IPAddress(8, 8, 8, 8);
-		// WiFi.softAPConfig(addr, addr, IPAddress(255, 255, 255, 0));
-		while (!WiFi.softAP(AP_SSID, AP_PASS, 1, 0, 2)) {
+		// my_IP_address = IPAddress(8, 8, 8, 8);
+		// WiFi.softAPConfig(my_IP_address, my_IP_address, IPAddress(255, 255, 255, 0));
+		while (!WiFi.softAP(AP_SSID.c_str(), AP_PASS, 1, 0, 2)) {
 			Serial.println("ERROR: failed to create soft AP");
 			Monitor.println("ERROR: WiFi AP");
 			Monitor.display();
 			delay(reinitialize_interval);
 		}
-		addr = WiFi.softAPIP();
+		my_IP_address = WiFi.softAPIP();
 		String const SSID = WiFi.softAPSSID();
 		Serial.print("WiFi SSID: ");
 		Serial.println(SSID);
 		Monitor.println("WiFi SSID:");
 		Monitor.println(SSID);
 		Serial.print("IP address: ");
-		Serial.println(addr);
+		Serial.println(my_IP_address.toString());
 		Monitor.println("IP address:");
-		Monitor.println(addr);
+		Monitor.println(my_IP_address.toString());
 		Monitor.display();
 
 		/* DNS server */
 		// static uint16_t const DNS_port = 53;
 		// static String const DNS_domain("*");
-		// while (!DNSd.start(DNS_port, DNS_domain, addr)) {
+		// while (!DNSd.start(DNS_port, DNS_domain, my_IP_address)) {
 		// 	Serial.println("ERROR: failed to create DNS server");
 		// 	Monitor.println("ERROR: DNS server");
 		// 	delay(reinitialize_interval);
@@ -331,7 +340,7 @@ static void setup_wifi(void) {
 		while (millis() < WiFi_wait_time) {
 			delay(2);
 			if (WiFi.status() == WL_CONNECTED) {
-				addr = WiFi.localIP();
+				my_IP_address = WiFi.localIP();
 				break;
 			}
 		}
@@ -342,7 +351,7 @@ static void setup_wifi(void) {
 /*****************************************************************************/
 /* Web server */
 
-static PROGMEM char const web_html[] =
+static PROGMEM char const home_html[] =
 R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 	<head>
 		<meta content-type='application/xhtml+xml; charset=UTF-8' />
@@ -368,7 +377,14 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 					$p = $E('p');
 					$p.style['text-align'] = 'center';
 					$a = $E('a');
-					$a.style['margin-right'] = '2ex';
+					$a.style['margin'] = '1ex';
+					$a.style['border'] = 'solid thin gray';
+					$a.style['padding'] = '1ex';
+					$a.setAttribute('href', 'setting.html');
+					$a.appendChild($T('Settings'));
+					$p.appendChild($a);
+					$a = $E('a');
+					$a.style['margin'] = '1ex';
 					$a.style['border'] = 'solid thin gray';
 					$a.style['padding'] = '1ex';
 					$a.setAttribute('href', 'recent.csv');
@@ -376,9 +392,9 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 					$a.appendChild($T('Download recent data'));
 					$p.appendChild($a);
 					$a = $E('a');
-					$a.style['margin-left'] = '2ex';
-					$a.style['padding'] = '1ex';
+					$a.style['margin'] = '1ex';
 					$a.style['border'] = 'solid thin gray';
+					$a.style['padding'] = '1ex';
 					$a.setAttribute('href', 'all.csv');
 					$a.setAttribute('download', '');
 					$a.appendChild($T('Download all data'));
@@ -398,7 +414,6 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 					$label = $E('label');
 					$label.style['margin-left'] = '2ex';
 					$label.style['padding'] = '1ex';
-					$label.style['border'] = 'solid thin gray';
 					$auto = $input = $E('input');
 					$input.setAttribute('type', 'checkbox');
 					$label.appendChild($input);
@@ -495,8 +510,8 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 </html>
 )HTML";
 
-static void respond_web_html(void) {
-	HTTPd.send(200, "application/xhtml+xml", web_html);
+static void respond_home_html(void) {
+	HTTPd.send(200, "application/xhtml+xml", home_html);
 }
 
 static PROGMEM char const web_icon[] = {
@@ -528,50 +543,130 @@ static void respond_web_icon(void) {
 	HTTPd.send(200, "image/png", web_icon);
 }
 
-static void respond_web_data(void) {
-	// HTTPd.setContentLength(CONTENT_LENGTH_UNKNOWN);
-	String content("time,temperature,pressure,humidity\r\n");
-	for (Data data: records) {
-		content =
-			content
-				+ show_time(data.time) + ","
+static void respond_data(void) {
+	HTTPd.setContentLength(CONTENT_LENGTH_UNKNOWN);
+	HTTPd.send(200, "text/csv", "time,temperature,pressure,humidity\r\n");
+	for (Data data: records)
+		HTTPd.sendContent(
+			show_time(data.time) + ","
 				+ data.temperature + ","
 				+ data.pressure + ","
-				+ data.humidity + "\r\n";
+				+ data.humidity + "\r\n"
+		);
+}
+
+static PROGMEM char const web_setting_head[] =
+R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
+	<head>
+		<meta content-type='application/xhtml+xml; charset=UTF-8' />
+		<meta charset='UTF-8' />
+		<meta name='viewport' content='width=device-width, initial-scale=1' />
+		<title>Settings</title>
+		<link rel='stylesheet' type='text/css' href='style.css' />
+	</head>
+	<body>
+		<p><a href='./'>&#x2190; Back</a></p>
+)HTML";
+
+static PROGMEM char const web_setting_tail[] =
+R"HTML(
+	</body>
+</html>
+)HTML";
+
+static void respond_setting_html(void) {
+	HTTPd.setContentLength(CONTENT_LENGTH_UNKNOWN);
+	HTTPd.send(200, "application/xhtml+xml", web_setting_head);
+	HTTPd.sendContent("		<form action='command' method='POST'>\
+<label>Current time \
+<input type='number' name='time' required='' /></label>\
+<button type='submit'>Set</button></form>\r\n");
+	HTTPd.sendContent("		<form action='command' method='POST'>\
+<label>Measure interval / seconds \
+<input type='datetime-local' name='time' min='15' max='900' required='' value='");
+	HTTPd.sendContent(String(measure_interval / 1000));
+	HTTPd.sendContent("' /></label><button type='submit'>Set</button></form>\r\n");
+	HTTPd.sendContent(web_setting_tail);
+}
+
+static PROGMEM char const command_html[] =
+R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
+	<head>
+		<meta content-type='application/xhtml+xml; charset=UTF-8' />
+		<meta charset='UTF-8' />
+		<meta name='viewport' content='width=device-width, initial-scale=1' />
+		<title>Command redirection</title>
+		<link rel='stylesheet' type='text/css' href='style.css' />
+	</head>
+	<body>
+		<p>Command received. Redirect to <a href='./'>homepage.</a></p>
+	</body>
+</html>
+)HTML";
+
+static void respond_command(void) {
+	bool updated = false;
+	if (HTTPd.hasArg("time")) {
+		String const arg = HTTPd.arg("time");
+		Serial.print("command time = ");
+		Serial.println(arg);
+		DateTime const datetime(arg.c_str());
+		if (datetime.isValid()) {
+			set_time(datetime);
+			updated = true;
+		}
 	}
-	HTTPd.send(200, "text/csv", content);
+	if (HTTPd.hasArg("measure")) {
+		String const arg = HTTPd.arg("measure");
+		Serial.print("command measure = ");
+		Serial.println(arg);
+		char *end;
+		unsigned long int value = strtoul(arg.c_str(), &end, 10);
+		if (*end == 0 && value >= 15 && value <= 900) {
+			measure_interval = value * 1000;
+			updated = true;
+		} else {
+			Serial.print("WARN: incorrect command measure=");
+			Serial.println(arg);
+		}
+	}
+	HTTPd.sendHeader("Location", "/");
+	HTTPd.send(303, "application/xhtml+xml", command_html);
+	if (updated) save_settings();
 }
 
-static class FileHandler : public RequestHandler {
-	public:
-		bool canHandle(HTTPMethod method, String link) override;
-		bool handle(WebServer &server, HTTPMethod method, String link) override;
-} file_handler;
+// static class FileHandler : public RequestHandler {
+// 	public:
+// 		bool canHandle(HTTPMethod method, String link) override;
+// 		bool handle(WebServer &server, HTTPMethod method, String link) override;
+// } file_handler;
 
-bool FileHandler::canHandle(HTTPMethod const method, String const link) {
-	Serial.print("HTTP can handle: ");
-	Serial.println(link);
-	return method == HTTP_GET;
-}
+// bool FileHandler::canHandle(HTTPMethod const method, String const link) {
+// 	Serial.print("HTTP can handle: ");
+// 	Serial.println(link);
+// 	return method == HTTP_GET && link == "/set";
+// }
 
-bool FileHandler::handle([[unused]] WebServer &server, [[unused]] HTTPMethod const method, String const link) {
-	Serial.print("HTTP: ");
-	Serial.println(link);
-	return false;
-}
+// bool FileHandler::handle([[unused]] WebServer &server, [[unused]] HTTPMethod const method, String const link) {
+// 	Serial.print("HTTP: ");
+// 	Serial.println(link);
+// 	return false;
+// }
 
 // static void respond_web_not_found(void) {
-// 	HTTPd.sendHeader("Location", String("http://") + addr + "/");
-// 	HTTPd.send(303, "text/plain", "Redirect...");
+// 	HTTPd.sendHeader("Location", String("http://") + my_IP_address.toString() + "/");
+// 	HTTPd.send(302, "text/plain", "Redirect...");
 // }
 
 static void setup_webserver(void) {
 	HTTPd.enableCORS(true);
 	HTTPd.enableCrossOrigin(true);
-	HTTPd.on("/", HTTP_GET, respond_web_html);
+	HTTPd.on("/", HTTP_GET, respond_home_html);
 	HTTPd.on("/favicon.ico", HTTP_GET, respond_web_icon);
-	HTTPd.on("/recent.csv", respond_web_data);
-	HTTPd.addHandler(&file_handler);
+	HTTPd.on("/recent.csv", respond_data);
+	HTTPd.on("/setting.html", HTTP_GET, respond_setting_html);
+	HTTPd.on("/command", HTTP_POST, respond_command);
+	// HTTPd.addHandler(&file_handler);
 	if (has_SD_card) HTTPd.serveStatic("/", SD, "/");
 	// HTTPd.onNotFound(respond_web_not_found);
 	HTTPd.begin();
