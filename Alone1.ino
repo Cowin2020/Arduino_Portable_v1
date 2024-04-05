@@ -437,6 +437,7 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 			s_($table, 'width', '100%');
 			s_($table, 'border-collapse', 'collapse');
 			$thead = $E('thead');
+			s_($thead, 'border-bottom-style', 'solid');
 			$tr = $E('tr');
 			$th = $E('th');
 			c_($th, $T('Time'));
@@ -458,8 +459,13 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 			return $tbody;
 		}();
 		function load() {
+			$list.textContent = null;
+			var $loading = $E('p');
+			c_($loading, $T('Loading...'));
+			c_(document.body, $loading);
 			var xhr = new XMLHttpRequest();
 			xhr.onloadend = function (event) {
+				document.body.removeChild($loading);
 				var text = xhr.responseText;
 				if (text == null || xhr.status !== 200) {
 					alert('Failed to load data');
@@ -467,7 +473,6 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 				}
 				var lines = text.split('\r\n');
 				if (!lines || !(lines.length > 0)) return;
-				$list.textContent = null;
 				for (var i = 1; lines.length > i; ++i) {
 					if (!lines[i] || typeof lines[i] !== 'string') continue;
 					var fields = lines[i].split(',');
@@ -499,7 +504,7 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 			function (event) {
 				if ($auto.checked) {
 					if (timer !== null) return;
-					timer = setInterval(load, 30000);
+					timer = setInterval(load, 15000);
 				}
 				else {
 					if (timer === null) return;
