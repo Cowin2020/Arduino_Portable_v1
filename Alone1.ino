@@ -525,8 +525,9 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 				var lines = text.split('\r\n');
 				if (!lines || !(lines.length > 0)) return;
 				for (var i = 1; lines.length > i; ++i) {
-					if (!lines[i] || typeof lines[i] !== 'string') continue;
-					var fields = lines[i].split(',');
+					var line = lines[lines.length - i].trim();
+					if (!line || typeof line !== "string") continue;
+					var fields = line.split(",");
 					var $tr = $E('tr');
 					for (var j = 0; fields.length > j; ++j) {
 						var $td = $E('td');
