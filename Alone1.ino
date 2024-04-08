@@ -411,8 +411,11 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 <body>
 <noscript>Javascript is required for this webpage.</noscript>
 <script type='text/javascript'>
-	(function(p){document.readyState!=='loading'?p():document.addEventListener('DOMContentLoaded',p)})(function(){
+	(function(p){document.readyState!=='loading'?p():document.addEventListener('DOMContentLoaded',p)})
+	(function(p){return import('./script.js').then(function(){},p);}
+	(function(load_error){
 		'use strict';
+		console.error('Load error:', load_error);
 		var records = new Array();
 		function $T(string) {
 			return document.createTextNode(string);
@@ -561,14 +564,8 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 				}
 			}
 		);
-		return new Promise(
-			function (resolve) {
-				return import('./script.js')
-					.then(function () {}, load)
-					.then(resolve);
-			}
-		);
-	});
+		load();
+	}));
 </script>
 </body>
 </html>
