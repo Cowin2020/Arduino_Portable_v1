@@ -891,9 +891,17 @@ void loop(void) {
 		save_settings();
 	}
 	if (need_reboot) {
-		need_reboot = false;
-		delay(1000);
-		esp_restart();
+		static unsigned long int reboot_time_0 = 0;
+		static unsigned long int reboot_time_1 = 0;
+		unsigned long int now = millis();
+		if (!reboot_time_1) {
+			reboot_time_0 = now;
+			reboot_time_1 = now + reboot_wait_time;
+		}
+		else if (
+			reboot_time_0 < reboot_time_1 && (now < reboot_time_0 || reboot_time_1 < now) ||
+			reboot_time_1 < reboot_time_0 && reboot_time_1 < now && now < reboot_time_0
+		) esp_restart();
 	}
 }
 
