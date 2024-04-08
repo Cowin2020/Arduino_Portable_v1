@@ -552,7 +552,7 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 			function (event) {
 				if ($auto.checked) {
 					if (timer !== null) return;
-					timer = setInterval(load, 15000);
+					timer = setInterval(load, 20000);
 				}
 				else {
 					if (timer === null) return;
@@ -638,42 +638,135 @@ R"HTML(
 </html>
 )HTML";
 
+static String XML_escape(String const &string) {
+	String result;
+	for (char const c: string)
+		switch (c) {
+		case '&':
+			result.concat("&amp;");
+			break;
+		case '<':
+			result.concat("&lt;");
+			break;
+		case '>':
+			result.concat("&gt;");
+			break;
+		case '"':
+			result.concat("&quot;");
+			break;
+		case '\'':
+			result.concat("&apos;");
+			break;
+		default:
+			result.concat(c);
+		}
+	return result;
+}
+
 static void respond_setting_html(void) {
 	static char const form_start[] =
-		"\t\t<form action='command.exe' method='POST' style='margin: 1ex; border: solid thin; padding: 1ex'>";
+		"\t\t<form action='setting.exe' method='POST' style='margin: 1ex; border: solid thin; padding: 1ex'>";
 	HTTPd.setContentLength(CONTENT_LENGTH_UNKNOWN);
 	HTTPd.send(200, "application/xhtml+xml", web_setting_head);
 
 	HTTPd.sendContent(form_start);
-	HTTPd.sendContent("<label>Current time \
-<input type='datetime-local' name='time' required='' /></label>\
-<button type='submit'>Set</button></form>\r\n");
+	HTTPd.sendContent(
+			"<label>"
+				"Current time "
+				"<input type='datetime-local' name='time' required='' />"
+			"</label>"
+			"<button type='submit'>Set</button>"
+		"</form>\r\n"
+	);
 
 	HTTPd.sendContent(form_start);
-	HTTPd.sendContent("<label>Measure interval / seconds \
-<input type='number' name='measure' min='15' max='900' required='' value='");
+	HTTPd.sendContent(
+			"<label>"
+				"Measure interval / seconds "
+				"<input type='number' name='measure' min='10' max='900' required='' value='"
+	);
 	HTTPd.sendContent(String(measure_interval / 1000));
-	HTTPd.sendContent("' /></label><button type='submit'>Set</button></form>\r\n");
+	HTTPd.sendContent(
+				"' />"
+			"</label>"
+			"<button type='submit'>Set</button>"
+		"</form>\r\n"
+	);
 
 	HTTPd.sendContent(form_start);
-	HTTPd.sendContent("\r\n\t\t\t<label style='display: block'>Provide WiFi \
-<input type='checkbox' name='useAP'");
-	if (use_AP_mode) HTTPd.sendContent(" checked");
-	HTTPd.sendContent(" /></label>\r\n\
-\t\t\t<button type='submit'>Set</button>\r\n\
-\t\t</form>\r\n");
+	HTTPd.sendContent(
+			"<label style='display: block'>"
+				"Provide WiFi "
+				"<select name='WiFi'>"
+					"<option value='AP'"
+	);
+	if (use_AP_mode) HTTPd.sendContent(" selected=''");
+	HTTPd.sendContent(
+					">"
+						"Access point"
+					"</option>"
+					"<option value='STA'"
+	);
+	if (!use_AP_mode) HTTPd.sendContent(" selected=''");
+	HTTPd.sendContent(
+					">"
+						"Station"
+					"</option>"
+				"</select>"
+			"</label>"
+			"<label style='display: block'>"
+				"AP SSID "
+				"<input name='APSSID' value='"
+	);
+	HTTPd.sendContent(XML_escape(AP_SSID));
+	HTTPd.sendContent(
+				"' />"
+			"</label>"
+			"<label style='display: block'>"
+				"AP PASS "
+				"<input name='APPASS' value='"
+	);
+	HTTPd.sendContent(XML_escape(AP_PASS));
+	HTTPd.sendContent(
+				"' />"
+			"</label>"
+			"<label style='display: block'>"
+				"STA SSID "
+				"<input name='STASSID' value='"
+	);
+	HTTPd.sendContent(XML_escape(STA_SSID));
+	HTTPd.sendContent(
+				"' />"
+			"</label>"
+			"<label style='display: block'>"
+				"STA PASS "
+				"<input name='STAPASS' value='"
+	);
+	HTTPd.sendContent(XML_escape(STA_PASS));
+	HTTPd.sendContent(
+				"' />"
+			"</label>"
+			"<button type='submit'>Set</button>\r\n"
+		"</form>\r\n"
+	);
 
 	HTTPd.sendContent(form_start);
-	HTTPd.sendContent("\r\n\t\t\t<label style='display: block'>Confirm \
-<input type='checkbox' name='delete' /></label>\r\n\
-\t\t\t<button type='submit'>Delete all data</button>\r\n\
-\t\t</form>\r\n");
+	HTTPd.sendContent(
+			"<label style='display: block'>"
+				"Confirm "
+				"<input type='checkbox' name='delete' /></label>"
+			"<button type='submit'>Delete all data</button>"
+		"</form>\r\n"
+	);
 
 	HTTPd.sendContent(form_start);
-	HTTPd.sendContent("\r\n\t\t\t<label style='display: block'>Confirm \
-<input type='checkbox' name='reboot' /></label>\r\n\
-\t\t\t<button type='submit' name='reboot'>Reboot</button>\r\n\
-\t\t</form>\r\n");
+	HTTPd.sendContent(
+			"<label style='display: block'>Confirm "
+				"<input type='checkbox' name='reboot' />"
+			"</label>"
+			"<button type='submit' name='reboot'>Reboot</button>"
+		"</form>\r\n"
+	);
 
 	HTTPd.sendContent(web_setting_tail);
 }
@@ -721,6 +814,37 @@ static void respond_command(void) {
 			Serial.println(arg);
 		}
 	}
+	if (HTTPd.hasArg("WiFi")) {
+		String const arg_WiFi = HTTPd.arg("WiFi");
+		String const arg_APSSID = HTTPd.arg("APSSID");
+		String const arg_APPASS = HTTPd.arg("APPASS");
+		String const arg_STASSID = HTTPd.arg("STASSID");
+		String const arg_STAPASS = HTTPd.arg("STAPASS");
+		if (arg_WiFi == "AP") {
+			use_AP_mode = true;
+			need_save = true;
+		}
+		else if (arg_WiFi == "STA") {
+			use_AP_mode = false;
+			need_save = true;
+		}
+		if (!arg_APSSID.isEmpty()) {
+			AP_SSID = arg_APSSID;
+			need_save = true;
+		}
+		if (!arg_APPASS.isEmpty()) {
+			AP_PASS = arg_APPASS;
+			need_save = true;
+		}
+		if (!arg_STASSID.isEmpty()) {
+			STA_SSID = arg_STASSID;
+			need_save = true;
+		}
+		if (!arg_STAPASS.isEmpty()) {
+			STA_PASS = arg_STAPASS;
+			need_save = true;
+		}
+	}
 	if (HTTPd.hasArg("delete")) {
 		Serial.println("command delete");
 		SD.remove(setting_filename);
@@ -748,7 +872,7 @@ static void setup_webserver(void) {
 	HTTPd.on("/favicon.ico", HTTP_GET, respond_web_icon);
 	HTTPd.on("/recent.csv", respond_data);
 	HTTPd.on("/setting.html", HTTP_GET, respond_setting_html);
-	HTTPd.on("/command.exe", HTTP_POST, respond_command);
+	HTTPd.on("/setting.exe", HTTP_POST, respond_command);
 	if (has_SD_card) HTTPd.serveStatic("/", SD, "/");
 	// HTTPd.onNotFound(respond_web_not_found);
 	HTTPd.begin();
@@ -776,7 +900,6 @@ void loop(void) {
 void setup(void) {
 	/* Serial port */
 	Serial.begin(serial_baudrate);
-	delay(start_wait_time);
 
 	/* OLED display */
 	Monitor.begin(SSD1306_SWITCHCAPVCC, 0x3C);
@@ -785,6 +908,9 @@ void setup(void) {
 	Monitor.clearDisplay();
 	Monitor.display();
 	Monitor.setCursor(0, 0);
+
+	/* Start-up delay */
+	delay(start_wait_time);
 
 	/* SD */
 	pinMode(SD_MISO, INPUT_PULLUP);
