@@ -1,0 +1,9 @@
+td {
+	background-color: white;
+	text-color: black;
+}
+
+tr:nth-child(odd) td:nth-child(odd) ,
+tr:nth-child(even) td:nth-child(even) {
+	background-color: whitesmoke;
+}
