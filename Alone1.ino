@@ -416,7 +416,7 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 	(function(load_error){
 		'use strict';
 		console.error('Load error:', load_error);
-		var records = new Array();
+		document.body.textContent = '';
 		function $T(string) {
 			return document.createTextNode(string);
 		}
@@ -435,6 +435,8 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 		void function () {
 			var $p, $a;
 			$p = $E('p');
+			s_($p, 'display', 'flex');
+			s_($p, 'flex-flow', 'row wrap');
 			s_($p, 'text-align', 'center');
 			$a = $E('a');
 			s_($a, 'margin', '1ex');
