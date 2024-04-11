@@ -1,6 +1,6 @@
 td {
 	background-color: white;
-	text-color: black;
+	color: black;
 }
 
 tr:nth-child(odd) td:nth-child(odd) ,

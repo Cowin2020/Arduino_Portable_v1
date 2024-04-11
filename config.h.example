@@ -9,7 +9,7 @@ static String STA_SSID = "Use this SSID";
 static String STA_PASS = "and password";
 
 static unsigned int const start_wait_time = 6000;
-static unsigned int const reboot_wait_time = 3000;
+static unsigned int const reboot_wait_time = 6000;
 static unsigned int const WiFi_wait_time = 20000;
 static unsigned int const WiFi_check_interval = 10000;
 static unsigned int const serial_baudrate = 115200;

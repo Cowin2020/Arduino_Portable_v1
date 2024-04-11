@@ -38,6 +38,8 @@ static size_t const buffer_size = 4096;
 /* SD card */
 
 static char const setting_filename[] = "/setting.txt";
+static char const data_filename[] = "/data.csv";
+static char const data_header[] = "time,temperature,pressure,humidity";
 
 // static SPIClass SPI_1(HSPI);
 static bool has_SD_card;
@@ -47,7 +49,7 @@ static void save_settings(void) {
 	std::lock_guard<std::mutex> file_lock(FILE_MUTEX);
 	File file = SD.open(setting_filename, "w", true);
 	if (!file) {
-		Serial.println("Failed to open setting file");
+		Serial.println("ERROR: failed to open setting file");
 		return;
 	}
 	file.println(measure_interval / 1000);
@@ -68,7 +70,7 @@ static void load_settings(void) {
 	std::lock_guard<std::mutex> file_lock(FILE_MUTEX);
 	File file = SD.open(setting_filename, "r", false);
 	if (!file) {
-		Serial.println("Failed to open setting file");
+		Serial.println("ERROR: failed to open setting file");
 		return;
 	}
 
@@ -154,24 +156,32 @@ static void measure(void) {
 	else
 		data.time = DateTime(0, 0, 0);
 	std::lock_guard<std::mutex> device_lock(MEASURE_MUTEX);
-	data.temperature = BME280.readTemperature();
-	data.pressure = BME280.readPressure();
-	data.humidity = BME280.readHumidity();
+	data = {
+		.temperature = BME280.readTemperature(),
+		.pressure = BME280.readPressure(),
+		.humidity = BME280.readHumidity()
+	};
 
 	Serial.printf(
 		"Measure %s,%f,%f,%f\r\n",
-		show_time(data.time).c_str(), data.temperature, data.pressure, data.humidity
+		show_time(data.time).c_str(),
+		data.temperature, data.pressure, data.humidity
 	);
 
 	if (records.size() >= records_max_size) records.pop_back();
 	records.push_front(data);
 
 	if (has_SD_card) {
-		File file = SD.open("/all.csv", "a", true);
-		file.printf(
-			"%s,%f,%f,%f\r\n",
-			show_time(data.time).c_str(), data.temperature, data.pressure, data.humidity
-		);
+		File file = SD.open(data_filename, "a", true);
+		try {
+			file.printf(
+				"%s,%f,%f,%f\r\n",
+				show_time(data.time).c_str(), data.temperature, data.pressure, data.humidity
+			);
+		}
+		catch (...) {
+			Serial.println("ERROR: failed to write data into SD card");
+		}
 		file.close();
 	}
 }
@@ -491,7 +501,7 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 			s_($a, 'margin', '1ex');
 			s_($a, 'border', 'solid thin gray');
 			s_($a, 'padding', '1ex');
-			a_($a, 'href', 'all.csv');
+			a_($a, 'href', 'data.csv');
 			a_($a, 'download', '');
 			c_($a, $T('Download all data'));
 			c_($p, $a);
@@ -548,6 +558,41 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 			c_($table, $tbody);
 			c_(document.body, $table);
 		}();
+		function load() {
+			$list.textContent = null;
+			var $loading = $E('p');
+			c_($loading, $T('Loading...'));
+			c_(document.body, $loading);
+			var xhr = new XMLHttpRequest();
+			xhr.onloadend = function (event) {
+				document.body.removeChild($loading);
+				var text = xhr.responseText;
+				if (text == null || xhr.status !== 200) {
+					alert('Failed to load data');
+					return;
+				}
+				var lines = text.split('\r\n');
+				if (!lines || !(lines.length > 0)) return;
+				for (var i = 1; lines.length > i; ++i) {
+					var line = lines[lines.length - i].trim();
+					if (!line || typeof line !== "string") continue;
+					var fields = line.split(",");
+					var $tr = $E('tr');
+					for (var j = 0; fields.length > j; ++j) {
+						var $td = $E('td');
+						s_($td, 'border-style', 'solid');
+						s_($td, 'border-width', 'thin');
+						s_($td, 'text-align', 'center');
+						if (j === 0) c_($td, $T(show_Date(fields[j])));
+						else c_($td, $T(fields[j]));
+						c_($tr, $td);
+					}
+					c_($list, $tr);
+				}
+			};
+			xhr.open('GET', '/recent.csv', true);
+			xhr.send(null);
+		}
 		var GPS = new Array;
 		var $GPS;
 		void function () {
@@ -613,46 +658,11 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 					function (error) {
 						console.error('GeoLocationError: ', error.message);
 					},
-					{timeout: 10000, enableHighAccuracy: true}
+					{timeout: 15000, enableHighAccuracy: true}
 				)
 			}
 			get_GPS();
 			setInterval(get_GPS, 30000);
-		}
-		function load() {
-			$list.textContent = null;
-			var $loading = $E('p');
-			c_($loading, $T('Loading...'));
-			c_(document.body, $loading);
-			var xhr = new XMLHttpRequest();
-			xhr.onloadend = function (event) {
-				document.body.removeChild($loading);
-				var text = xhr.responseText;
-				if (text == null || xhr.status !== 200) {
-					alert('Failed to load data');
-					return;
-				}
-				var lines = text.split('\r\n');
-				if (!lines || !(lines.length > 0)) return;
-				for (var i = 1; lines.length > i; ++i) {
-					var line = lines[lines.length - i].trim();
-					if (!line || typeof line !== "string") continue;
-					var fields = line.split(",");
-					var $tr = $E('tr');
-					for (var j = 0; fields.length > j; ++j) {
-						var $td = $E('td');
-						s_($td, 'border-style', 'solid');
-						s_($td, 'border-width', 'thin');
-						s_($td, 'text-align', 'center');
-						if (j === 0) c_($td, $T(show_Date(fields[j])));
-						else c_($td, $T(fields[j]));
-						c_($tr, $td);
-					}
-					c_($list, $tr);
-				}
-			};
-			xhr.open('GET', '/recent.csv', true);
-			xhr.send(null);
 		}
 		$reflesh.addEventListener(
 			'submit',
@@ -724,7 +734,7 @@ static httpsserver::ResourceNode web_icon_node("/", "GET", web_icon_handle);
 
 static void web_data_handle(httpsserver::HTTPRequest *const request, httpsserver::HTTPResponse *const response) {
 	response->setHeader("CONTENT-TYPE", "text/csv");
-	response->println("time,temperature,pressure,humidity");
+	response->println(data_header);
 	for (Data const record: records) {
 		response->print(show_time(record.time));
 		response->print(',');
@@ -1008,8 +1018,17 @@ static void web_command_handle(httpsserver::HTTPRequest *const request, httpsser
 		}
 		else if (name == "delete") {
 			Serial.println("command delete");
-			SD.remove(setting_filename);
 			records.clear();
+			std::lock_guard<std::mutex> file_lock(FILE_MUTEX);
+			//	SD.remove(data_filename);
+			File file = SD.open(data_filename, "w", true);
+			try {
+				file.println(data_header);
+			}
+			catch (...) {
+				Serial.println("ERROR: failed to write header into data file");
+			}
+			file.close();
 		}
 		else if (name == "reboot") {
 			Serial.println("command reboot");
@@ -1066,10 +1085,8 @@ static void web_file_handle(httpsserver::HTTPRequest *const request, httpsserver
 		while (size_t const n = file.readBytes(buffer, sizeof buffer))
 			response->write(reinterpret_cast<byte *>(buffer), n);
 	}
-	catch (...) {
-		file.close();
-		throw;
-	}
+	catch (...) {}
+	file.close();
 }
 
 static httpsserver::ResourceNode web_file_node("", "", web_file_handle);
@@ -1106,15 +1123,15 @@ static void setup_webserver(void) {
 void loop(void) {
 	delay(2);
 	{
-		std::lock_guard<std::mutex> lock(NETWORK_MUTEX);
+		std::lock_guard<std::mutex> network_lock(NETWORK_MUTEX);
 		// if (use_AP_mode) DNSd.processNextRequest();
 		HTTPd.loop();
 		HTTPSd.loop();
 	}
 
 	if (need_save) {
-		need_save = false;
 		save_settings();
+		need_save = false;
 	}
 
 	if (need_reboot) {
@@ -1128,7 +1145,10 @@ void loop(void) {
 		else if (
 			reboot_time_0 < reboot_time_1 && (now < reboot_time_0 || reboot_time_1 < now) ||
 			reboot_time_1 < reboot_time_0 && reboot_time_1 < now && now < reboot_time_0
-		) esp_restart();
+		) {
+			need_reboot = false;
+			esp_restart();
+		}
 	}
 }
 
