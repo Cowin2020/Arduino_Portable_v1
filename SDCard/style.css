@@ -1,4 +1,102 @@
+#dashboard {
+	margin: 2ex;
+	border: double 8px #FC8;
+	border-radius: 4ex;
+	padding: 2ex;
+	width: calc(100vw - 10ex - 16px);
+	background-color: #8AC;
+}
+
+#dashboard .nodata {
+	text-align: center;
+	font-size: 4rem;
+	color: #000;
+	text-shadow: 2px 2px 4px #FFF;
+}
+
+#dashboard .title {
+	display: flex;
+	flex-direction: row;
+	flex-wrap: wrap;
+	justify-content: center;
+	column-gap: 1.5ex;
+	margin: 1ex;
+	text-align: center;
+	font-size: 6ex;
+	color: #CFD;
+}
+
+#dashboard .items {
+	display: flex;
+	flex-flow: row wrap;
+	justify-content: center;
+	column-gap: 3ex;
+}
+
+#dashboard .items .item {
+	display: flex;
+	flex-flow: column wrap;
+	justify-content: center;
+	margin: 0.5rem;
+	border: solid thin lightyellow;
+	padding: 1rem;
+	text-align: center;
+}
+
+#dashboard .item .name {
+	font-size: 2rem;
+	color: #FED;
+}
+
+#dashboard .item .value {
+	font-size: 3rem;
+	color: snow;
+}
+
+#dashboard .item .value span {
+	font-size: 1.5rem;
+}
+
+.download-links {
+	display: flex;
+	flex-flow: row wrap;
+	text-align: center;
+}
+
+.download-links a {
+	margin: 1ex;
+	border: solid thin gray;
+	padding: 1ex;
+}
+
+.reflesh {
+	margin-top: 2ex;
+	margin-bottom: 2ex;
+}
+
+.reflesh label {
+	margin-left: 2ex;
+	padding: 1ex;
+}
+
+.plot {
+	width: 100%;
+	height: 90vh;
+}
+
+table {
+	border-collapse: collapse;
+	width: 100%;
+}
+
+thead {
+	border-bottom-style: solid;
+}
+
 td {
+	border-style: solid;
+	border-width: thin;
+	text-align: center;
 	background-color: white;
 	color: black;
 }
