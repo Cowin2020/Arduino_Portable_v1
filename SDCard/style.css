@@ -85,6 +85,7 @@
 }
 
 table {
+	margin-bottom: 3ex;
 	border-collapse: collapse;
 	width: 100%;
 }

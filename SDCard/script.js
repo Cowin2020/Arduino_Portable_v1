@@ -20,10 +20,26 @@ function $E(name, attributes, children) {
 	return element;
 }
 
+function show_Date(value) {
+	var date = new Date(value);
+	return (
+		date.getFullYear().toString()
+			+ '-'
+			+ (date.getMonth() + 1).toString().padStart(2, '0')
+			+ '-'
+			+ date.getDate().toString().padStart(2, '0')
+			+ ' '
+			+ date.getHours().toString().padStart(2, '0')
+			+ ':'
+			+ date.getMinutes().toString().padStart(2, '0')
+			+ ':'
+			+ date.getSeconds().toString().padStart(2, '0')
+	);
+}
+
 document.body.style["margin"] = "1ex";
 
 var $dashboard;
-
 document.body.appendChild(
 	$dashboard = $E("div", {"id": "dashboard"})
 );
@@ -84,7 +100,6 @@ document.body.appendChild(
 );
 
 var $reflesh, $auto;
-
 document.body.appendChild(
 	$reflesh = $E("form", {"class": "reflesh"}, [
 		$E("button", {"type": "submit"}, [$T("Reflesh now")]),
@@ -94,7 +109,6 @@ document.body.appendChild(
 );
 
 var $plot_temperature, $plot_pressure, $plot_humidity;
-
 void function () {
 	document.body.appendChild(
 		$plot_temperature = $E("div", {"class": "plot"})
@@ -155,9 +169,11 @@ function show_plot(rows) {
 }
 
 var $list;
-
 document.body.appendChild(
 	$E("table", null, [
+		$E("caption", null, [
+			$T("Sensor data")
+		]),
 		$E("thead", null, [
 			$E("tr", null, [
 				$E("th", null, [$T("Time")]),
@@ -214,6 +230,60 @@ function load() {
 	xhr.open("GET", "/recent.csv", true);
 	xhr.send(null);
 }
+
+var GPS = new Array;
+
+var $GPS;
+document.body.appendChild(
+	$E("table", null, [
+		$E("caption", null, [
+			$T("GPS data")
+		]),
+		$E("thead", null, [
+			$E("tr", null, [
+				$E("th", null, [$T("Time")]),
+				$E("th", null, [$T("Latitude")]),
+				$E("th", null, [$T("Longitude")]),
+				$E("th", null, [$T("Altitude")])
+			])
+		]),
+		$GPS = $E("tbody")
+	])
+);
+
+function get_GPS() {
+	navigator.geolocation.getCurrentPosition(
+		function (spacetime) {
+			var coords = spacetime.coords;
+			GPS.push(
+				[
+					spacetime.timestamp,
+					coords.latitude, coords.longitude, coords.altitude,
+					coords.accuracy, coords.altitudeAccuracy,
+					coords.heading, coords.speed
+				]
+			);
+			var $tr = $E('tr', null,
+				[show_Date(spacetime.timestamp), coords.latitude, coords.longitude, coords.altitude].map(
+					function add_td(value) {
+						return $E('td', null, value == null ? null : [$T(String(value))]);
+					}
+				)
+			);
+			if ($GPS.firstChild)
+				$GPS.insertBefore($tr, $GPS.firstChild);
+			else
+				$GPS.appendChild($tr);
+		},
+		function (error) {
+			console.error('GeoLocationError: ', error.message);
+		},
+		{timeout: 15000, enableHighAccuracy: true}
+	)
+}
+
+get_GPS();
+setInterval(get_GPS, 30000);
 
 $reflesh.addEventListener(
 	"submit",

@@ -624,42 +624,39 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 			c_($table, $tbody);
 			c_(document.body, $table);
 		}();
-		function add_GPS(timestamp, coords) {
-			if (!Array.isArray(GPS)) return;
-			GPS.push(
-				[
-					timestamp,
-					coords.latitude, coords.longitude, coords.altitude,
-					coords.accuracy, coords.altitudeAccuracy,
-					coords.heading, coords.speed
-				]
-			);
-			var $tr = $E('tr');
-			function add_td(value) {
-				var $td = $E('td');
-				s_($td, 'border-style', 'solid');
-				s_($td, 'border-width', 'thin');
-				s_($td, 'text-align', 'center');
-				if (value != null) c_($td, $T(String(value)));
-				c_($tr, $td);
-			}
-			add_td(show_Date(timestamp));
-			add_td(coords.latitude);
-			add_td(coords.longitude);
-			add_td(coords.altitude);
-			c_($GPS, $tr);
-		}
 		if ("geolocation" in navigator) {
 			function get_GPS() {
 				navigator.geolocation.getCurrentPosition(
 					function (spacetime) {
-						add_GPS(spacetime.timestamp, spacetime.coords);
+						var coords = spacetime.coords;
+						GPS.push(
+							[
+								spacetime.timestamp,
+								coords.latitude, coords.longitude, coords.altitude,
+								coords.accuracy, coords.altitudeAccuracy,
+								coords.heading, coords.speed
+							]
+						);
+						var $tr = $E('tr');
+						function add_td(value) {
+							var $td = $E('td');
+							s_($td, 'border-style', 'solid');
+							s_($td, 'border-width', 'thin');
+							s_($td, 'text-align', 'center');
+							if (value != null) c_($td, $T(String(value)));
+							c_($tr, $td);
+						}
+						add_td(show_Date(spacetime.timestamp));
+						add_td(coords.latitude);
+						add_td(coords.longitude);
+						add_td(coords.altitude);
+						c_($GPS, $tr);
 					},
 					function (error) {
 						console.error('GeoLocationError: ', error.message);
 					},
 					{timeout: 15000, enableHighAccuracy: true}
-				)
+				);
 			}
 			get_GPS();
 			setInterval(get_GPS, 30000);
