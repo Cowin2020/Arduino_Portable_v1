@@ -3,6 +3,7 @@
 #include <chrono>
 #include <thread>
 #include <mutex>
+#include <condition_variable>
 #include <Arduino.h>
 #include <esp_pthread.h>
 #include <WiFi.h>
@@ -24,6 +25,9 @@ static std::mutex mutex_1;
 #define MEASURE_MUTEX mutex_1
 #define FILE_MUTEX mutex_1
 #define NETWORK_MUTEX mutex_1
+
+static std::mutex wait_measure_mutex;
+static std::condition_variable wait_measure_condition;
 
 static bool need_save = false;
 static bool need_reboot = false;
@@ -176,8 +180,10 @@ static void measure_thread(void) {
 	for (;;)
 		try {
 			measure();
+			std::unique_lock<std::mutex> wait_lock(wait_measure_mutex);
 			// delay(measure_interval);
-			std::this_thread::sleep_for(std::chrono::duration<unsigned long int, std::milli>(measure_interval));
+			//	std::this_thread::sleep_for(std::chrono::duration<unsigned long int, std::milli>(measure_interval));
+			wait_measure_condition.wait_for(wait_lock, std::chrono::duration<unsigned long int, std::milli>(measure_interval));
 		}
 		catch (...) {
 			std::lock_guard<std::mutex> display_lock(DISPLAY_MUTEX);
@@ -421,13 +427,13 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 <link rel='stylesheet' type='text/css' href='style.css' />
 </head>
 <body>
-<noscript>Javascript is required for this webpage.</noscript>
+<noscript>Javascript is required for this web page.</noscript>
 <script type='text/javascript'>
 	(function(p){document.readyState!=='loading'?p():document.addEventListener('DOMContentLoaded',p)})
 	(function(p){return import('./script.js').then(function(){},p);}
-	(function(load_error){
+	(function(SD_load_error){
 		'use strict';
-		console.error('Load error:', load_error);
+		console.log('Failed to load script from SD card:', SD_load_error);
 		document.body.textContent = '';
 		function $T(string) {
 			return document.createTextNode(string);
@@ -704,7 +710,7 @@ static void web_setting_handle(httpsserver::HTTPRequest *const request, httpsser
 	response->print(
 			"<label>"
 				"Measure interval / seconds "
-				"<input type='number' name='measure' min='10' max='900' required='' value='"
+				"<input type='number' name='interval' min='10' max='900' required='' value='"
 	);
 	response->print(String(measure_interval / 1000));
 	response->print(
@@ -775,6 +781,15 @@ static void web_setting_handle(httpsserver::HTTPRequest *const request, httpsser
 	response->print(
 			"<label style='display: block'>"
 				"Confirm "
+				"<input type='checkbox' name='measure' /></label>"
+			"<button type='submit'>Measure now</button>"
+		"</form>"
+	);
+
+	response->print(form_start);
+	response->print(
+			"<label style='display: block'>"
+				"Confirm "
 				"<input type='checkbox' name='delete' /></label>"
 			"<button type='submit'>Delete all data</button>"
 		"</form>"
@@ -836,9 +851,9 @@ static void web_command_handle(httpsserver::HTTPRequest *const request, httpsser
 				Serial.println(value.c_str());
 			}
 		}
-		else if (name == "measure") {
+		else if (name == "interval") {
 			std::string const value = read_parser(parser);
-			Serial.print("command measure = ");
+			Serial.print("command interval = ");
 			Serial.println(value.c_str());
 			char *end;
 			unsigned long int const x = strtoul(value.c_str(), &end, 10);
@@ -847,7 +862,7 @@ static void web_command_handle(httpsserver::HTTPRequest *const request, httpsser
 				need_save = true;
 			}
 			else {
-				Serial.print("WARN: incorrect command measure = ");
+				Serial.print("WARN: incorrect command interval = ");
 				Serial.println(value.c_str());
 			}
 		}
@@ -895,6 +910,10 @@ static void web_command_handle(httpsserver::HTTPRequest *const request, httpsser
 			Serial.println(value.c_str());
 			STA_PASS = value.c_str();
 			need_save = true;
+		}
+		else if (name == "measure") {
+			Serial.println("command measure");
+			wait_measure_condition.notify_all();
 		}
 		else if (name == "delete") {
 			Serial.println("command delete");
