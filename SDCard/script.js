@@ -20,20 +20,20 @@ function $E(name, attributes, children) {
 	return element;
 }
 
-function show_Date(value) {
+function show_Date(value, seperator = " ") {
 	var date = new Date(value);
 	return (
 		date.getFullYear().toString()
-			+ '-'
-			+ (date.getMonth() + 1).toString().padStart(2, '0')
-			+ '-'
-			+ date.getDate().toString().padStart(2, '0')
-			+ ' '
-			+ date.getHours().toString().padStart(2, '0')
-			+ ':'
-			+ date.getMinutes().toString().padStart(2, '0')
-			+ ':'
-			+ date.getSeconds().toString().padStart(2, '0')
+			+ "-"
+			+ (date.getMonth() + 1).toString().padStart(2, "0")
+			+ "-"
+			+ date.getDate().toString().padStart(2, "0")
+			+ seperator
+			+ date.getHours().toString().padStart(2, "0")
+			+ ":"
+			+ date.getMinutes().toString().padStart(2, "0")
+			+ ":"
+			+ date.getSeconds().toString().padStart(2, "0")
 	);
 }
 
@@ -85,6 +85,7 @@ function show_dashboard(row) {
 
 show_dashboard(null);
 
+var $save_GPS;
 document.body.appendChild(
 	$E("p", {"class": "download-links"}, [
 		$E("a", {"href": "setting.html"}, [
@@ -95,6 +96,9 @@ document.body.appendChild(
 		]),
 		$E("a", {"href": "all.csv", "download": ""}, [
 			$T("Download all data")
+		]),
+		$save_GPS = $E("a", {"href": "#"}, [
+			$T("Save GPS data")
 		])
 	])
 );
@@ -254,19 +258,20 @@ document.body.appendChild(
 function get_GPS() {
 	navigator.geolocation.getCurrentPosition(
 		function (spacetime) {
+			console.debug(spacetime);
 			var coords = spacetime.coords;
 			GPS.push(
 				[
-					spacetime.timestamp,
+					show_Date(new Date(spacetime.timestamp), "T"),
 					coords.latitude, coords.longitude, coords.altitude,
 					coords.accuracy, coords.altitudeAccuracy,
 					coords.heading, coords.speed
 				]
 			);
-			var $tr = $E('tr', null,
+			var $tr = $E("tr", null,
 				[show_Date(spacetime.timestamp), coords.latitude, coords.longitude, coords.altitude].map(
 					function add_td(value) {
-						return $E('td', null, value == null ? null : [$T(String(value))]);
+						return $E("td", null, value == null ? null : [$T(String(value))]);
 					}
 				)
 			);
@@ -276,14 +281,34 @@ function get_GPS() {
 				$GPS.appendChild($tr);
 		},
 		function (error) {
-			console.error('GeoLocationError: ', error.message);
+			console.error("GeoLocationError: ", error.message);
 		},
 		{timeout: 15000, enableHighAccuracy: true}
 	)
 }
-
 get_GPS();
 setInterval(get_GPS, 30000);
+
+var $GPS_downloader = $E("a", {"download": "gps.csv"});
+$GPS_downloader.hidden = true;
+document.body.appendChild($GPS_downloader);
+function save_GPS() {
+	var content =
+		"Time,Latitude,Longitude,Altitude,Horizontal accuracy,Vertical accuracy,Heading,Speed\r\n"
+			+ GPS.map(function (record) {return record.join(",");}).join("\r\n");
+	var oldobj = $GPS_downloader.getAttribute("href");
+	if (oldobj) URL.revokeObjectURL(objurl);
+	$GPS_downloader.setAttribute("href", URL.createObjectURL(new Blob(Array.of(content), {type: "text/csv"})));
+	setTimeout(function () {$GPS_downloader.click();}, 1000);
+}
+
+$save_GPS.addEventListener(
+	"click",
+	function (event) {
+		event.preventDefault();
+		save_GPS();
+	}
+);
 
 $reflesh.addEventListener(
 	"submit",
