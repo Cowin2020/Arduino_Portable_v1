@@ -450,6 +450,22 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 		function a_(element, name, value) {
 			return element.setAttribute(name, value);
 		}
+		function show_Date(value) {
+			var date = new Date(value);
+			return (
+				date.getFullYear().toString()
+					+ '-'
+					+ (date.getMonth() + 1).toString().padStart(2, '0')
+					+ '-'
+					+ date.getDate().toString().padStart(2, '0')
+					+ ' '
+					+ date.getHours().toString().padStart(2, '0')
+					+ ':'
+					+ date.getMinutes().toString().padStart(2, '0')
+					+ ':'
+					+ date.getSeconds().toString().padStart(2, '0')
+			);
+		}
 		void function () {
 			var $p, $a;
 			$p = $E('p');
@@ -503,10 +519,14 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 		}();
 		var $list;
 		void function () {
-			var $table, $thead, $tr, $th, $tbody;
+			var $table, $caption, $thead, $tr, $th, $tbody;
 			$table = $E('table');
-			s_($table, 'width', '100%');
+			s_($table, 'margin-bottom', '3ex');
 			s_($table, 'border-collapse', 'collapse');
+			s_($table, 'width', '100%');
+			$caption = $E('caption');
+			c_($caption, $T('Sensor data'));
+			c_($table, $caption);
 			$thead = $E('thead');
 			s_($thead, 'border-bottom-style', 'solid');
 			$tr = $E('tr');
@@ -527,8 +547,78 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 			$list = $tbody = $E('tbody');
 			c_($table, $tbody);
 			c_(document.body, $table);
-			return $tbody;
 		}();
+		var GPS = new Array;
+		var $GPS;
+		void function () {
+			var $table, $caption, $thead, $tr, $th, $tbody;
+			$table = $E('table');
+			s_($table, 'border-collapse', 'collapse');
+			s_($table, 'width', '100%');
+			$caption = $E('caption');
+			c_($caption, $T('GPS data'));
+			c_($table, $caption);
+			$thead = $E('thead');
+			s_($thead, 'border-bottom-style', 'solid');
+			$tr = $E('tr');
+			$th = $E('th');
+			c_($th, $T('Time'));
+			c_($tr, $th);
+			$th = $E('th');
+			c_($th, $T('Latitude'));
+			c_($tr, $th);
+			$th = $E('th');
+			c_($th, $T('Longitude'));
+			c_($tr, $th);
+			$th = $E('th');
+			c_($th, $T('Altitude'));
+			c_($tr, $th);
+			c_($thead, $tr);
+			c_($table, $thead);
+			$GPS = $tbody = $E('tbody');
+			c_($table, $tbody);
+			c_(document.body, $table);
+		}();
+		function add_GPS(timestamp, coords) {
+			if (!Array.isArray(GPS)) return;
+			GPS.push(
+				[
+					timestamp,
+					coords.latitude, coords.longitude, coords.altitude,
+					coords.accuracy, coords.altitudeAccuracy,
+					coords.heading, coords.speed
+				]
+			);
+			var $tr = $E('tr');
+			function add_td(value) {
+				var $td = $E('td');
+				s_($td, 'border-style', 'solid');
+				s_($td, 'border-width', 'thin');
+				s_($td, 'text-align', 'center');
+				if (value != null) c_($td, $T(String(value)));
+				c_($tr, $td);
+			}
+			add_td(show_Date(timestamp));
+			add_td(coords.latitude);
+			add_td(coords.longitude);
+			add_td(coords.altitude);
+			c_($GPS, $tr);
+		}
+		if ("geolocation" in navigator) {
+			function get_GPS() {
+				navigator.geolocation.getCurrentPosition(
+					function (spacetime) {
+						add_GPS(spacetime.timestamp, spacetime.coords);
+					},
+					function (error) {
+						console.error('GeoLocationError: ', error.message);
+					},
+					{timeout: 10000, enableHighAccuracy: true}
+				)
+			}
+			get_GPS();
+			setInterval(get_GPS, 30000);
+		}
 		function load() {
 			$list.textContent = null;
 			var $loading = $E('p');
@@ -554,7 +644,8 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 						s_($td, 'border-style', 'solid');
 						s_($td, 'border-width', 'thin');
 						s_($td, 'text-align', 'center');
-						c_($td, $T(fields[j]));
+						if (j === 0) c_($td, $T(show_Date(fields[j])));
+						else c_($td, $T(fields[j]));
 						c_($tr, $td);
 					}
 					c_($list, $tr);
