@@ -460,7 +460,7 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 		function a_(element, name, value) {
 			return element.setAttribute(name, value);
 		}
-		function show_Date(value) {
+		function string_from_Date(value, seperator = ' ') {
 			var date = new Date(value);
 			return (
 				date.getFullYear().toString()
@@ -468,7 +468,7 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 					+ (date.getMonth() + 1).toString().padStart(2, '0')
 					+ '-'
 					+ date.getDate().toString().padStart(2, '0')
-					+ ' '
+					+ seperator
 					+ date.getHours().toString().padStart(2, '0')
 					+ ':'
 					+ date.getMinutes().toString().padStart(2, '0')
@@ -476,34 +476,39 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 					+ date.getSeconds().toString().padStart(2, '0')
 			);
 		}
+		var $save_GPS;
 		void function () {
 			var $p, $a;
+			function style_$a() {
+				s_($a, 'margin', '1ex');
+				s_($a, 'border', 'solid thin gray');
+				s_($a, 'padding', '1ex');
+			}
 			$p = $E('p');
 			s_($p, 'display', 'flex');
 			s_($p, 'flex-flow', 'row wrap');
 			s_($p, 'text-align', 'center');
 			$a = $E('a');
-			s_($a, 'margin', '1ex');
-			s_($a, 'border', 'solid thin gray');
-			s_($a, 'padding', '1ex');
+			style_$a();
 			a_($a, 'href', 'setting.html');
 			c_($a, $T('Settings'));
 			c_($p, $a);
 			$a = $E('a');
-			s_($a, 'margin', '1ex');
-			s_($a, 'border', 'solid thin gray');
-			s_($a, 'padding', '1ex');
+			style_$a();
 			a_($a, 'href', 'recent.csv');
 			a_($a, 'download', '');
 			c_($a, $T('Download recent data'));
 			c_($p, $a);
 			$a = $E('a');
-			s_($a, 'margin', '1ex');
-			s_($a, 'border', 'solid thin gray');
-			s_($a, 'padding', '1ex');
+			style_$a();
 			a_($a, 'href', 'data.csv');
 			a_($a, 'download', '');
 			c_($a, $T('Download all data'));
+			c_($p, $a);
+			$save_GPS = $a = $E('a');
+			style_$a();
+			a_($a, 'href', '.');
+			c_($a, $T('Save GPS data'));
 			c_($p, $a);
 			c_(document.body, $p);
 		}();
@@ -575,15 +580,15 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 				if (!lines || !(lines.length > 0)) return;
 				for (var i = 1; lines.length > i; ++i) {
 					var line = lines[lines.length - i].trim();
-					if (!line || typeof line !== "string") continue;
-					var fields = line.split(",");
+					if (!line || typeof line !== 'string') continue;
+					var fields = line.split(',');
 					var $tr = $E('tr');
 					for (var j = 0; fields.length > j; ++j) {
 						var $td = $E('td');
 						s_($td, 'border-style', 'solid');
 						s_($td, 'border-width', 'thin');
 						s_($td, 'text-align', 'center');
-						if (j === 0) c_($td, $T(show_Date(fields[j])));
+						if (j === 0) c_($td, $T(string_from_Date(fields[j])));
 						else c_($td, $T(fields[j]));
 						c_($tr, $td);
 					}
@@ -593,6 +598,29 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 			xhr.open('GET', '/recent.csv', true);
 			xhr.send(null);
 		}
+		$reflesh.addEventListener(
+			'submit',
+			function (event) {
+				event.preventDefault();
+				load();
+			}
+		);
+		var timer = null;
+		$auto.addEventListener(
+			'change',
+			function (event) {
+				if ($auto.checked) {
+					if (timer !== null) return;
+					timer = setInterval(load, 20000);
+				}
+				else {
+					if (timer === null) return;
+					clearInterval(timer);
+					timer = null;
+				}
+			}
+		);
+		load();
 		var GPS = new Array;
 		var $GPS;
 		void function () {
@@ -624,34 +652,35 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 			c_($table, $tbody);
 			c_(document.body, $table);
 		}();
-		if ("geolocation" in navigator) {
+		if ('geolocation' in navigator) {
+			function record_GPS(spacetime) {
+				var coords = spacetime.coords;
+				GPS.push(
+					[
+						string_from_Date(spacetime.timestamp, 'T'),
+						coords.latitude, coords.longitude, coords.altitude,
+						coords.accuracy, coords.altitudeAccuracy,
+						coords.heading, coords.speed
+					]
+				);
+				var $tr = $E('tr');
+				function add_td(value) {
+					var $td = $E('td');
+					s_($td, 'border-style', 'solid');
+					s_($td, 'border-width', 'thin');
+					s_($td, 'text-align', 'center');
+					if (value != null) c_($td, $T(String(value)));
+					c_($tr, $td);
+				}
+				add_td(string_from_Date(spacetime.timestamp));
+				add_td(coords.latitude);
+				add_td(coords.longitude);
+				add_td(coords.altitude);
+				c_($GPS, $tr);
+			}
 			function get_GPS() {
 				navigator.geolocation.getCurrentPosition(
-					function (spacetime) {
-						var coords = spacetime.coords;
-						GPS.push(
-							[
-								spacetime.timestamp,
-								coords.latitude, coords.longitude, coords.altitude,
-								coords.accuracy, coords.altitudeAccuracy,
-								coords.heading, coords.speed
-							]
-						);
-						var $tr = $E('tr');
-						function add_td(value) {
-							var $td = $E('td');
-							s_($td, 'border-style', 'solid');
-							s_($td, 'border-width', 'thin');
-							s_($td, 'text-align', 'center');
-							if (value != null) c_($td, $T(String(value)));
-							c_($tr, $td);
-						}
-						add_td(show_Date(spacetime.timestamp));
-						add_td(coords.latitude);
-						add_td(coords.longitude);
-						add_td(coords.altitude);
-						c_($GPS, $tr);
-					},
+					record_GPS,
 					function (error) {
 						console.error('GeoLocationError: ', error.message);
 					},
@@ -659,31 +688,30 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 				);
 			}
 			get_GPS();
-			setInterval(get_GPS, 30000);
+			// setInterval(get_GPS, 30000);
+			navigator.geolocation.watchPosition(record_GPS);
 		}
-		$reflesh.addEventListener(
-			'submit',
+		var $GPS_downloader = $E('a');
+		a_($GPS_downloader, 'download', 'gps.csv');
+		$GPS_downloader.hidden = true;
+		document.body.appendChild($GPS_downloader);
+		function save_GPS() {
+			var content =
+				'Time,Latitude,Longitude,Altitude,Horizontal accuracy,Vertical accuracy,Heading,Speed\r\n'
+					+ GPS.map(function (record) {return record.join(',');}).join('\r\n');
+			var oldobj = $GPS_downloader.getAttribute('href');
+			if (oldobj) URL.revokeObjectURL(objurl);
+			$GPS_downloader.setAttribute('href', URL.createObjectURL(new Blob(Array.of(content), {type: 'text/csv'})));
+			setTimeout(function () {$GPS_downloader.click();}, 1000);
+		}
+
+		$save_GPS.addEventListener(
+			'click',
 			function (event) {
 				event.preventDefault();
-				load();
+				save_GPS();
 			}
 		);
-		var timer = null;
-		$auto.addEventListener(
-			'change',
-			function (event) {
-				if ($auto.checked) {
-					if (timer !== null) return;
-					timer = setInterval(load, 20000);
-				}
-				else {
-					if (timer === null) return;
-					clearInterval(timer);
-					timer = null;
-				}
-			}
-		);
-		load();
 	}));
 </script>
 </body>
