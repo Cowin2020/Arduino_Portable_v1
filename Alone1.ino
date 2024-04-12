@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <vector>
 #include <deque>
 #include <chrono>
 #include <thread>
@@ -21,18 +22,16 @@
 #include "config.h"
 
 static std::mutex mutex_1;
-#define DISPLAY_MUTEX mutex_1
-#define MEASURE_MUTEX mutex_1
-#define FILE_MUTEX mutex_1
-#define NETWORK_MUTEX mutex_1
+#define DISPLAY_LOCK(lock) std::lock_guard<std::mutex> lock(mutex_1);
+#define DEVICE_LOCK(lock) std::lock_guard<std::mutex> lock(mutex_1);
+#define SDCARD_LOCK(lock) std::lock_guard<std::mutex> lock(mutex_1);
+#define NETWORK_LOCK(lock)
 
 static std::mutex wait_measure_mutex;
 static std::condition_variable wait_measure_condition;
 
 static bool need_save = false;
 static bool need_reboot = false;
-
-static size_t const buffer_size = 4096;
 
 /*****************************************************************************/
 /* SD card */
@@ -46,7 +45,7 @@ static bool has_SD_card;
 
 static void save_settings(void) {
 	if (!has_SD_card) return;
-	std::lock_guard<std::mutex> file_lock(FILE_MUTEX);
+	SDCARD_LOCK(sdcard_lock)
 	File file = SD.open(setting_filename, "w", true);
 	if (!file) {
 		Serial.println("ERROR: failed to open setting file");
@@ -67,7 +66,7 @@ static void load_settings(void) {
 	unsigned long int u;
 
 	if (!has_SD_card) return;
-	std::lock_guard<std::mutex> file_lock(FILE_MUTEX);
+	SDCARD_LOCK(sdcard_lock)
 	File file = SD.open(setting_filename, "r", false);
 	if (!file) {
 		Serial.println("ERROR: failed to open setting file");
@@ -108,7 +107,7 @@ static bool clock_available(void) {
 
 static void set_time(DateTime const datetime) {
 	if (external_clock_available) {
-		std::lock_guard<std::mutex> display_lock(DISPLAY_MUTEX);
+		DEVICE_LOCK(device_lock)
 		external_clock.adjust(datetime);
 	}
 	else {
@@ -119,12 +118,18 @@ static void set_time(DateTime const datetime) {
 
 static DateTime get_time(void) {
 	if (external_clock_available) {
-		std::lock_guard<std::mutex> display_lock(DISPLAY_MUTEX);
+		DEVICE_LOCK(device_lock)
 		return external_clock.now();
 	}
-	else {
+	else
 		return internal_clock.now();
-	}
+}
+
+static String show_time(DateTime const datetime) {
+	if (datetime.isValid())
+		return datetime.timestamp();
+	else
+		return String("?");
 }
 
 /*****************************************************************************/
@@ -142,25 +147,16 @@ struct Data {
 static size_t const records_max_size = 60;
 static std::deque<Data> records;
 
-inline static String show_time(DateTime const datetime) {
-	if (datetime.isValid())
-		return datetime.timestamp();
-	else
-		return String("?");
-}
-
 static void measure(void) {
 	Data data;
 	if (clock_available())
 		data.time = get_time();
 	else
 		data.time = DateTime(0, 0, 0);
-	std::lock_guard<std::mutex> device_lock(MEASURE_MUTEX);
-	data = {
-		.temperature = BME280.readTemperature(),
-		.pressure = BME280.readPressure(),
-		.humidity = BME280.readHumidity()
-	};
+	DEVICE_LOCK(device_lock)
+	data.temperature = BME280.readTemperature();
+	data.pressure = BME280.readPressure();
+	data.humidity = BME280.readHumidity();
 
 	Serial.printf(
 		"Measure %s,%f,%f,%f\r\n",
@@ -196,7 +192,6 @@ static void measure_thread(void) {
 			wait_measure_condition.wait_for(wait_lock, std::chrono::duration<unsigned long int, std::milli>(measure_interval));
 		}
 		catch (...) {
-			std::lock_guard<std::mutex> display_lock(DISPLAY_MUTEX);
 			Serial.println("ERROR: exception in measurement");
 		}
 }
@@ -356,7 +351,6 @@ static void wifi_thread(void) {
 			check_WiFi_status();
 		}
 		catch (...) {
-			std::lock_guard<std::mutex> display_lock(DISPLAY_MUTEX);
 			Serial.println("ERROR: exception in WiFi checking");
 		}
 }
@@ -410,7 +404,7 @@ static void setup_wifi(void) {
 			delay(reinitialize_interval);
 		}
 		while (millis() < WiFi_wait_time) {
-			delay(2);
+			delay(1);
 			if (WiFi.status() == WL_CONNECTED) {
 				my_IP_address = WiFi.localIP();
 				break;
@@ -568,7 +562,7 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 			var $loading = $E('p');
 			c_($loading, $T('Loading...'));
 			c_(document.body, $loading);
-			var xhr = new XMLHttpRequest();
+			var xhr = new XMLHttpRequest;
 			xhr.onloadend = function (event) {
 				document.body.removeChild($loading);
 				var text = xhr.responseText;
@@ -704,7 +698,6 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 			$GPS_downloader.setAttribute('href', URL.createObjectURL(new Blob(Array.of(content), {type: 'text/csv'})));
 			setTimeout(function () {$GPS_downloader.click();}, 1000);
 		}
-
 		$save_GPS.addEventListener(
 			'click',
 			function (event) {
@@ -755,7 +748,7 @@ static void web_icon_handle(httpsserver::HTTPRequest *const request, httpsserver
 	response->write(web_icon_data, sizeof web_icon_data - 1);
 }
 
-static httpsserver::ResourceNode web_icon_node("/", "GET", web_icon_handle);
+static httpsserver::ResourceNode web_icon_node("/favicon.ico", "GET", web_icon_handle);
 
 static void web_data_handle(httpsserver::HTTPRequest *const request, httpsserver::HTTPResponse *const response) {
 	response->setHeader("CONTENT-TYPE", "text/csv");
@@ -772,6 +765,7 @@ static void web_data_handle(httpsserver::HTTPRequest *const request, httpsserver
 }
 
 static httpsserver::ResourceNode web_data_node("/recent.csv", "GET", web_data_handle);
+static char buffer[8192];
 
 static PROGMEM char const web_setting_head[] =
 "<html xmlns='http://www.w3.org/1999/xhtml'>\r\n"
@@ -826,7 +820,7 @@ static void web_setting_handle(httpsserver::HTTPRequest *const request, httpsser
 	response->print(
 			"<label>"
 				"Current time "
-				"<input type='datetime-local' name='time' required='' />"
+				"<input type='datetime-local' id='time' name='time' required='' />"
 			"</label>"
 			"<button type='submit'>Set</button>"
 		"</form>"
@@ -945,12 +939,11 @@ static PROGMEM char const web_command_html[] =
 		"<link rel='stylesheet' type='text/css' href='style.css' />"
 	"</head>"
 	"<body>"
-		"<p>Command received. Redirect to <a href='./'>homepage.</a></p>"
+		"<p>Command received. Redirect to <a href='./setting.html'>homepage.</a></p>"
 	"</body>"
 "</html>";
 
 static std::string read_parser(httpsserver::HTTPBodyParser &parser) {
-	char buffer[buffer_size];
 	std::string result = "";
 	while (!parser.endOfField()) {
 		size_t const n = parser.read(reinterpret_cast<byte *>(buffer), sizeof buffer);
@@ -968,10 +961,8 @@ static void web_command_handle(httpsserver::HTTPRequest *const request, httpsser
 			Serial.print("command time = ");
 			Serial.println(value.c_str());
 			DateTime const datetime(value.c_str());
-			if (datetime.isValid()) {
+			if (datetime.isValid())
 				set_time(datetime);
-				need_save = true;
-			}
 			else {
 				Serial.print("WARN: incorrect command time = ");
 				Serial.println(value.c_str());
@@ -1044,7 +1035,7 @@ static void web_command_handle(httpsserver::HTTPRequest *const request, httpsser
 		else if (name == "delete") {
 			Serial.println("command delete");
 			records.clear();
-			std::lock_guard<std::mutex> file_lock(FILE_MUTEX);
+			SDCARD_LOCK(sdcard_lock)
 			//	SD.remove(data_filename);
 			File file = SD.open(data_filename, "w", true);
 			try {
@@ -1069,7 +1060,7 @@ static void web_command_handle(httpsserver::HTTPRequest *const request, httpsser
 
 	response->setStatusCode(303);
 	response->setStatusText("SEE OTHER");
-	response->setHeader("LOCATION", "/");
+	response->setHeader("LOCATION", "/setting.html");
 	response->setHeader("CONTENT-TYPE", "application/xhtml+xml; charset=UTF-8");
 	response->write(reinterpret_cast<byte const *>(web_command_html), sizeof web_command_html - 1);
 }
@@ -1078,7 +1069,6 @@ static httpsserver::ResourceNode web_command_node("/setting.exe", "POST", web_co
 
 static void web_file_handle(httpsserver::HTTPRequest *const request, httpsserver::HTTPResponse *const response) {
 	std::string const name = request->getRequestString();
-	Serial.print("DEBUG: web file ");
 	Serial.println(name.c_str());
 	if (request->getMethod() != "GET") {
 		response->setStatusCode(405);
@@ -1106,11 +1096,13 @@ static void web_file_handle(httpsserver::HTTPRequest *const request, httpsserver
 			response->setHeader("CONTENT-TYPE", "image/png");
 		else
 			response->setHeader("CONTENT-TYPE", "application/octet-stream");
-		char buffer[buffer_size];
+		response->setHeader("CACHE-CONTROL", "max-age=604800, immutable");
 		while (size_t const n = file.readBytes(buffer, sizeof buffer))
 			response->write(reinterpret_cast<byte *>(buffer), n);
 	}
-	catch (...) {}
+	catch (...) {
+		Serial.println("ERROR: response file");
+	}
 	file.close();
 }
 
@@ -1146,9 +1138,9 @@ static void setup_webserver(void) {
 /* Main procedures */
 
 void loop(void) {
-	delay(2);
+	delay(1);
 	{
-		std::lock_guard<std::mutex> network_lock(NETWORK_MUTEX);
+		NETWORK_LOCK(network)
 		// if (use_AP_mode) DNSd.processNextRequest();
 		HTTPd.loop();
 		HTTPSd.loop();

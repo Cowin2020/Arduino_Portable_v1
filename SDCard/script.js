@@ -186,6 +186,9 @@ document.body.appendChild(
 );
 
 function load() {
+	$plot_temperature.hidden = true;
+	$plot_pressure.hidden = true;
+	$plot_humidity.hidden = true;
 	$list.textContent = null;
 	var $loading = $E("p");
 	$loading.appendChild($T("Loading..."));
