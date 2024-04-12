@@ -185,17 +185,19 @@ document.body.appendChild(
 	])
 );
 
+var $loading = $E("h1", null, [$T("Loading...")]);
+$loading.hidden = true;
+document.body.appendChild($loading);
+
 function load() {
 	$plot_temperature.hidden = true;
 	$plot_pressure.hidden = true;
 	$plot_humidity.hidden = true;
 	$list.textContent = null;
-	var $loading = $E("p");
-	$loading.appendChild($T("Loading..."));
-	document.body.appendChild($loading);
+	$loading.hidden = false;
 	var xhr = new XMLHttpRequest();
 	xhr.onloadend = function (event) {
-		document.body.removeChild($loading);
+		$loading.hidden = true;
 		var text = xhr.responseText;
 		if (text == null || xhr.status !== 200) {
 			alert("Failed to load data");
