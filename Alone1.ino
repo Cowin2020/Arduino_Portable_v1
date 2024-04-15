@@ -765,7 +765,7 @@ static void web_data_handle(httpsserver::HTTPRequest *const request, httpsserver
 }
 
 static httpsserver::ResourceNode web_data_node("/recent.csv", "GET", web_data_handle);
-static char buffer[8192];
+static char buffer[32768];
 
 static PROGMEM char const web_setting_head[] =
 "<html xmlns='http://www.w3.org/1999/xhtml'>\r\n"
@@ -1097,8 +1097,10 @@ static void web_file_handle(httpsserver::HTTPRequest *const request, httpsserver
 		else
 			response->setHeader("CONTENT-TYPE", "application/octet-stream");
 		response->setHeader("CACHE-CONTROL", "max-age=604800, immutable");
-		while (size_t const n = file.readBytes(buffer, sizeof buffer))
+		while (size_t const n = file.readBytes(buffer, sizeof buffer)) {
 			response->write(reinterpret_cast<byte *>(buffer), n);
+			yield();
+		}
 	}
 	catch (...) {
 		Serial.println("ERROR: response file");

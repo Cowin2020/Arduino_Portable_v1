@@ -106,9 +106,24 @@ document.body.appendChild(
 var $reflesh, $auto;
 document.body.appendChild(
 	$reflesh = $E("form", {"class": "reflesh"}, [
-		$E("button", {"type": "submit"}, [$T("Reflesh now")]),
+		$auto = $E("input", {"type": "checkbox"}),
 		$E("label", null, [$T("Auto reflesh")]),
-		$auto = $E("input", {"type": "checkbox"})
+		$E("button", {"type": "submit"}, [$T("Reflesh now")])
+	])
+);
+
+var $list;
+document.body.appendChild(
+	$E("table", null, [
+		$E("thead", null, [
+			$E("tr", null, [
+				$E("th", null, [$T("Time")]),
+				$E("th", null, [$T("Temperature")]),
+				$E("th", null, [$T("Pressure")]),
+				$E("th", null, [$T("Humidity")])
+			])
+		]),
+		$list = $E("tbody")
 	])
 );
 
@@ -138,7 +153,7 @@ function show_plot(rows) {
 		}
 		var time = column(0);
 		var layout = {
-			margin: {autoexpand: false, r: 10}
+			margin: {r: 8}
 		};
 		var config = {
 			responsive: true
@@ -169,21 +184,6 @@ function show_plot(rows) {
 		);
 	}
 }
-
-var $list;
-document.body.appendChild(
-	$E("table", null, [
-		$E("thead", null, [
-			$E("tr", null, [
-				$E("th", null, [$T("Time")]),
-				$E("th", null, [$T("Temperature")]),
-				$E("th", null, [$T("Pressure")]),
-				$E("th", null, [$T("Humidity")])
-			])
-		]),
-		$list = $E("tbody")
-	])
-);
 
 var $loading = $E("h1", null, [$T("Loading...")]);
 $loading.hidden = true;
@@ -264,35 +264,6 @@ load();
 
 var GPS = new Array;
 
-var $plot_GPS = $E("div", {"class": "plot"});
-$plot_GPS.hidden = true;
-document.body.appendChild($plot_GPS);
-
-function plot_GPS() {
-	$plot_GPS.hidden = false;
-	Plotly.newPlot(
-		$plot_GPS,
-		{
-			data: [
-				{
-					type:"scatter",
-					mode: "lines+markers",
-					x: GPS.map(function (record) {return record[2];}),
-					y: GPS.map(function (record) {return record[1];})
-				}
-			],
-			layout: {
-				title: "Position",
-				showlegend: false,
-				margin: {autoexpand: false, r: 10},
-				xaxis: {title: "Longitude (E)"},
-				yaxis: {title: "Latitude (N)"}
-			},
-			config: {responsive: true}
-		}
-	);
-}
-
 var $GPS;
 document.body.appendChild(
 	$E("table", null, [
@@ -308,8 +279,42 @@ document.body.appendChild(
 	])
 );
 
-if ("geolocation" in navigator) {
+if (!("geolocation" in navigator)) {
+	document.body.appendChild($E("p", null, [$T("Geo-location is not support in this browser")]));
+}
+else {
+	var $plot_GPS = $E("div", {"class": "plot"});
+	$plot_GPS.hidden = true;
+	document.body.appendChild($plot_GPS);
+
+	function plot_GPS() {
+		$plot_GPS.hidden = false;
+		Plotly.newPlot(
+			$plot_GPS,
+			{
+				data: [
+					{
+						type: "scatter",
+						mode: "lines+markers",
+						x: GPS.map(function (record) {return record[2];}),
+						y: GPS.map(function (record) {return record[1];})
+					}
+				],
+				layout: {
+					title: "Position",
+					xaxis: {title: "Longitude (E)"},
+					yaxis: {title: "Latitude (N)"},
+					margin: {r: 8}
+				},
+				config: {
+					responsive: true
+				}
+			}
+		);
+	}
+
 	function record_GPS(spacetime) {
+		if (spacetime === null || typeof spacetime === "undefined") return;
 		var coords = spacetime.coords;
 		GPS.push(
 			[
