@@ -24,7 +24,7 @@
 static std::mutex mutex_1;
 #define DISPLAY_LOCK(lock) std::lock_guard<std::mutex> lock(mutex_1);
 #define DEVICE_LOCK(lock) std::lock_guard<std::mutex> lock(mutex_1);
-#define SDCARD_LOCK(lock) std::lock_guard<std::mutex> lock(mutex_1);
+#define SDCARD_LOCK(lock)
 #define NETWORK_LOCK(lock)
 
 static std::mutex wait_measure_mutex;
@@ -60,17 +60,16 @@ static void save_settings(void) {
 	file.close();
 }
 
-static void load_settings(void) {
+static bool load_settings(void) {
 	char *e;
 	String s;
 	unsigned long int u;
 
-	if (!has_SD_card) return;
 	SDCARD_LOCK(sdcard_lock)
 	File file = SD.open(setting_filename, "r", false);
 	if (!file) {
-		Serial.println("ERROR: failed to open setting file");
-		return;
+		Serial.println("Failed to open setting file");
+		return false;
 	}
 
 	s = file.readStringUntil('\n');
@@ -91,6 +90,7 @@ static void load_settings(void) {
 	STA_PASS.trim();
 
 	file.close();
+	return true;
 }
 
 /*****************************************************************************/
@@ -713,12 +713,13 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 
 static void web_home_handle(httpsserver::HTTPRequest *const request, httpsserver::HTTPResponse *const response) {
 	response->setHeader("CONTENT-TYPE", "text/html; charset=UTF-8");
-	response->println(web_home_html);
+	response->write(reinterpret_cast<byte const *>(web_home_html), sizeof web_home_html - 1);
+	response->finalize();
 }
 
 static httpsserver::ResourceNode web_home_node("/", "GET", web_home_handle);
 
-static PROGMEM byte const web_icon_data[] = {
+static PROGMEM char const web_icon_data[] = {
 	/* PNG signature */
 	0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
 	/* data length */
@@ -745,7 +746,8 @@ static PROGMEM byte const web_icon_data[] = {
 
 static void web_icon_handle(httpsserver::HTTPRequest *const request, httpsserver::HTTPResponse *const response) {
 	response->setHeader("CONTENT-TYPE", "image/png");
-	response->write(web_icon_data, sizeof web_icon_data - 1);
+	response->write(reinterpret_cast<byte const *>(web_icon_data), sizeof web_icon_data - 1);
+	response->finalize();
 }
 
 static httpsserver::ResourceNode web_icon_node("/favicon.ico", "GET", web_icon_handle);
@@ -821,6 +823,20 @@ static void web_setting_handle(httpsserver::HTTPRequest *const request, httpsser
 			"<label>"
 				"Current time "
 				"<input type='datetime-local' id='time' name='time' required='' />"
+			"</label>"
+			"<button type='submit'>Set</button>"
+		"</form>"
+	);
+
+	response->write(reinterpret_cast<byte const *>(form_start), sizeof form_start - 1);
+	response->print(
+			"<label>"
+				"Device ID "
+				"<input type='text' name='name' required='' value='"
+	);
+	response->print(XML_escape(device_name));
+	response->print(
+				"' />"
 			"</label>"
 			"<button type='submit'>Set</button>"
 		"</form>"
@@ -925,6 +941,7 @@ static void web_setting_handle(httpsserver::HTTPRequest *const request, httpsser
 	);
 
 	response->write(reinterpret_cast<byte const *>(web_setting_tail), sizeof web_setting_tail - 1);
+	response->finalize();
 }
 
 static httpsserver::ResourceNode web_setting_node("/setting.html", "GET", web_setting_handle);
@@ -967,6 +984,13 @@ static void web_command_handle(httpsserver::HTTPRequest *const request, httpsser
 				Serial.print("WARN: incorrect command time = ");
 				Serial.println(value.c_str());
 			}
+		}
+		else if (name == "name") {
+			std::string const value = read_parser(parser);
+			Serial.print("command name = ");
+			Serial.println(value.c_str());
+			device_name = value.c_str();
+			need_save = true;
 		}
 		else if (name == "interval") {
 			std::string const value = read_parser(parser);
@@ -1063,6 +1087,7 @@ static void web_command_handle(httpsserver::HTTPRequest *const request, httpsser
 	response->setHeader("LOCATION", "/setting.html");
 	response->setHeader("CONTENT-TYPE", "application/xhtml+xml; charset=UTF-8");
 	response->write(reinterpret_cast<byte const *>(web_command_html), sizeof web_command_html - 1);
+	response->finalize();
 }
 
 static httpsserver::ResourceNode web_command_node("/setting.exe", "POST", web_command_handle);
@@ -1081,6 +1106,7 @@ static void web_file_handle(httpsserver::HTTPRequest *const request, httpsserver
 		Serial.println(name.c_str());
 		response->setStatusCode(404);
 		response->setStatusText("NOT FOUND");
+		response->finalize();
 		return;
 	}
 	try {
@@ -1101,6 +1127,7 @@ static void web_file_handle(httpsserver::HTTPRequest *const request, httpsserver
 			response->write(reinterpret_cast<byte *>(buffer), n);
 			yield();
 		}
+		response->finalize();
 	}
 	catch (...) {
 		Serial.println("ERROR: response file");
@@ -1190,8 +1217,10 @@ void setup(void) {
 	pinMode(SD_MISO, INPUT_PULLUP);
 	SPI.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
 	has_SD_card = SD.begin(SD_CS, SPI);
-	if (has_SD_card)
-		load_settings();
+	if (has_SD_card) {
+		if (!load_settings())
+			save_settings();
+	}
 	else {
 		Serial.println("WARN: SD card not found");
 		Monitor.println("No SD card");

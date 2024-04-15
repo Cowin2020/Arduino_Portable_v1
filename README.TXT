@@ -15,6 +15,9 @@ Copy files in "SDCard" to SD card if SD card is used
 Copy "config.h.example" to "config.h"
 Edit "config.h"
 
+device_name:
+	Identity of the device
+
 use_AP_mode:
 	"true" to provide WiFi access point, or
 	"false" to use an existing WiFi
