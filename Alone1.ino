@@ -51,6 +51,7 @@ static void save_settings(void) {
 		Serial.println("ERROR: failed to open setting file");
 		return;
 	}
+	file.println(device_name);
 	file.println(measure_interval / 1000);
 	file.println(int(use_AP_mode));
 	file.println(AP_SSID);
@@ -72,6 +73,8 @@ static bool load_settings(void) {
 		return false;
 	}
 
+	device_name = file.readStringUntil('\n');
+	device_name.trim();
 	s = file.readStringUntil('\n');
 	s.trim();
 	u = strtoul(s.c_str(), &e, 10);
