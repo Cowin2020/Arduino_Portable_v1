@@ -288,23 +288,49 @@ else {
 	document.body.appendChild($plot_GPS);
 
 	function plot_GPS() {
-		$plot_GPS.hidden = false;
-		Plotly.newPlot(
+			$plot_GPS.hidden = false;
+			Plotly.react(
 			$plot_GPS,
 			{
 				data: [
 					{
 						type: "scatter",
 						mode: "lines+markers",
+						marker: {color: "red"},
 						x: GPS.map(function (record) {return record[2];}),
 						y: GPS.map(function (record) {return record[1];})
 					}
 				],
 				layout: {
 					title: "Position",
-					xaxis: {title: "Longitude (E)"},
-					yaxis: {title: "Latitude (N)"},
-					margin: {r: 8}
+					xaxis: {
+						title: "Longitude (E)",
+						range: [113.836945, 114.331024]
+					},
+					yaxis: {
+						title: "Latitude (N)",
+						range: [22.214888, 22.539684],
+						scaleanchor: "x"
+					},
+					margin: {
+						r: 8
+					},
+					images: [
+						{
+							source: "HK.jpg",
+							layer: "below",
+							xref: "x",
+							yref: "y",
+							x: 113.8331682,
+							y: 22.14320451,
+							sizex: 0.57957280,
+							sizey: 0.41995108,
+							xanchor: "left",
+							yanchor: "bottom",
+							sizing: "stretch",
+							opacity: 0.5
+						}
+					]
 				},
 				config: {
 					responsive: true
