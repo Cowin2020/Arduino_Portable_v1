@@ -1,5 +1,24 @@
 import "./plotly.min.js";
 
+var data_fields = [
+	/* "Time" is excluded */
+	{
+		index: 1,
+		name: "Temperature",
+		unit: "\u2103"
+	},
+	{
+		index: 2,
+		name: "Pressure",
+		unit: "Pa"
+	},
+	{
+		index: 3,
+		name: "Humidity",
+		unit: "%"
+	}
+];
+
 var records = new Array();
 
 function $T(string) {
@@ -62,23 +81,22 @@ function show_dashboard(row) {
 				)
 			)
 		);
-		function $item(title, index, unit) {
-			return $E("div", {"class": "item"}, [
-				$E("span", {"class": "name"}, [
-					$T(title)
-				]),
-				$E("span", {"class": "value"}, [
-					$T(row[index]),
-					$E("span", null, [$T(unit)])
-				])
-			])
-		}
 		$dashboard.appendChild(
-			$E("div", {"class": "items"}, [
-				$item("Temperature", 1, "\u2103"),
-				$item("Pressure", 2, "Pa"),
-				$item("Humidity", 3, "%")
-			])
+			$E("div", {"class": "items"},
+				data_fields.map(
+					function (field) {
+						return $E("div", {"class": "item"}, [
+							$E("span", {"class": "name"}, [
+								$T(field.name)
+							]),
+							$E("span", {"class": "value"}, [
+								$T(row[field.index]),
+								$E("span", null, [$T(field.unit)])
+							])
+						]);
+					}
+				)
+			)
 		);
 	}
 }
@@ -127,27 +145,23 @@ document.body.appendChild(
 	])
 );
 
-var $plot_temperature, $plot_pressure, $plot_humidity;
-document.body.appendChild(
-	$plot_temperature = $E("div", {"class": "plot"})
-);
-document.body.appendChild(
-	$plot_pressure = $E("div", {"class": "plot"})
-);
-document.body.appendChild(
-	$plot_humidity = $E("div", {"class": "plot"})
+var $plots = data_fields.map(
+	function () {
+		var $plot = $E("div", {"class": "plot"});
+		document.body.appendChild($plot);
+		return $plot;
+	}
 );
 
+function hide_plot() {
+	$plots.forEach(function ($plot) {$plot.hidden = true;});
+}
+
 function show_plot(rows) {
-	if (!Array.isArray(rows)) {
-		$plot_temperature.hidden = true;
-		$plot_pressure.hidden = true;
-		$plot_humidity.hidden = true;
-	}
+	if (!Array.isArray(rows))
+		hide_plot();
 	else {
-		$plot_temperature.hidden = false;
-		$plot_pressure.hidden = false;
-		$plot_humidity.hidden = false;
+		$plots.forEach(function ($plot) {$plot.hidden = false;});
 		function column(n) {
 			return rows.map(function (row) {return row[n]});
 		}
@@ -158,28 +172,16 @@ function show_plot(rows) {
 		var config = {
 			responsive: true
 		};
-		Plotly.newPlot(
-			$plot_temperature,
-			{
-				data: [{x: time, y: column(1)}],
-				layout: {title: "Temperature (\u2103)", ...layout},
-				config: config
-			}
-		);
-		Plotly.newPlot(
-			$plot_pressure,
-			{
-				data: [{x: time, y: column(2)}],
-				layout: {title: "Pressure (Pa)", ...layout},
-				config: config
-			}
-		);
-		Plotly.newPlot(
-			$plot_humidity,
-			{
-				data: [{x: time, y: column(3)}],
-				layout: {title: "Humidity (%)", ...layout},
-				config: config
+		data_fields.forEach(
+			function (field, index) {
+				Plotly.newPlot(
+					$plots[index],
+					{
+						data: [{x: time, y: column(field.index)}],
+						layout: {title: field.name + " (" + field.unit + ")", ...layout},
+						config: config
+					}
+				);
 			}
 		);
 	}
@@ -190,9 +192,7 @@ $loading.hidden = true;
 document.body.appendChild($loading);
 
 function load() {
-	$plot_temperature.hidden = true;
-	$plot_pressure.hidden = true;
-	$plot_humidity.hidden = true;
+	hide_plot();
 	$list.textContent = null;
 	$loading.hidden = false;
 	var xhr = new XMLHttpRequest();

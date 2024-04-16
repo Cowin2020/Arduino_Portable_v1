@@ -34,11 +34,32 @@ static bool need_save = false;
 static bool need_reboot = false;
 
 /*****************************************************************************/
+/* Data */
+
+struct Data {
+	DateTime time;
+	float temperature;
+	float pressure;
+	float humidity;
+};
+
+static char const *data_fields[] = {
+	"time",
+	"temperature",
+	"pressure",
+	"humidity"
+};
+
+static String show_Data(struct Data const *const data) {
+	return show_time(data->time) + ',' + data->temperature + ',' + data->pressure + ',' + data->humidity;
+}
+
+/*****************************************************************************/
 /* SD card */
 
 static char const setting_filename[] = "/setting.txt";
 static char const data_filename[] = "/data.csv";
-static char const data_header[] = "time,temperature,pressure,humidity";
+static String data_header;
 
 // static SPIClass SPI_1(HSPI);
 static bool has_SD_card;
@@ -140,13 +161,6 @@ static String show_time(DateTime const datetime) {
 
 Adafruit_BME280 BME280;
 
-struct Data {
-	DateTime time;
-	float temperature;
-	float pressure;
-	float humidity;
-};
-
 static size_t const records_max_size = 60;
 static std::deque<Data> records;
 
@@ -161,11 +175,9 @@ static void measure(void) {
 	data.pressure = BME280.readPressure();
 	data.humidity = BME280.readHumidity();
 
-	Serial.printf(
-		"Measure %s,%f,%f,%f\r\n",
-		show_time(data.time).c_str(),
-		data.temperature, data.pressure, data.humidity
-	);
+	String const data_string = show_Data(&data);
+	Serial.print("Measure ");
+	Serial.println(data_string);
 
 	if (records.size() >= records_max_size) records.pop_back();
 	records.push_front(data);
@@ -173,10 +185,7 @@ static void measure(void) {
 	if (has_SD_card) {
 		File file = SD.open(data_filename, "a", true);
 		try {
-			file.printf(
-				"%s,%f,%f,%f\r\n",
-				show_time(data.time).c_str(), data.temperature, data.pressure, data.humidity
-			);
+			file.println(data_string);
 		}
 		catch (...) {
 			Serial.println("ERROR: failed to write data into SD card");
@@ -424,7 +433,7 @@ static httpsserver::HTTPServer HTTPd;
 static httpsserver::SSLCert certificate;
 static httpsserver::HTTPSServer HTTPSd(&certificate);
 
-static PROGMEM char const web_home_html[] =
+static PROGMEM char const web_home_html_1[] =
 R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 <head>
 <meta content-type='application/xhtml+xml; charset=UTF-8' />
@@ -542,18 +551,10 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 			$thead = $E('thead');
 			s_($thead, 'border-bottom-style', 'solid');
 			$tr = $E('tr');
-			$th = $E('th');
-			c_($th, $T('Time'));
-			c_($tr, $th);
-			$th = $E('th');
-			c_($th, $T('Temperature'));
-			c_($tr, $th);
-			$th = $E('th');
-			c_($th, $T('Pressure'));
-			c_($tr, $th);
-			$th = $E('th');
-			c_($th, $T('Humidity'));
-			c_($tr, $th);
+
+)HTML";
+
+static PROGMEM char const web_home_html_2[] = R"HTML(
 			c_($thead, $tr);
 			c_($table, $thead);
 			$list = $tbody = $E('tbody');
@@ -565,7 +566,7 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 			var $loading = $E('p');
 			c_($loading, $T('Loading...'));
 			c_(document.body, $loading);
-			var xhr = new XMLHttpRequest;
+			var xhr = new XMLHttpRequest();
 			xhr.onloadend = function (event) {
 				document.body.removeChild($loading);
 				var text = xhr.responseText;
@@ -701,6 +702,7 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 			$GPS_downloader.setAttribute('href', URL.createObjectURL(new Blob(Array.of(content), {type: 'text/csv'})));
 			setTimeout(function () {$GPS_downloader.click();}, 1000);
 		}
+
 		$save_GPS.addEventListener(
 			'click',
 			function (event) {
@@ -714,9 +716,33 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 </html>
 )HTML";
 
+static String javascript_escape(String const &string) {
+	String result;
+	for (char const c: string)
+		switch (c) {
+		case '\"':
+			result.concat("\\\"");
+			break;
+		case '\'':
+			result.concat("\\\'");
+			break;
+		default:
+			result.concat(c);
+		}
+	return result;
+}
+
 static void web_home_handle(httpsserver::HTTPRequest *const request, httpsserver::HTTPResponse *const response) {
 	response->setHeader("CONTENT-TYPE", "text/html; charset=UTF-8");
-	response->write(reinterpret_cast<byte const *>(web_home_html), sizeof web_home_html - 1);
+	response->write(reinterpret_cast<byte const *>(web_home_html_1), sizeof web_home_html_1 - 1);
+	for (char const *field: data_fields) {
+		response->println("\t\t\t$th = $E('th');");
+		response->print("\t\t\tc_($th, $T('");
+		response->print(javascript_escape(field));
+		response->println("'));");
+		response->println("\t\t\tc_($tr, $th);");
+	}
+	response->write(reinterpret_cast<byte const *>(web_home_html_2), sizeof web_home_html_2 - 1);
 	response->finalize();
 }
 
@@ -758,21 +784,14 @@ static httpsserver::ResourceNode web_icon_node("/favicon.ico", "GET", web_icon_h
 static void web_data_handle(httpsserver::HTTPRequest *const request, httpsserver::HTTPResponse *const response) {
 	response->setHeader("CONTENT-TYPE", "text/csv");
 	response->println(data_header);
-	for (Data const record: records) {
-		response->print(show_time(record.time));
-		response->print(',');
-		response->print(record.temperature);
-		response->print(',');
-		response->print(record.pressure);
-		response->print(',');
-		response->println(record.humidity);
-	}
+	for (Data const &record: records)
+		response->println(show_Data(&record));
 }
 
 static httpsserver::ResourceNode web_data_node("/recent.csv", "GET", web_data_handle);
 static char buffer[32768];
 
-static PROGMEM char const web_setting_head[] =
+static PROGMEM char const web_setting_html_1[] =
 "<html xmlns='http://www.w3.org/1999/xhtml'>\r\n"
 	"<head>\r\n"
 		"<meta content-type='application/xhtml+xml; charset=UTF-8' />\r\n"
@@ -785,9 +804,16 @@ static PROGMEM char const web_setting_head[] =
 	"<body>\r\n"
 		"<p><a href='./'>&#x2190; Back</a></p>\r\n";
 
-static PROGMEM char const web_setting_tail[] =
+static PROGMEM char const web_setting_html_2[] =
 	"</body>"
 "</html>";
+
+static PROGMEM char const web_setting_form_0[] =
+	"<form"
+		" action='setting.exe'"
+		" method='POST'"
+		" style='margin: 1ex; border: solid thin; padding: 1ex'"
+	">\r\n";
 
 static String XML_escape(String const &string) {
 	String result;
@@ -815,13 +841,10 @@ static String XML_escape(String const &string) {
 }
 
 static void web_setting_handle(httpsserver::HTTPRequest *const request, httpsserver::HTTPResponse *const response) {
-	static char const form_start[] =
-		"<form action='setting.exe' method='POST' style='margin: 1ex; border: solid thin; padding: 1ex'>\r\n";
-
 	response->setHeader("CONTENT-TYPE", "application/xhtml+xml; charset=UTF-8");
-	response->write(reinterpret_cast<byte const *>(web_setting_head), sizeof web_setting_head - 1);
+	response->write(reinterpret_cast<byte const *>(web_setting_html_1), sizeof web_setting_html_1 - 1);
 
-	response->write(reinterpret_cast<byte const *>(form_start), sizeof form_start - 1);
+	response->write(reinterpret_cast<byte const *>(web_setting_form_0), sizeof web_setting_form_0 - 1);
 	response->print(
 			"<label>"
 				"Current time "
@@ -831,7 +854,7 @@ static void web_setting_handle(httpsserver::HTTPRequest *const request, httpsser
 		"</form>"
 	);
 
-	response->write(reinterpret_cast<byte const *>(form_start), sizeof form_start - 1);
+	response->write(reinterpret_cast<byte const *>(web_setting_form_0), sizeof web_setting_form_0 - 1);
 	response->print(
 			"<label>"
 				"Device ID "
@@ -845,7 +868,7 @@ static void web_setting_handle(httpsserver::HTTPRequest *const request, httpsser
 		"</form>"
 	);
 
-	response->write(reinterpret_cast<byte const *>(form_start), sizeof form_start - 1);
+	response->write(reinterpret_cast<byte const *>(web_setting_form_0), sizeof web_setting_form_0 - 1);
 	response->print(
 			"<label>"
 				"Measure interval / seconds "
@@ -859,7 +882,7 @@ static void web_setting_handle(httpsserver::HTTPRequest *const request, httpsser
 		"</form>"
 	);
 
-	response->write(reinterpret_cast<byte const *>(form_start), sizeof form_start - 1);
+	response->write(reinterpret_cast<byte const *>(web_setting_form_0), sizeof web_setting_form_0 - 1);
 	response->print(
 			"<label style='display: block'>"
 				"Provide WiFi "
@@ -916,7 +939,7 @@ static void web_setting_handle(httpsserver::HTTPRequest *const request, httpsser
 		"</form>"
 	);
 
-	response->print(form_start);
+	response->print(web_setting_form_0);
 	response->print(
 			"<label style='display: block'>"
 				"Confirm "
@@ -925,7 +948,7 @@ static void web_setting_handle(httpsserver::HTTPRequest *const request, httpsser
 		"</form>"
 	);
 
-	response->print(form_start);
+	response->print(web_setting_form_0);
 	response->print(
 			"<label style='display: block'>"
 				"Confirm "
@@ -934,7 +957,7 @@ static void web_setting_handle(httpsserver::HTTPRequest *const request, httpsser
 		"</form>"
 	);
 
-	response->write(reinterpret_cast<byte const *>(form_start), sizeof form_start - 1);
+	response->write(reinterpret_cast<byte const *>(web_setting_form_0), sizeof web_setting_form_0 - 1);
 	response->print(
 			"<label style='display: block'>Confirm "
 				"<input type='checkbox' name='reboot' />"
@@ -943,7 +966,7 @@ static void web_setting_handle(httpsserver::HTTPRequest *const request, httpsser
 		"</form>"
 	);
 
-	response->write(reinterpret_cast<byte const *>(web_setting_tail), sizeof web_setting_tail - 1);
+	response->write(reinterpret_cast<byte const *>(web_setting_html_2), sizeof web_setting_html_2 - 1);
 	response->finalize();
 }
 
@@ -1097,7 +1120,6 @@ static httpsserver::ResourceNode web_command_node("/setting.exe", "POST", web_co
 
 static void web_file_handle(httpsserver::HTTPRequest *const request, httpsserver::HTTPResponse *const response) {
 	std::string const name = request->getRequestString();
-	Serial.println(name.c_str());
 	if (request->getMethod() != "GET") {
 		response->setStatusCode(405);
 		response->setStatusText("METHOD NOT ALLOWED");
@@ -1202,6 +1224,13 @@ void loop(void) {
 }
 
 void setup(void) {
+	/* Constants*/
+	data_header += data_fields[0];
+	for (unsigned int i = 0; i < sizeof data_fields / sizeof *data_fields; ++i) {
+		data_header += ',';
+		data_header += data_fields[i];
+	}
+
 	/* Serial port */
 	Serial.begin(serial_baudrate);
 
