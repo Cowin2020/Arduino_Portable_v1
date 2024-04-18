@@ -9,7 +9,7 @@ try:
 except:
 	PORT = 8880
 
-data_fields = ["time", "temperature", "pressure", "humidity"]
+data_fields = ["time", "latitude", "longitude", "altitude", "temperature", "pressure", "humidity"]
 id_fields = "identity"
 
 table = dict()

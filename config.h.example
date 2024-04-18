@@ -8,6 +8,7 @@ static String AP_SSID = "My SSID";
 static String AP_PASS = "My password";
 static String STA_SSID = "Use this SSID";
 static String STA_PASS = "and password";
+static String report_URL = "http://api.example.com:80/";
 
 static unsigned int const start_wait_time = 6000;
 static unsigned int const reboot_wait_time = 6000;

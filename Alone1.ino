@@ -79,6 +79,7 @@ static void save_settings(void) {
 	file.println(AP_PASS);
 	file.println(STA_SSID);
 	file.println(STA_PASS);
+	file.println(report_URL);
 	file.close();
 }
 
@@ -112,6 +113,8 @@ static bool load_settings(void) {
 	STA_SSID.trim();
 	STA_PASS = file.readStringUntil('\n');
 	STA_PASS.trim();
+	report_URL = file.readStringUntil('\n');
+	report_URL.trim();
 
 	file.close();
 	return true;
@@ -446,10 +449,15 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 <noscript>Javascript is required for this web page.</noscript>
 <script type='text/javascript'>
 	(function(p){document.readyState!=='loading'?p():document.addEventListener('DOMContentLoaded',p)})
-	(function(p){return import('./script.js').then(function(){},p);}
+	(function(p){return import('x/script.js').then(function(){},p);}
 	(function(SD_load_error){
 		'use strict';
 		console.log('Failed to load script from SD card:', SD_load_error);
+
+		var data_fields = [)HTML";
+
+static PROGMEM char const web_home_html_2[] = R"HTML(];
+
 		document.body.textContent = '';
 		function $T(string) {
 			return document.createTextNode(string);
@@ -518,26 +526,53 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 			c_($p, $a);
 			c_(document.body, $p);
 		}();
-		var $reflesh, $auto;
+		var $refresh, $refresh_auto;
 		void function () {
 			var $form, $button, $label, $input;
-			$reflesh = $form = $E('form');
-			s_($form, 'margin-top', '2ex');
-			s_($form, 'margin-bottom', '2ex');
-			$button = $E('button');
-			a_($button, 'type', 'submit');
-			c_($button, $T('Reflesh now'));
-			c_($form, $button);
+			$refresh = $form = $E('form');
+			s_($form, 'display', 'inline');
+			s_($form, 'margin', '1ex');
+			s_($form, 'border', 'solid thin gray');
+			s_($form, 'padding', '1ex');
 			$label = $E('label');
-			s_($label, 'margin-left', '2ex');
+			s_($label, 'margin-right', '1ex');
 			s_($label, 'padding', '1ex');
-			c_($label, $T('Auto reflesh'));
-			$auto = $input = $E('input');
+			$refresh_auto = $input = $E('input');
 			a_($input, 'type', 'checkbox');
 			c_($label, $input);
+			c_($label, $T('Auto refresh'));
 			c_($form, $label);
+			$button = $E('button');
+			a_($button, 'type', 'submit');
+			s_($button, 'margin-left', '1ex');
+			c_($button, $T('Refresh now'));
+			c_($form, $button);
 			c_(document.body, $form);
 		}();
+		var $report, $report_auto;
+		void function () {
+			var $form, $button, $label, $input;
+			$report = $form = $E('form');
+			s_($form, 'display', 'inline');
+			s_($form, 'margin', '1ex');
+			s_($form, 'border', 'solid thin gray');
+			s_($form, 'padding', '1ex');
+			$label = $E('label');
+			s_($label, 'margin-right', '1ex');
+			s_($label, 'padding', '1ex');
+			$report_auto = $input = $E('input');
+			a_($input, 'type', 'checkbox');
+			c_($label, $input);
+			c_($label, $T('Report to monitor'));
+			c_($form, $label);
+			$button = $E('button');
+			a_($button, 'type', 'submit');
+			s_($button, 'margin-left', '1ex');
+			c_($button, $T('Report now'));
+			c_($form, $button);
+			c_(document.body, $form);
+		}();
+		var latest = null;
 		var $list;
 		void function () {
 			var $table, $caption, $thead, $tr, $th, $tbody;
@@ -551,10 +586,13 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 			$thead = $E('thead');
 			s_($thead, 'border-bottom-style', 'solid');
 			$tr = $E('tr');
-
-)HTML";
-
-static PROGMEM char const web_home_html_2[] = R"HTML(
+			data_fields.forEach(
+				function (field) {
+					$th = $E('th');
+					c_($th, $T(field[0].toUpperCase() + field.substring(1)));
+					c_($tr, $th);
+				}
+			);
 			c_($thead, $tr);
 			c_($table, $thead);
 			$list = $tbody = $E('tbody');
@@ -574,12 +612,13 @@ static PROGMEM char const web_home_html_2[] = R"HTML(
 					alert('Failed to load data');
 					return;
 				}
+				var fields = null;
 				var lines = text.split('\r\n');
 				if (!lines || !(lines.length > 0)) return;
 				for (var i = 1; lines.length > i; ++i) {
 					var line = lines[lines.length - i].trim();
 					if (!line || typeof line !== 'string') continue;
-					var fields = line.split(',');
+					fields = line.split(',');
 					var $tr = $E('tr');
 					for (var j = 0; fields.length > j; ++j) {
 						var $td = $E('td');
@@ -592,103 +631,134 @@ static PROGMEM char const web_home_html_2[] = R"HTML(
 					}
 					c_($list, $tr);
 				}
+				latest = fields;
 			};
 			xhr.open('GET', '/recent.csv', true);
 			xhr.send(null);
 		}
-		$reflesh.addEventListener(
+		function report() {
+			if (!GPS.length) return;
+			var position = GPS[GPS.length - 1];
+			var formdata = new FormData;
+			formdata.append('time',      position[0]);
+			formdata.append('latitude',  position[1]);
+			formdata.append('longitude', position[2]);
+			formdata.append('latitude',  position[3]);
+			if (Array.isArray(latest))
+				for (var i = 1; data_fields.length > i; ++i)
+					formdata.append(data_fields[i], latest[i]);
+
+			fetch(
+
+				')HTML";
+
+static PROGMEM char const web_home_html_3[] = R"HTML(',
+
+				{method: 'POST', body: formdata}
+			)
+				.catch(function () {});
+
+		}
+		$refresh.addEventListener(
 			'submit',
 			function (event) {
 				event.preventDefault();
 				load();
 			}
 		);
-		var timer = null;
-		$auto.addEventListener(
+		var refresh_timer = null;
+		$refresh_auto.addEventListener(
 			'change',
 			function (event) {
-				if ($auto.checked) {
-					if (timer !== null) return;
-					timer = setInterval(load, 20000);
+				if ($refresh_auto.checked) {
+					if (refresh_timer !== null) return;
+					refresh_timer = setInterval(load, 30000);
 				}
 				else {
-					if (timer === null) return;
-					clearInterval(timer);
-					timer = null;
+					if (refresh_timer === null) return;
+					clearInterval(refresh_timer);
+					refresh_timer = null;
+				}
+			}
+		);
+		$report.addEventListener(
+			'submit',
+			function (event) {
+				event.preventDefault();
+				report();
+			}
+		);
+		var report_timer = null;
+		$report_auto.addEventListener(
+			'change',
+			function (event) {
+				if ($report.checked) {
+					if (report_timer !== null) return;
+					report_timer = setInterval(report, 30000);
+				}
+				else {
+					if (report_timer === null) return;
+					clearInterval(report_timer);
+					report_timer = null;
 				}
 			}
 		);
 		load();
 		var GPS = new Array;
-		var $GPS;
-		void function () {
-			var $table, $caption, $thead, $tr, $th, $tbody;
-			$table = $E('table');
-			s_($table, 'border-collapse', 'collapse');
-			s_($table, 'width', '100%');
-			$caption = $E('caption');
-			c_($caption, $T('GPS data'));
-			c_($table, $caption);
-			$thead = $E('thead');
-			s_($thead, 'border-bottom-style', 'solid');
-			$tr = $E('tr');
-			$th = $E('th');
-			c_($th, $T('Time'));
-			c_($tr, $th);
-			$th = $E('th');
-			c_($th, $T('Latitude'));
-			c_($tr, $th);
-			$th = $E('th');
-			c_($th, $T('Longitude'));
-			c_($tr, $th);
-			$th = $E('th');
-			c_($th, $T('Altitude'));
-			c_($tr, $th);
-			c_($thead, $tr);
-			c_($table, $thead);
-			$GPS = $tbody = $E('tbody');
-			c_($table, $tbody);
-			c_(document.body, $table);
-		}();
-		if ('geolocation' in navigator) {
-			function record_GPS(spacetime) {
-				var coords = spacetime.coords;
-				GPS.push(
-					[
-						string_from_Date(spacetime.timestamp, 'T'),
-						coords.latitude, coords.longitude, coords.altitude,
-						coords.accuracy, coords.altitudeAccuracy,
-						coords.heading, coords.speed
-					]
-				);
-				var $tr = $E('tr');
-				function add_td(value) {
-					var $td = $E('td');
-					s_($td, 'border-style', 'solid');
-					s_($td, 'border-width', 'thin');
-					s_($td, 'text-align', 'center');
-					if (value != null) c_($td, $T(String(value)));
-					c_($tr, $td);
+		if ('geolocation' in navigator)
+			if (window.isSecureContext) {
+				var $GPS;
+				void function () {
+					var $table, $caption, $thead, $tr, $th, $tbody;
+					$table = $E('table');
+					s_($table, 'border-collapse', 'collapse');
+					s_($table, 'width', '100%');
+					$caption = $E('caption');
+					c_($caption, $T('GPS data'));
+					c_($table, $caption);
+					$thead = $E('thead');
+					s_($thead, 'border-bottom-style', 'solid');
+					$tr = $E('tr');
+					['Time', 'Latitude', 'Longitude', 'Altitude'].forEach(
+						function (title) {
+							$th = $E('th');
+							c_($th, $T(title));
+							c_($tr, $th);
+						}
+					);
+					c_($thead, $tr);
+					c_($table, $thead);
+					$GPS = $tbody = $E('tbody');
+					c_($table, $tbody);
+					c_(document.body, $table);
+				}();
+				function record_GPS(spacetime) {
+					var coords = spacetime.coords;
+					GPS.push(
+						[
+							string_from_Date(spacetime.timestamp, 'T'),
+							coords.latitude, coords.longitude, coords.altitude,
+							coords.accuracy, coords.altitudeAccuracy,
+							coords.heading, coords.speed
+						]
+					);
+					var $tr = $E('tr');
+					function add_td(value) {
+						var $td = $E('td');
+						s_($td, 'border-style', 'solid');
+						s_($td, 'border-width', 'thin');
+						s_($td, 'text-align', 'center');
+						if (value != null) c_($td, $T(String(value)));
+						c_($tr, $td);
+					}
+					add_td(string_from_Date(spacetime.timestamp));
+					add_td(coords.latitude);
+					add_td(coords.longitude);
+					add_td(coords.altitude);
+					c_($GPS, $tr);
 				}
-				add_td(string_from_Date(spacetime.timestamp));
-				add_td(coords.latitude);
-				add_td(coords.longitude);
-				add_td(coords.altitude);
-				c_($GPS, $tr);
+				navigator.geolocation.watchPosition(record_GPS);
 			}
-			function get_GPS() {
-				navigator.geolocation.getCurrentPosition(
-					record_GPS,
-					function (error) {
-						console.error('GeoLocationError: ', error.message);
-					},
-					{timeout: 15000, enableHighAccuracy: true}
-				);
-			}
-			get_GPS();
-			// setInterval(get_GPS, 30000);
-			navigator.geolocation.watchPosition(record_GPS);
-		}
 		var $GPS_downloader = $E('a');
 		a_($GPS_downloader, 'download', 'gps.csv');
 		$GPS_downloader.hidden = true;
@@ -702,8 +772,7 @@ static PROGMEM char const web_home_html_2[] = R"HTML(
 			$GPS_downloader.setAttribute('href', URL.createObjectURL(new Blob(Array.of(content), {type: 'text/csv'})));
 			setTimeout(function () {$GPS_downloader.click();}, 1000);
 		}
-
-		$save_GPS.addEventListener(
+		$GPS_downloader.addEventListener(
 			'click',
 			function (event) {
 				event.preventDefault();
@@ -733,16 +802,22 @@ static String javascript_escape(String const &string) {
 }
 
 static void web_home_handle(httpsserver::HTTPRequest *const request, httpsserver::HTTPResponse *const response) {
-	response->setHeader("CONTENT-TYPE", "text/html; charset=UTF-8");
+	response->setHeader("CONTENT-TYPE", "application/xhtml+xml; charset=UTF-8");
+	response->setHeader("CONTENT-SECURITY-POLICY", "connect-src *");
 	response->write(reinterpret_cast<byte const *>(web_home_html_1), sizeof web_home_html_1 - 1);
+	bool first = true;
 	for (char const *field: data_fields) {
-		response->println("\t\t\t$th = $E('th');");
-		response->print("\t\t\tc_($th, $T('");
+		if (first)
+			first = false;
+		else
+			response->print(", ");
+		response->print('\'');
 		response->print(javascript_escape(field));
-		response->println("'));");
-		response->println("\t\t\tc_($tr, $th);");
+		response->print('\'');
 	}
 	response->write(reinterpret_cast<byte const *>(web_home_html_2), sizeof web_home_html_2 - 1);
+	response->print(javascript_escape(report_URL));
+	response->write(reinterpret_cast<byte const *>(web_home_html_3), sizeof web_home_html_3 - 1);
 	response->finalize();
 }
 
@@ -792,28 +867,31 @@ static httpsserver::ResourceNode web_data_node("/recent.csv", "GET", web_data_ha
 static char buffer[32768];
 
 static PROGMEM char const web_setting_html_1[] =
-"<html xmlns='http://www.w3.org/1999/xhtml'>\r\n"
-	"<head>\r\n"
-		"<meta content-type='application/xhtml+xml; charset=UTF-8' />\r\n"
-		"<meta charset='UTF-8' />\r\n"
-		"<meta name='viewport' content='width=device-width, initial-scale=1' />\r\n"
-		"<title>Settings</title>\r\n"
-		"<link rel='icon' type='image/png' href='favicon.ico' />\r\n"
-		"<link rel='stylesheet' type='text/css' href='style.css' />\r\n"
-	"</head>\r\n"
-	"<body>\r\n"
-		"<p><a href='./'>&#x2190; Back</a></p>\r\n";
+R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
+<head>
+<meta content-type='application/xhtml+xml; charset=UTF-8' />
+<meta charset='UTF-8' />
+<meta name='viewport' content='width=device-width, initial-scale=1' />
+<title>Settings</title>
+<link rel='icon' type='image/png' href='favicon.ico' />
+<link rel='stylesheet' type='text/css' href='style.css' />
+</head>
+<body>
+<p><a href='./'>&#x2190; Back</a></p>
+)HTML";
 
-static PROGMEM char const web_setting_html_2[] =
-	"</body>"
-"</html>";
+static PROGMEM char const web_setting_html_2[] = R"HTML(
+</body>
+</html>
+)HTML";
 
-static PROGMEM char const web_setting_form_0[] =
-	"<form"
-		" action='setting.exe'"
-		" method='POST'"
-		" style='margin: 1ex; border: solid thin; padding: 1ex'"
-	">\r\n";
+static PROGMEM char const web_setting_form_0[] = R"HTML(
+<form
+	action='setting.exe'
+	method='POST'
+	style='margin: 1ex; border: solid thin; padding: 1ex'
+>
+)HTML";
 
 static String XML_escape(String const &string) {
 	String result;
@@ -846,124 +924,140 @@ static void web_setting_handle(httpsserver::HTTPRequest *const request, httpsser
 
 	response->write(reinterpret_cast<byte const *>(web_setting_form_0), sizeof web_setting_form_0 - 1);
 	response->print(
-			"<label>"
-				"Current time "
-				"<input type='datetime-local' id='time' name='time' required='' />"
-			"</label>"
-			"<button type='submit'>Set</button>"
-		"</form>"
+		"\t<label>\r\n"
+		"\t\tCurrent time \r\n"
+		"\t\t<input type='datetime-local' id='time' name='time' required='' />\r\n"
+		"\t</label>\r\n"
+		"\t<button type='submit'>Set</button>\r\n"
+		"</form>\r\n"
 	);
 
 	response->write(reinterpret_cast<byte const *>(web_setting_form_0), sizeof web_setting_form_0 - 1);
 	response->print(
-			"<label>"
-				"Device ID "
-				"<input type='text' name='name' required='' value='"
+		"\t<label>\r\n"
+		"\t\tDevice ID\r\n"
+		"\t\t<input type='text' name='name' required='' value='"
 	);
 	response->print(XML_escape(device_name));
 	response->print(
-				"' />"
-			"</label>"
-			"<button type='submit'>Set</button>"
-		"</form>"
+		"' />\r\n"
+		"\t</label>\r\n"
+		"\t<button type='submit'>Set</button>\r\n"
+		"</form>\r\n"
 	);
 
 	response->write(reinterpret_cast<byte const *>(web_setting_form_0), sizeof web_setting_form_0 - 1);
 	response->print(
-			"<label>"
-				"Measure interval / seconds "
-				"<input type='number' name='interval' min='10' max='900' required='' value='"
+		"\t<label>\r\n"
+		"\t\tMeasure interval / seconds\r\n"
+		"\t\t<input type='number' name='interval' min='10' max='900' required='' value='"
 	);
 	response->print(String(measure_interval / 1000));
 	response->print(
-				"' />"
-			"</label>"
-			"<button type='submit'>Set</button>"
-		"</form>"
+		"' />"
+		"\t</label>\r\n"
+		"\t<button type='submit'>Set</button>\r\n"
+		"</form>\r\n"
 	);
 
 	response->write(reinterpret_cast<byte const *>(web_setting_form_0), sizeof web_setting_form_0 - 1);
 	response->print(
-			"<label style='display: block'>"
-				"Provide WiFi "
-				"<select name='WiFi'>"
-					"<option value='AP'"
+		"\t<label style='display: block'>\r\n"
+		"\t\tProvide WiFi\r\n"
+		"\t\t<select name='WiFi'>\r\n"
+		"\t\t\t<option value='AP'"
 	);
 	if (use_AP_mode) response->print(" selected=''");
 	response->print(
-					">"
-						"Access point"
-					"</option>"
-					"<option value='STA'"
+		">\r\n"
+		"\t\t\t\tAccess point\r\n"
+		"\t\t\t</option>\r\n"
+		"\t\t\t<option value='STA'"
 	);
 	if (!use_AP_mode) response->print(" selected=''");
 	response->print(
-					">"
-						"Station"
-					"</option>"
-				"</select>"
-			"</label>"
-			"<label style='display: block'>"
-				"AP SSID "
-				"<input name='APSSID' value='"
+		">\r\n"
+		"\t\t\t\tStation\r\n"
+		"\t\t\t</option>\r\n"
+		"\t\t</select>\r\n"
+		"\t</label>\r\n"
+		"\t<label style='display: block'>\r\n"
+		"\t\tAP SSID\r\n"
+		"\t\t<input name='APSSID' value='"
 	);
 	response->print(XML_escape(AP_SSID));
 	response->print(
-				"' />"
-			"</label>"
-			"<label style='display: block'>"
-				"AP PASS "
-				"<input name='APPASS' value='"
+		"' />\r\n"
+		"\t</label>\r\n"
+		"\t<label style='display: block'>\r\n"
+		"\t\tAP PASS\r\n"
+		"\t\t<input name='APPASS' value='"
 	);
 	response->print(XML_escape(AP_PASS));
 	response->print(
-				"' />"
-			"</label>"
-			"<label style='display: block'>"
-				"STA SSID "
-				"<input name='STASSID' value='"
+		"' />\r\n"
+		"\t</label>\r\n"
+		"\t<label style='display: block'>\r\n"
+		"\t\tSTA SSID\r\n"
+		"\t\t<input name='STASSID' value='"
 	);
 	response->print(XML_escape(STA_SSID));
 	response->print(
-				"' />"
-			"</label>"
-			"<label style='display: block'>"
-				"STA PASS "
-				"<input name='STAPASS' value='"
+		"' />\r\n"
+		"\t</label>\r\n"
+		"\t<label style='display: block'>\r\n"
+		"\t\tSTA PASS\r\n"
+		"\t\t<input name='STAPASS' value='"
 	);
 	response->print(XML_escape(STA_PASS));
 	response->print(
-				"' />"
-			"</label>"
-			"<button type='submit'>Set</button>\r\n"
-		"</form>"
-	);
-
-	response->print(web_setting_form_0);
-	response->print(
-			"<label style='display: block'>"
-				"Confirm "
-				"<input type='checkbox' name='measure' /></label>"
-			"<button type='submit'>Measure now</button>"
-		"</form>"
-	);
-
-	response->print(web_setting_form_0);
-	response->print(
-			"<label style='display: block'>"
-				"Confirm "
-				"<input type='checkbox' name='delete' /></label>"
-			"<button type='submit'>Delete all data</button>"
-		"</form>"
+		"' />\r\n"
+		"\t</label>\r\n"
+		"\t<button type='submit'>Set</button>\r\n\r\n"
+		"</form>\r\n"
 	);
 
 	response->write(reinterpret_cast<byte const *>(web_setting_form_0), sizeof web_setting_form_0 - 1);
 	response->print(
-			"<label style='display: block'>Confirm "
-				"<input type='checkbox' name='reboot' />"
-			"</label>"
-			"<button type='submit' name='reboot'>Reboot</button>"
-		"</form>"
+		"\t<label>\r\n"
+		"\t\tReport URL\r\n"
+		"\t\t<input type='text' name='report' required='' value='"
+	);
+	response->print(XML_escape(report_URL));
+	response->print(
+		"' />\r\n"
+		"\t</label>\r\n"
+		"\t<button type='submit'>Set</button>\r\n"
+		"</form>\r\n"
+	);
+
+	response->print(web_setting_form_0);
+	response->print(
+		"\t<label style='display: block'>\r\n"
+		"\t\tConfirm\r\n"
+		"\t\t<input type='checkbox' name='measure' />\r\n"
+		"\t</label>\r\n"
+		"\t<button type='submit'>Measure now</button>\r\n"
+		"</form>\r\n"
+	);
+
+	response->print(web_setting_form_0);
+	response->print(
+		"\t<label style='display: block'>\r\n"
+		"\t\tConfirm\r\n"
+		"\t\t<input type='checkbox' name='delete' />\r\n"
+		"\t</label>\r\n"
+		"\t<button type='submit'>Delete all data</button>\r\n"
+		"</form>\r\n"
+	);
+
+	response->write(reinterpret_cast<byte const *>(web_setting_form_0), sizeof web_setting_form_0 - 1);
+	response->print(
+		"\t<label style='display: block'>Confirm \r\n"
+		"\t\t<input type='checkbox' name='reboot' />\r\n"
+		"\t</label>\r\n"
+		"\t<button type='submit' name='reboot'>Reboot</button>\r\n"
+		"</form>\r\n"
 	);
 
 	response->write(reinterpret_cast<byte const *>(web_setting_html_2), sizeof web_setting_html_2 - 1);
@@ -973,18 +1067,19 @@ static void web_setting_handle(httpsserver::HTTPRequest *const request, httpsser
 static httpsserver::ResourceNode web_setting_node("/setting.html", "GET", web_setting_handle);
 
 static PROGMEM char const web_command_html[] =
-"<html xmlns='http://www.w3.org/1999/xhtml'>"
-	"<head>"
-		"<meta content-type='application/xhtml+xml; charset=UTF-8' />"
-		"<meta charset='UTF-8' />"
-		"<meta name='viewport' content='width=device-width, initial-scale=1' />"
-		"<title>Command redirection</title>"
-		"<link rel='stylesheet' type='text/css' href='style.css' />"
-	"</head>"
-	"<body>"
-		"<p>Command received. Redirect to <a href='./setting.html'>homepage.</a></p>"
-	"</body>"
-"</html>";
+R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
+<head>
+<meta content-type='application/xhtml+xml; charset=UTF-8' />
+<meta charset='UTF-8' />
+<meta name='viewport' content='width=device-width, initial-scale=1' />
+<title>Command redirection</title>
+<link rel='stylesheet' type='text/css' href='style.css' />
+</head>
+<body>
+<p>Command received. Redirect to <a href='./setting.html'>homepage.</a></p>
+</body>
+</html>
+)HTML";
 
 static std::string read_parser(httpsserver::HTTPBodyParser &parser) {
 	std::string result = "";
@@ -1076,6 +1171,13 @@ static void web_command_handle(httpsserver::HTTPRequest *const request, httpsser
 			Serial.print("command STAPASS = ");
 			Serial.println(value.c_str());
 			STA_PASS = value.c_str();
+			need_save = true;
+		}
+		else if (name == "report") {
+			std::string const value = read_parser(parser);
+			Serial.print("command report = ");
+			Serial.println(value.c_str());
+			report_URL = value.c_str();
 			need_save = true;
 		}
 		else if (name == "measure") {

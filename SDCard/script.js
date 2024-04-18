@@ -19,8 +19,6 @@ var data_fields = [
 	}
 ];
 
-var records = new Array();
-
 function $T(string) {
 	return document.createTextNode(string);
 }
