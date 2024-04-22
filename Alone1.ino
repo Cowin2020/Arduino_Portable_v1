@@ -885,8 +885,9 @@ static PROGMEM char const web_setting_html_2[] = R"HTML(
 </html>
 )HTML";
 
-static PROGMEM char const web_setting_form_0[] = R"HTML(
-<form
+static PROGMEM char const web_setting_form_1[] = "<form\r\n\tid='";
+
+static PROGMEM char const web_setting_form_2[] = R"HTML('
 	action='setting.exe'
 	method='POST'
 	style='margin: 1ex; border: solid thin; padding: 1ex'
@@ -918,21 +919,27 @@ static String XML_escape(String const &string) {
 	return result;
 }
 
+static void web_setting_form(httpsserver::HTTPResponse *const response, char const *const id) {
+	response->write(reinterpret_cast<byte const *>(web_setting_form_1), sizeof web_setting_form_1 - 1);
+	response->print(XML_escape(id));
+	response->write(reinterpret_cast<byte const *>(web_setting_form_2), sizeof web_setting_form_2 - 1);
+}
+
 static void web_setting_handle(httpsserver::HTTPRequest *const request, httpsserver::HTTPResponse *const response) {
 	response->setHeader("CONTENT-TYPE", "application/xhtml+xml; charset=UTF-8");
 	response->write(reinterpret_cast<byte const *>(web_setting_html_1), sizeof web_setting_html_1 - 1);
 
-	response->write(reinterpret_cast<byte const *>(web_setting_form_0), sizeof web_setting_form_0 - 1);
+	web_setting_form(response, "set_time");
 	response->print(
 		"\t<label>\r\n"
 		"\t\tCurrent time \r\n"
-		"\t\t<input type='datetime-local' id='time' name='time' required='' />\r\n"
+		"\t\t<input type='datetime-local' name='time' required='' />\r\n"
 		"\t</label>\r\n"
 		"\t<button type='submit'>Set</button>\r\n"
 		"</form>\r\n"
 	);
 
-	response->write(reinterpret_cast<byte const *>(web_setting_form_0), sizeof web_setting_form_0 - 1);
+	web_setting_form(response, "set_name");
 	response->print(
 		"\t<label>\r\n"
 		"\t\tDevice ID\r\n"
@@ -946,7 +953,7 @@ static void web_setting_handle(httpsserver::HTTPRequest *const request, httpsser
 		"</form>\r\n"
 	);
 
-	response->write(reinterpret_cast<byte const *>(web_setting_form_0), sizeof web_setting_form_0 - 1);
+	web_setting_form(response, "set_interval");
 	response->print(
 		"\t<label>\r\n"
 		"\t\tMeasure interval / seconds\r\n"
@@ -960,7 +967,7 @@ static void web_setting_handle(httpsserver::HTTPRequest *const request, httpsser
 		"</form>\r\n"
 	);
 
-	response->write(reinterpret_cast<byte const *>(web_setting_form_0), sizeof web_setting_form_0 - 1);
+	web_setting_form(response, "set_wifi");
 	response->print(
 		"\t<label style='display: block'>\r\n"
 		"\t\tProvide WiFi\r\n"
@@ -1017,7 +1024,7 @@ static void web_setting_handle(httpsserver::HTTPRequest *const request, httpsser
 		"</form>\r\n"
 	);
 
-	response->write(reinterpret_cast<byte const *>(web_setting_form_0), sizeof web_setting_form_0 - 1);
+	web_setting_form(response, "set_report");
 	response->print(
 		"\t<label>\r\n"
 		"\t\tReport URL\r\n"
@@ -1031,7 +1038,7 @@ static void web_setting_handle(httpsserver::HTTPRequest *const request, httpsser
 		"</form>\r\n"
 	);
 
-	response->print(web_setting_form_0);
+	web_setting_form(response, "do_measure");
 	response->print(
 		"\t<label style='display: block'>\r\n"
 		"\t\tConfirm\r\n"
@@ -1041,7 +1048,7 @@ static void web_setting_handle(httpsserver::HTTPRequest *const request, httpsser
 		"</form>\r\n"
 	);
 
-	response->print(web_setting_form_0);
+	web_setting_form(response, "do_delete");
 	response->print(
 		"\t<label style='display: block'>\r\n"
 		"\t\tConfirm\r\n"
@@ -1051,7 +1058,7 @@ static void web_setting_handle(httpsserver::HTTPRequest *const request, httpsser
 		"</form>\r\n"
 	);
 
-	response->write(reinterpret_cast<byte const *>(web_setting_form_0), sizeof web_setting_form_0 - 1);
+	web_setting_form(response, "do_reboot");
 	response->print(
 		"\t<label style='display: block'>Confirm \r\n"
 		"\t\t<input type='checkbox' name='reboot' />\r\n"
