@@ -70,18 +70,23 @@
 	padding: 1ex;
 }
 
-.reflesh {
-	margin-top: 2ex;
-	margin-bottom: 2ex;
+.timers {
 	text-align: center;
 }
 
-.reflesh label {
-	margin-right: 2ex;
+.refresh, .report {
+	display: inline-block;
+	margin: 1ex;
+	border: solid thin;
+	padding: 1ex;
 }
 
-.reflesh button {
-	margin-left: 2ex;
+.refresh label, .report label {
+	margin-right: 1ex;
+}
+
+.refresh button, .report button {
+	margin-left: 1ex;
 }
 
 .plot {

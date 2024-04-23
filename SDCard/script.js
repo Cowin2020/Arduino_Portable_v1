@@ -119,12 +119,19 @@ document.body.appendChild(
 	])
 );
 
-var $reflesh, $auto;
+var $refresh, $auto_refresh, $report, $auto_report;
 document.body.appendChild(
-	$reflesh = $E("form", {"class": "reflesh"}, [
-		$auto = $E("input", {"type": "checkbox"}),
-		$E("label", null, [$T("Auto reflesh")]),
-		$E("button", {"type": "submit"}, [$T("Reflesh now")])
+	$E("p", {"class": "timers"}, [
+		$refresh = $E("form", {"class": "refresh"}, [
+			$auto_refresh = $E("input", {"type": "checkbox"}),
+			$E("label", null, [$T("Auto refresh")]),
+			$E("button", {"type": "submit"}, [$T("Refresh now")])
+		]),
+		$report = $E("form", {"class": "report"}, [
+			$auto_report = $E("input", {"type": "checkbox"}),
+			$E("label", null, [$T("Auto report")]),
+			$E("button", {"type": "submit"}, [$T("Report now")])
+		])
 	])
 );
 
@@ -233,7 +240,23 @@ function load() {
 	xhr.send(null);
 }
 
-$reflesh.addEventListener(
+function report() {
+	if (!GPS.length) return;
+	var position = GPS[GPS.length - 1];
+	var formdata = new FormData;
+	formdata.append('identity',  Alone.identity);
+	formdata.append('time',      position[0]);
+	formdata.append('latitude',  position[1]);
+	formdata.append('longitude', position[2]);
+	formdata.append('latitude',  position[3]);
+	if (Array.isArray(latest))
+		for (var i = 1; Alone.data_fields.length > i; ++i)
+			formdata.append(Alone.data_fields[i], latest[i]);
+	fetch(Alone.report, {method: 'POST', body: formdata})
+		.catch(function () {});
+}
+
+$refresh.addEventListener(
 	"submit",
 	function (event) {
 		event.preventDefault();
@@ -241,19 +264,44 @@ $reflesh.addEventListener(
 	}
 );
 
-var timer = null;
+var refresh_timer = null;
 
-$auto.addEventListener(
+$auto_refresh.addEventListener(
 	"change",
 	function (event) {
-		if ($auto.checked) {
-			if (timer !== null) return;
-			timer = setInterval(load, 20000);
+		if ($auto_refresh.checked) {
+			if (refresh_timer !== null) return;
+			refresh_timer = setInterval(load, 20000);
 		}
 		else {
-			if (timer === null) return;
-			clearInterval(timer);
-			timer = null;
+			if (refresh_timer === null) return;
+			clearInterval(refresh_timer);
+			refresh_timer = null;
+		}
+	}
+);
+
+$report.addEventListener(
+	"submit",
+	function (event) {
+		event.preventDefault();
+		report();
+	}
+);
+
+var report_timer = null;
+
+$auto_report.addEventListener(
+	"change",
+	function (event) {
+		if ($auto_report.checked) {
+			if (report_timer !== null) return;
+			report_timer = setInterval(report, 20000);
+		}
+		else {
+			if (report_timer === null) return;
+			clearInterval(report_timer);
+			report_timer = null;
 		}
 	}
 );
