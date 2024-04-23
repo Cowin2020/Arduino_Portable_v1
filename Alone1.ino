@@ -452,18 +452,16 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 <noscript>Javascript is required for this web page.</noscript>
 <script type='text/javascript'>
 	(function(p){document.readyState!=='loading'?p():document.addEventListener('DOMContentLoaded',p)})
-	(function(p){window.Alone={)HTML";
+	(function(p){window.Alone={
 
-static PROGMEM char const web_home_html_2[] =
-	R"HTML(};return import('./script.js').then(function(){},p);}
+)HTML";
+
+static PROGMEM char const web_home_html_2[] = R"HTML(
+
+	};return import('./script.js').then(function(){},p);}
 	(function(SD_load_error){
 		'use strict';
 		console.log('Failed to load script from SD card:', SD_load_error);
-
-		var data_fields = [)HTML";
-
-static PROGMEM char const web_home_html_3[] = R"HTML(];
-
 		document.body.textContent = '';
 		function $T(string) {
 			return document.createTextNode(string);
@@ -536,7 +534,7 @@ static PROGMEM char const web_home_html_3[] = R"HTML(];
 		void function () {
 			var $form, $button, $label, $input;
 			$refresh = $form = $E('form');
-			s_($form, 'display', 'inline');
+			s_($form, 'display', 'inline-block');
 			s_($form, 'margin', '1ex');
 			s_($form, 'border', 'solid thin gray');
 			s_($form, 'padding', '1ex');
@@ -559,7 +557,7 @@ static PROGMEM char const web_home_html_3[] = R"HTML(];
 		void function () {
 			var $form, $button, $label, $input;
 			$report = $form = $E('form');
-			s_($form, 'display', 'inline');
+			s_($form, 'display', 'inline-block');
 			s_($form, 'margin', '1ex');
 			s_($form, 'border', 'solid thin gray');
 			s_($form, 'padding', '1ex');
@@ -592,7 +590,7 @@ static PROGMEM char const web_home_html_3[] = R"HTML(];
 			$thead = $E('thead');
 			s_($thead, 'border-bottom-style', 'solid');
 			$tr = $E('tr');
-			data_fields.forEach(
+			Alone.data_fields.forEach(
 				function (field) {
 					$th = $E('th');
 					c_($th, $T(field[0].toUpperCase() + field.substring(1)));
@@ -652,8 +650,8 @@ static PROGMEM char const web_home_html_3[] = R"HTML(];
 			formdata.append('longitude', position[2]);
 			formdata.append('latitude',  position[3]);
 			if (Array.isArray(latest))
-				for (var i = 1; data_fields.length > i; ++i)
-					formdata.append(data_fields[i], latest[i]);
+				for (var i = 1; Alone.data_fields.length > i; ++i)
+					formdata.append(Alone.data_fields[i], latest[i]);
 			fetch(Alone.report, {method: 'POST', body: formdata})
 				.catch(function () {});
 		}
@@ -803,13 +801,11 @@ static void web_home_handle(httpsserver::HTTPRequest *const request, httpsserver
 	response->setHeader("CONTENT-TYPE", "application/xhtml+xml; charset=UTF-8");
 	response->setHeader("CONTENT-SECURITY-POLICY", "connect-src *");
 	response->write(reinterpret_cast<byte const *>(web_home_html_1), sizeof web_home_html_1 - 1);
-	response->print("identity:'");
+	response->print("\t\tidentity: '");
 	response->print(javascript_escape(device_name));
-	response->print("',");
-	response->print("report:'");
+	response->print("',\r\n\t\treport: '");
 	response->print(javascript_escape(report_URL));
-	response->print("'");
-	response->write(reinterpret_cast<byte const *>(web_home_html_2), sizeof web_home_html_2 - 1);
+	response->print("',\r\n\t\tdata_fields: [");
 	bool first = true;
 	for (char const *field: data_fields) {
 		if (first)
@@ -820,7 +816,8 @@ static void web_home_handle(httpsserver::HTTPRequest *const request, httpsserver
 		response->print(javascript_escape(field));
 		response->print('\'');
 	}
-	response->write(reinterpret_cast<byte const *>(web_home_html_3), sizeof web_home_html_3 - 1);
+	response->print("]\r\n");
+	response->write(reinterpret_cast<byte const *>(web_home_html_2), sizeof web_home_html_2 - 1);
 	response->finalize();
 }
 
