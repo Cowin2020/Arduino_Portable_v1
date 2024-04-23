@@ -17,6 +17,7 @@
 #include <SD.h>
 #include <RTClib.h>
 #include <Adafruit_SSD1306.h>
+#include <Fonts/TomThumb.h>
 #include <Adafruit_BME280.h>
 
 #include "config.h"
@@ -32,6 +33,8 @@ static std::condition_variable wait_measure_condition;
 
 static bool need_save = false;
 static bool need_reboot = false;
+
+static Adafruit_SSD1306 Monitor(128, 64);
 
 /*****************************************************************************/
 /* Data */
@@ -50,8 +53,29 @@ static char const *data_fields[] = {
 	"humidity"
 };
 
-static String show_Data(struct Data const *const data) {
-	return show_time(data->time) + ',' + data->temperature + ',' + data->pressure + ',' + data->humidity;
+static String CSV_Data(struct Data const *const data) {
+	return show_time(&data->time) + ',' + data->temperature + ',' + data->pressure + ',' + data->humidity;
+}
+
+static String pretty_Data(struct Data const *const data) {
+	char date[11], time[9];
+	String fulltime = show_time(&data->time);
+	if (fulltime.length() ==19) {
+		memcpy(date, fulltime.c_str(), 10);
+		date[10] = 0;
+		memcpy(time, fulltime.c_str() + 11, 8);
+		time[8] = 0;
+	}
+	else {
+		date[0] = '?';
+		date[1] = 0;
+		time[0] = '?';
+		time[1] = 0;
+	}
+	return String("Time:\r\n") + date + "\r\n" + time + "\r\n"
+		+ "Temperature:\r\n" + String(data->temperature) + "\r\n"
+		+ "Pressure:\r\n" + String(data->pressure) + "\r\n"
+		+ "Humidity:\r\n" + String(data->humidity) + "\r\n";
 }
 
 /*****************************************************************************/
@@ -152,9 +176,9 @@ static DateTime get_time(void) {
 		return internal_clock.now();
 }
 
-static String show_time(DateTime const datetime) {
-	if (datetime.isValid())
-		return datetime.timestamp();
+static String show_time(DateTime const *const datetime) {
+	if (datetime->isValid())
+		return datetime->timestamp();
 	else
 		return String("?");
 }
@@ -178,7 +202,7 @@ static void measure(void) {
 	data.pressure = BME280.readPressure();
 	data.humidity = BME280.readHumidity();
 
-	String const data_string = show_Data(&data);
+	String const data_string = CSV_Data(&data);
 	Serial.print("Measure ");
 	Serial.println(data_string);
 
@@ -195,6 +219,8 @@ static void measure(void) {
 		}
 		file.close();
 	}
+
+	redraw_display();
 }
 
 static void measure_thread(void) {
@@ -215,8 +241,6 @@ static void measure_thread(void) {
 /* WiFi */
 
 // static DNSServer DNSd;
-static Adafruit_SSD1306 Monitor(128, 64);
-static IPAddress my_IP_address;
 
 static void handle_WiFi_event(WiFiEvent_t const event) {
 	switch (event) {
@@ -337,24 +361,15 @@ static signed int check_WiFi_status(void) {
 	signed int status = WiFi.status();
 	if (status != last_status) {
 		last_status = status;
-		String const message = status_message(status);
-		Serial.println(message);
-		Monitor.clearDisplay();
-		Monitor.setCursor(0, 0);
-		Monitor.println(message);
+		Serial.println(status_message(status));
 		if (status == WL_CONNECTED) {
 			String const SSID = WiFi.SSID();
 			Serial.print("WiFi SSID: ");
-			Serial.println(SSID);
-			Monitor.println("WiFi SSID:");
-			Monitor.println(SSID);
-			my_IP_address = WiFi.localIP();
+			Serial.println(WiFi.SSID());
 			Serial.print("IP address: ");
-			Serial.println(my_IP_address.toString());
-			Monitor.println("IP address:");
-			Monitor.println(my_IP_address.toString());
+			Serial.println(WiFi.localIP().toString());
 		}
-		Monitor.display();
+		redraw_display();
 	}
 	return status;
 }
@@ -370,7 +385,7 @@ static void wifi_thread(void) {
 		}
 }
 
-static void setup_wifi(void) {
+static void setup_WiFi(void) {
 	WiFi.disconnect();
 	WiFi.onEvent(handle_WiFi_event);
 
@@ -379,7 +394,7 @@ static void setup_wifi(void) {
 		WiFi.disconnect();
 		WiFi.mode(WIFI_AP);
 		WiFi.setHostname("WeatherStation");
-		// my_IP_address = IPAddress(8, 8, 8, 8);
+		// IPAddress my_IP_address = IPAddress(8, 8, 8, 8);
 		// WiFi.softAPConfig(my_IP_address, my_IP_address, IPAddress(255, 255, 255, 0));
 		while (!WiFi.softAP(AP_SSID.c_str(), AP_PASS, 1, 0, 2)) {
 			Serial.println("ERROR: failed to create soft AP");
@@ -387,17 +402,10 @@ static void setup_wifi(void) {
 			Monitor.display();
 			delay(reinitialize_interval);
 		}
-		my_IP_address = WiFi.softAPIP();
-		String const SSID = WiFi.softAPSSID();
 		Serial.print("WiFi SSID: ");
-		Serial.println(SSID);
-		Monitor.println("WiFi SSID:");
-		Monitor.println(SSID);
+		Serial.println(WiFi.softAPSSID());
 		Serial.print("IP address: ");
-		Serial.println(my_IP_address.toString());
-		Monitor.println("IP address:");
-		Monitor.println(my_IP_address.toString());
-		Monitor.display();
+		Serial.println(WiFi.softAPIP().toString());
 
 		/* DNS server */
 		// static uint16_t const DNS_port = 53;
@@ -418,13 +426,8 @@ static void setup_wifi(void) {
 			Monitor.display();
 			delay(reinitialize_interval);
 		}
-		while (millis() < WiFi_wait_time) {
+		while (millis() < WiFi_wait_time && WiFi.status() != WL_CONNECTED)
 			delay(1);
-			if (WiFi.status() == WL_CONNECTED) {
-				my_IP_address = WiFi.localIP();
-				break;
-			}
-		}
 		std::thread(wifi_thread).detach();
 	}
 }
@@ -449,14 +452,17 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 <noscript>Javascript is required for this web page.</noscript>
 <script type='text/javascript'>
 	(function(p){document.readyState!=='loading'?p():document.addEventListener('DOMContentLoaded',p)})
-	(function(p){return import('x/script.js').then(function(){},p);}
+	(function(p){window.Alone={)HTML";
+
+static PROGMEM char const web_home_html_2[] =
+	R"HTML(};return import('./script.js').then(function(){},p);}
 	(function(SD_load_error){
 		'use strict';
 		console.log('Failed to load script from SD card:', SD_load_error);
 
 		var data_fields = [)HTML";
 
-static PROGMEM char const web_home_html_2[] = R"HTML(];
+static PROGMEM char const web_home_html_3[] = R"HTML(];
 
 		document.body.textContent = '';
 		function $T(string) {
@@ -640,6 +646,7 @@ static PROGMEM char const web_home_html_2[] = R"HTML(];
 			if (!GPS.length) return;
 			var position = GPS[GPS.length - 1];
 			var formdata = new FormData;
+			formdata.append('identity',  Alone.identity);
 			formdata.append('time',      position[0]);
 			formdata.append('latitude',  position[1]);
 			formdata.append('longitude', position[2]);
@@ -647,17 +654,8 @@ static PROGMEM char const web_home_html_2[] = R"HTML(];
 			if (Array.isArray(latest))
 				for (var i = 1; data_fields.length > i; ++i)
 					formdata.append(data_fields[i], latest[i]);
-
-			fetch(
-
-				')HTML";
-
-static PROGMEM char const web_home_html_3[] = R"HTML(',
-
-				{method: 'POST', body: formdata}
-			)
+			fetch(Alone.report, {method: 'POST', body: formdata})
 				.catch(function () {});
-
 		}
 		$refresh.addEventListener(
 			'submit',
@@ -805,6 +803,13 @@ static void web_home_handle(httpsserver::HTTPRequest *const request, httpsserver
 	response->setHeader("CONTENT-TYPE", "application/xhtml+xml; charset=UTF-8");
 	response->setHeader("CONTENT-SECURITY-POLICY", "connect-src *");
 	response->write(reinterpret_cast<byte const *>(web_home_html_1), sizeof web_home_html_1 - 1);
+	response->print("identity:'");
+	response->print(javascript_escape(device_name));
+	response->print("',");
+	response->print("report:'");
+	response->print(javascript_escape(report_URL));
+	response->print("'");
+	response->write(reinterpret_cast<byte const *>(web_home_html_2), sizeof web_home_html_2 - 1);
 	bool first = true;
 	for (char const *field: data_fields) {
 		if (first)
@@ -815,8 +820,6 @@ static void web_home_handle(httpsserver::HTTPRequest *const request, httpsserver
 		response->print(javascript_escape(field));
 		response->print('\'');
 	}
-	response->write(reinterpret_cast<byte const *>(web_home_html_2), sizeof web_home_html_2 - 1);
-	response->print(javascript_escape(report_URL));
 	response->write(reinterpret_cast<byte const *>(web_home_html_3), sizeof web_home_html_3 - 1);
 	response->finalize();
 }
@@ -860,7 +863,7 @@ static void web_data_handle(httpsserver::HTTPRequest *const request, httpsserver
 	response->setHeader("CONTENT-TYPE", "text/csv");
 	response->println(data_header);
 	for (Data const &record: records)
-		response->println(show_Data(&record));
+		response->println(CSV_Data(&record));
 }
 
 static httpsserver::ResourceNode web_data_node("/recent.csv", "GET", web_data_handle);
@@ -1300,6 +1303,34 @@ static void setup_webserver(void) {
 /*****************************************************************************/
 /* Main procedures */
 
+static void redraw_display(void) {
+	Monitor.clearDisplay();
+	Monitor.setCursor(0, 12);
+	if (has_SD_card)
+		Monitor.println("SD card found");
+	else
+		Monitor.println("No SD card");
+	if (use_AP_mode) {
+		Monitor.println("WiFi SSID:");
+		Monitor.println(WiFi.softAPSSID());
+		Monitor.println("IP address:");
+		Monitor.println(WiFi.softAPIP().toString());
+	}
+	else {
+		signed int status = WiFi.status();
+		Monitor.println(status_message(status));
+		if (WL_CONNECTED) {
+			Monitor.println("WiFi SSID:");
+			Monitor.println(WiFi.SSID());
+			Monitor.println("IP address:");
+			Monitor.println(WiFi.localIP().toString());
+		}
+	}
+	if (records.size())
+		Monitor.println(pretty_Data(&records.back()));
+	Monitor.display();
+}
+
 void loop(void) {
 	delay(1);
 	{
@@ -1345,8 +1376,9 @@ void setup(void) {
 
 	/* OLED display */
 	Monitor.begin(SSD1306_SWITCHCAPVCC, 0x3C);
-	Monitor.setRotation(2);
+	Monitor.setFont(&TomThumb);
 	Monitor.setTextColor(SSD1306_WHITE, SSD1306_BLACK);
+	Monitor.setRotation(3);
 	Monitor.clearDisplay();
 	Monitor.display();
 	Monitor.setCursor(0, 0);
@@ -1358,15 +1390,10 @@ void setup(void) {
 	pinMode(SD_MISO, INPUT_PULLUP);
 	SPI.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
 	has_SD_card = SD.begin(SD_CS, SPI);
-	if (has_SD_card) {
-		if (!load_settings())
-			save_settings();
-	}
-	else {
+	if (has_SD_card)
+		load_settings();
+	else
 		Serial.println("WARN: SD card not found");
-		Monitor.println("No SD card");
-		Monitor.display();
-	}
 
 	/* Clock */
 	external_clock_available = external_clock.begin();
@@ -1374,13 +1401,11 @@ void setup(void) {
 	/* Sensor */
 	while (!BME280.begin()) {
 		Serial.println("ERROR: BME280 not found");
-		Monitor.println("ERROR: BME280");
-		Monitor.display();
 		delay(reinitialize_interval);
 	}
 
 	/* WiFi */
-	setup_wifi();
+	setup_WiFi();
 
 	/* Web server */
 	setup_webserver();

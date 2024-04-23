@@ -49,6 +49,6 @@ Setup:
 To modify elements:
 	Edit "Alone1.ino":
 		modify "measure" to fit how the values measured
-		modify fields "struct Data", "data_fields" and "show_Data"
+		modify fields "struct Data", "data_fields[]" "CSV_Data()" and "pretty_Data()"
 	Edit "SDCard/script.js":
 		modify "data_fields"
