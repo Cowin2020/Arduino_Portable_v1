@@ -54,6 +54,26 @@ function string_from_Date(value, seperator = " ") {
 	);
 }
 
+function Timer() {
+	this.interval = null;
+	this.update();
+}
+Timer.prototype = {
+	run() {},
+	update() {},
+	set(checked) {
+		if (checked) {
+			if (this.interval !== null) return;
+			this.interval = setInterval(this.run.bind(this), 30000);
+		}
+		else {
+			if (this.interval === null) return;
+			clearInterval(this.interval);
+			this.interval = null;
+		}
+	}
+};
+
 document.body.style["margin"] = "1ex";
 
 var $dashboard;
@@ -123,12 +143,12 @@ var $refresh, $auto_refresh, $report, $auto_report;
 document.body.appendChild(
 	$E("p", {"class": "timers"}, [
 		$refresh = $E("form", {"class": "refresh"}, [
-			$auto_refresh = $E("input", {"type": "checkbox"}),
+			$auto_refresh = $E("input", {"type": "checkbox", "checked": ""}),
 			$E("label", null, [$T("Auto refresh")]),
 			$E("button", {"type": "submit"}, [$T("Refresh now")])
 		]),
 		$report = $E("form", {"class": "report"}, [
-			$auto_report = $E("input", {"type": "checkbox"}),
+			$auto_report = $E("input", {"type": "checkbox", "checked": ""}),
 			$E("label", null, [$T("Auto report")]),
 			$E("button", {"type": "submit"}, [$T("Report now")])
 		])
@@ -153,6 +173,7 @@ document.body.appendChild(
 var $plots = data_fields.map(
 	function () {
 		var $plot = $E("div", {"class": "plot"});
+		$plot.hidden = true;
 		document.body.appendChild($plot);
 		return $plot;
 	}
@@ -179,7 +200,7 @@ function show_plot(rows) {
 		};
 		data_fields.forEach(
 			function (field, index) {
-				Plotly.newPlot(
+				Plotly.react(
 					$plots[index],
 					{
 						data: [{x: time, y: column(field.index)}],
@@ -249,9 +270,9 @@ function report() {
 	formdata.append('latitude',  position[1]);
 	formdata.append('longitude', position[2]);
 	formdata.append('latitude',  position[3]);
-	if (Array.isArray(latest))
+	if (Array.isArray(position))
 		for (var i = 1; Alone.data_fields.length > i; ++i)
-			formdata.append(Alone.data_fields[i], latest[i]);
+			formdata.append(Alone.data_fields[i], position[i]);
 	fetch(Alone.report, {method: 'POST', body: formdata})
 		.catch(function () {});
 }
@@ -264,22 +285,19 @@ $refresh.addEventListener(
 	}
 );
 
-var refresh_timer = null;
-
-$auto_refresh.addEventListener(
-	"change",
-	function (event) {
-		if ($auto_refresh.checked) {
-			if (refresh_timer !== null) return;
-			refresh_timer = setInterval(load, 20000);
-		}
-		else {
-			if (refresh_timer === null) return;
-			clearInterval(refresh_timer);
-			refresh_timer = null;
-		}
+function RefreshTimer() {
+	Timer.call(this);
+}
+RefreshTimer.prototype = {
+	__proto__: Timer.prototype,
+	run: load,
+	update() {
+		this.set($auto_refresh.checked);
 	}
-);
+};
+
+var refresh_timer = new RefreshTimer();
+$auto_refresh.addEventListener("change", refresh_timer.run);
 
 $report.addEventListener(
 	"submit",
@@ -289,22 +307,19 @@ $report.addEventListener(
 	}
 );
 
-var report_timer = null;
-
-$auto_report.addEventListener(
-	"change",
-	function (event) {
-		if ($auto_report.checked) {
-			if (report_timer !== null) return;
-			report_timer = setInterval(report, 20000);
-		}
-		else {
-			if (report_timer === null) return;
-			clearInterval(report_timer);
-			report_timer = null;
-		}
+function ReportTimer() {
+	Timer.call(this);
+}
+ReportTimer.prototype = {
+	__proto__: Timer.prototype,
+	run: report,
+	update() {
+		this.set($auto_report.checked);
 	}
-);
+};
+
+var report_timer = new ReportTimer();
+$auto_report.addEventListener("change", report_timer.onchange);
 
 load();
 
