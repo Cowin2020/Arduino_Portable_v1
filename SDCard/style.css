@@ -104,6 +104,12 @@ thead {
 	border-bottom-style: solid;
 }
 
+th {
+	border-style: solid;
+	background-color: darkslategray;
+	color: snow;
+}
+
 td {
 	border-style: solid;
 	border-width: thin;

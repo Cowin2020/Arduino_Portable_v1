@@ -76,6 +76,8 @@ Timer.prototype = {
 
 document.body.style["margin"] = "1ex";
 
+/* Dashboard */
+
 var $dashboard = new Object;
 $dashboard.items = new Array(data_fields.length);
 $dashboard.root = $E("div", {"id": "dashboard"}, [
@@ -128,6 +130,8 @@ function show_dashboard(row) {
 
 show_dashboard(null);
 
+/* Download links */
+
 var $save_GPS;
 document.body.appendChild(
 	$E("p", {"class": "download-links"}, [
@@ -146,21 +150,29 @@ document.body.appendChild(
 	])
 );
 
+/* Refresh */
+
 var $refresh, $auto_refresh, $report, $auto_report;
 document.body.appendChild(
 	$E("p", {"class": "timers"}, [
 		$refresh = $E("form", {"class": "refresh"}, [
-			$auto_refresh = $E("input", {"type": "checkbox", "checked": ""}),
-			$E("label", null, [$T("Auto refresh")]),
+			$E("label", null, [
+				$auto_refresh = $E("input", {"type": "checkbox", "checked": ""}),
+				$T("Auto refresh")
+			]),
 			$E("button", {"type": "submit"}, [$T("Refresh now")])
 		]),
 		$report = $E("form", {"class": "report"}, [
-			$auto_report = $E("input", {"type": "checkbox", "checked": ""}),
-			$E("label", null, [$T("Auto report")]),
+			$E("label", null, [
+				$auto_report = $E("input", {"type": "checkbox", "checked": ""}),
+				$T("Auto report")
+			]),
 			$E("button", {"type": "submit"}, [$T("Report now")])
 		])
 	])
 );
+
+/* Sensor data */
 
 var $list;
 document.body.appendChild(
@@ -268,22 +280,6 @@ function load() {
 	xhr.send(null);
 }
 
-function report() {
-	if (!GPS.length) return;
-	var position = GPS[GPS.length - 1];
-	var formdata = new FormData;
-	formdata.append('identity',  Alone.identity);
-	formdata.append('time',      position[0]);
-	formdata.append('latitude',  position[1]);
-	formdata.append('longitude', position[2]);
-	formdata.append('latitude',  position[3]);
-	if (Array.isArray(position))
-		for (var i = 1; Alone.data_fields.length > i; ++i)
-			formdata.append(Alone.data_fields[i], position[i]);
-	fetch(Alone.report, {method: 'POST', body: formdata})
-		.catch(function () {});
-}
-
 $refresh.addEventListener(
 	"submit",
 	function (event) {
@@ -305,61 +301,48 @@ RefreshTimer.prototype = {
 
 var refresh_timer = new RefreshTimer();
 $auto_refresh.addEventListener("change", refresh_timer.update.bind(refresh_timer));
-
-$report.addEventListener(
-	"submit",
-	function (event) {
-		event.preventDefault();
-		report();
-	}
-);
-
-function ReportTimer() {
-	Timer.call(this);
-}
-ReportTimer.prototype = {
-	__proto__: Timer.prototype,
-	run: report,
-	update() {
-		this.set($auto_report.checked);
-	}
-};
-
-var report_timer = new ReportTimer();
-$auto_report.addEventListener("change", report_timer.update.bind(report_timer));
-
 load();
 
-var GPS = new Array;
+/* GPS */
 
-// var $GPS = $E("div", {"id": "GPS"});
-var $GPS;
-document.body.appendChild(
-	$E("table", null, [
-		$E("thead", null, [
-			$E("tr", null, [
-				$E("th", null, [$T("Time")]),
-				$E("th", null, [$T("Latitude")]),
-				$E("th", null, [$T("Longitude")]),
-				$E("th", null, [$T("Altitude")])
-			])
+var GPS = new Array;
+var $GPS = new Object;
+
+$GPS.table = $E("table", null, [
+	$E("tbody", null, [
+		$E("tr", null, [
+			$E("th", null, [$T("Time")]),
+			$GPS.time = $E("td")
 		]),
-		$GPS = $E("tbody")
+		$E("tr", null, [
+			$E("th", null, [$T("Latitude")]),
+			$GPS.latitude = $E("td")
+		]),
+		$E("tr", null, [
+			$E("th", null, [$T("Longitude")]),
+			$GPS.longitude = $E("td")
+		]),
+		$E("tr", null, [
+			$E("th", null, [$T("Altitude")]),
+			$GPS.altitude = $E("td")
+		])
 	])
-);
+]);
+$GPS.table.hidden = true;
+document.body.appendChild($GPS.table);
+
+$GPS.plot = $E("div", {"class": "plot"});
+$GPS.plot.hidden = true;
+document.body.appendChild($GPS.plot);
 
 if (!("geolocation" in navigator)) {
 	document.body.appendChild($E("p", null, [$T("Geo-location is not support in this browser")]));
 }
 else {
-	var $plot_GPS = $E("div", {"class": "plot"});
-	$plot_GPS.hidden = true;
-	document.body.appendChild($plot_GPS);
-
 	function plot_GPS() {
-			$plot_GPS.hidden = false;
-			Plotly.react(
-			$plot_GPS,
+		$GPS.plot.hidden = false;
+		Plotly.react(
+			$GPS.plot,
 			{
 				data: [
 					{
@@ -419,17 +402,11 @@ else {
 				coords.heading, coords.speed
 			]
 		);
-		var $tr = $E("tr", null,
-			[string_from_Date(spacetime.timestamp), coords.latitude, coords.longitude, coords.altitude].map(
-				function add_td(value) {
-					return $E("td", null, value == null ? null : [$T(String(value))]);
-				}
-			)
-		);
-		if ($GPS.firstChild)
-			$GPS.insertBefore($tr, $GPS.firstChild);
-		else
-			$GPS.appendChild($tr);
+		$GPS.time.textContent = string_from_Date(spacetime.timestamp);
+		$GPS.latitude.textContent = coords.latitude;
+		$GPS.longitude.textContent = coords.longitude;
+		$GPS.altitude.textContent = coords.altitude;
+		$GPS.table.hidden = false;
 		plot_GPS();
 	}
 
@@ -442,11 +419,48 @@ else {
 			{timeout: 15000, enableHighAccuracy: true}
 		)
 	}
-
 	get_GPS();
-	// setInterval(get_GPS, 30000);
-	navigator.geolocation.watchPosition(record_GPS);
+	setInterval(get_GPS, 30000);
+	// navigator.geolocation.watchPosition(record_GPS);
 }
+
+function report() {
+	if (!GPS.length) return;
+	var position = GPS[GPS.length - 1];
+	var formdata = new FormData;
+	formdata.append('identity',  Alone.identity);
+	formdata.append('time',      position[0]);
+	formdata.append('latitude',  position[1]);
+	formdata.append('longitude', position[2]);
+	formdata.append('latitude',  position[3]);
+	if (Array.isArray(position))
+		for (var i = 1; Alone.data_fields.length > i; ++i)
+			formdata.append(Alone.data_fields[i], position[i]);
+	fetch(Alone.report, {method: 'POST', body: formdata})
+		.catch(function () {});
+}
+
+$report.addEventListener(
+	"submit",
+	function (event) {
+		event.preventDefault();
+		report();
+	}
+);
+
+function ReportTimer() {
+	Timer.call(this);
+}
+ReportTimer.prototype = {
+	__proto__: Timer.prototype,
+	run: report,
+	update() {
+		this.set($auto_report.checked);
+	}
+};
+
+var report_timer = new ReportTimer();
+$auto_report.addEventListener("change", report_timer.update.bind(report_timer));
 
 var $GPS_downloader = $E("a", {"download": "gps.csv"});
 $GPS_downloader.hidden = true;
@@ -468,3 +482,5 @@ $save_GPS.addEventListener(
 		save_GPS();
 	}
 );
+
+/* ************************************************************************* */
