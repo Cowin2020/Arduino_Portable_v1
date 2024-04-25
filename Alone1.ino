@@ -753,7 +753,17 @@ static PROGMEM char const web_home_html_2[] = R"HTML(
 					add_td(coords.altitude);
 					c_($GPS, $tr);
 				}
-				navigator.geolocation.watchPosition(record_GPS);
+				function get_GPS() {
+					navigator.geolocation.getCurrentPosition(
+						record_GPS,
+						function (error) {
+							console.error("GeoLocationError: ", error.message);
+						},
+						{timeout: 15000, enableHighAccuracy: true}
+					)
+				}
+				get_GPS();
+				setInterval(get_GPS, 30000);
 			}
 		var $GPS_downloader = $E('a');
 		a_($GPS_downloader, 'download', 'gps.csv');
