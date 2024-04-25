@@ -212,6 +212,7 @@ function show_plot(rows) {
 		}
 		var time = column(0);
 		var layout = {
+			dragmode: "pan",
 			margin: {r: 8}
 		};
 		var config = {
@@ -364,9 +365,6 @@ else {
 						range: [22.214888, 22.539684],
 						scaleanchor: "x"
 					},
-					margin: {
-						r: 8
-					},
 					images: [
 						{
 							source: "HK.jpg",
@@ -382,7 +380,11 @@ else {
 							sizing: "stretch",
 							opacity: 0.5
 						}
-					]
+					],
+					dragmode: "pan",
+					margin: {
+						r: 8
+					}
 				},
 				config: {
 					responsive: true
