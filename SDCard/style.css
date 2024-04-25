@@ -7,14 +7,14 @@
 	background-color: #8AC;
 }
 
-#dashboard .nodata {
+#dashboard #nodata {
 	text-align: center;
 	font-size: 4rem;
 	color: #000;
 	text-shadow: 2px 2px 4px #FFF;
 }
 
-#dashboard .title {
+#dashboard #datetime {
 	display: flex;
 	flex-direction: row;
 	flex-wrap: wrap;
@@ -26,14 +26,14 @@
 	color: #CFD;
 }
 
-#dashboard .items {
+#dashboard #items {
 	display: flex;
 	flex-flow: row wrap;
 	justify-content: center;
 	column-gap: 3ex;
 }
 
-#dashboard .items .item {
+#dashboard #items .item {
 	display: flex;
 	flex-flow: column wrap;
 	justify-content: center;
@@ -43,12 +43,12 @@
 	text-align: center;
 }
 
-#dashboard .item .name {
+#dashboard #items .item .name {
 	font-size: 2rem;
 	color: #FED;
 }
 
-#dashboard .item .value {
+#dashboard #items .item .value {
 	font-size: 3rem;
 	color: snow;
 }

@@ -76,45 +76,52 @@ Timer.prototype = {
 
 document.body.style["margin"] = "1ex";
 
-var $dashboard;
-document.body.appendChild(
-	$dashboard = $E("div", {"id": "dashboard"})
-);
+var $dashboard = new Object;
+$dashboard.items = new Array(data_fields.length);
+$dashboard.root = $E("div", {"id": "dashboard"}, [
+	$dashboard.nodata = $E("div", {"id": "nodata"}, [
+		$T("No data")
+	]),
+	$dashboard.datetime = $E("div", {"id": "datetime"}, [
+		$dashboard.date = $E("span"),
+		$dashboard.time = $E("span")
+	]),
+	$E("div", {"id": "items"},
+		data_fields.map(
+			function (field, index) {
+				return $E("div", {"class": "item"}, [
+					$E("span", {"class": "name"}, [$T(field.name)]),
+					$E("span", {"class": "value"}, [
+						$dashboard.items[index] = $E("span", {"class": "value"}),
+						$E("span", {"class": "unit"}, [$T(field.unit)])
+					])
+				]);
+			}
+		)
+	)
+]);
+$dashboard.nodata.hidden = true;
+$dashboard.datetime.hidden = true;
+$dashboard.items.hidden = true;
+document.body.appendChild($dashboard.root);
 
 function show_dashboard(row) {
-	$dashboard.textContent = "";
-	if (row == null)
-		$dashboard.appendChild(
-			$E("div", {"class": "nodata"}, [
-				$T("No data")
-			])
-		);
+	if (row == null) {
+		$dashboard.nodata.hidden = false;
+		$dashboard.datetime.hidden = true;
+		$dashboard.items.hidden = true;
+	}
 	else {
-		$dashboard.appendChild(
-			$E("div", {"class": "title"},
-				row[0].split("T").map(
-					function (s) {
-						return $E("span", null, [$T(s)]);
-					}
-				)
-			)
-		);
-		$dashboard.appendChild(
-			$E("div", {"class": "items"},
-				data_fields.map(
-					function (field) {
-						return $E("div", {"class": "item"}, [
-							$E("span", {"class": "name"}, [
-								$T(field.name)
-							]),
-							$E("span", {"class": "value"}, [
-								$T(row[field.index]),
-								$E("span", null, [$T(field.unit)])
-							])
-						]);
-					}
-				)
-			)
+		$dashboard.nodata.hidden = true;
+		$dashboard.datetime.hidden = false;
+		$dashboard.items.hidden = false;
+		var date_time = row[0].split("T");
+		$dashboard.date.textContent = date_time[0];
+		$dashboard.time.textContent = date_time[1];
+		data_fields.forEach(
+			function (field, index) {
+				$dashboard.items[index].textContent = row[field.index];
+			}
 		);
 	}
 }
@@ -297,7 +304,7 @@ RefreshTimer.prototype = {
 };
 
 var refresh_timer = new RefreshTimer();
-$auto_refresh.addEventListener("change", refresh_timer.run);
+$auto_refresh.addEventListener("change", refresh_timer.update.bind(refresh_timer));
 
 $report.addEventListener(
 	"submit",
@@ -319,12 +326,13 @@ ReportTimer.prototype = {
 };
 
 var report_timer = new ReportTimer();
-$auto_report.addEventListener("change", report_timer.onchange);
+$auto_report.addEventListener("change", report_timer.update.bind(report_timer));
 
 load();
 
 var GPS = new Array;
 
+// var $GPS = $E("div", {"id": "GPS"});
 var $GPS;
 document.body.appendChild(
 	$E("table", null, [
