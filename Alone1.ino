@@ -112,6 +112,10 @@ static bool load_settings(void) {
 	String s;
 	unsigned long int u;
 
+	if (digitalRead(reset_pin) == HIGH) {
+		Serial.println("Setting is not loaded because of hardware switch");
+		return false;
+	}
 	SDCARD_LOCK(sdcard_lock)
 	File file = SD.open(setting_filename, "r", false);
 	if (!file) {
@@ -1377,6 +1381,9 @@ void setup(void) {
 		data_header += ',';
 		data_header += data_fields[i];
 	}
+
+	/* Reset pin */
+	pinMode(reset_pin, INPUT_PULLDOWN);
 
 	/* Serial port */
 	Serial.begin(serial_baudrate);

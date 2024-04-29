@@ -16,5 +16,6 @@ static unsigned int const WiFi_wait_time = 20000;
 static unsigned int const WiFi_check_interval = 10000;
 static unsigned int const serial_baudrate = 115200;
 static unsigned int const reinitialize_interval = 15000;
+static unsigned char const reset_pin = 34;
 
 #endif /* INCLUDE_CONFIG_H */
