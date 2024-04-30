@@ -210,8 +210,8 @@ static void measure(void) {
 	Serial.print("Measure ");
 	Serial.println(data_string);
 
-	if (records.size() >= records_max_size) records.pop_back();
-	records.push_front(data);
+	if (records.size() >= records_max_size) records.pop_front();
+	records.push_back(data);
 
 	if (has_SD_card) {
 		File file = SD.open(data_filename, "a", true);

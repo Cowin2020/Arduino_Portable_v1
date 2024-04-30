@@ -212,7 +212,7 @@ function show_plot(rows) {
 		}
 		var time = column(0);
 		var layout = {
-			dragmode: "pan",
+			dragmode: false,
 			margin: {r: 8}
 		};
 		var config = {
@@ -381,7 +381,7 @@ else {
 							opacity: 0.5
 						}
 					],
-					dragmode: "pan",
+					dragmode: false,
 					margin: {
 						r: 8
 					}
