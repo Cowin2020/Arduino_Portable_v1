@@ -357,12 +357,10 @@ else {
 				layout: {
 					title: "Position",
 					xaxis: {
-						title: "Longitude (E)",
-						range: [113.836945, 114.331024]
+						title: "Longitude (E)"
 					},
 					yaxis: {
 						title: "Latitude (N)",
-						range: [22.214888, 22.539684],
 						scaleanchor: "x"
 					},
 					images: [
@@ -371,14 +369,14 @@ else {
 							layer: "below",
 							xref: "x",
 							yref: "y",
-							x: 113.8331682,
-							y: 22.14320451,
-							sizex: 0.57957280,
-							sizey: 0.41995108,
+							x: 113.8303978,
+							y: 22.1501391,
+							sizex: 0.61396362,
+							sizey: 0.41495771,
 							xanchor: "left",
 							yanchor: "bottom",
 							sizing: "stretch",
-							opacity: 0.5
+							opacity: 0.75
 						}
 					],
 					dragmode: false,
