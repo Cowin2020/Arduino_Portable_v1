@@ -306,8 +306,16 @@ load();
 
 /* GPS */
 
-var GPS = new Array;
+var storage = window.sessionStorage;
+var GPS = null;
 var $GPS = new Object;
+
+try {
+	if (storage) GPS = JSON.parse(storage.getItem("GPS"));
+}
+catch {
+}
+if (!Array.isArray(GPS)) GPS = new Array;
 
 $GPS.table = $E("table", null, [
 	$E("tbody", null, [
@@ -402,6 +410,7 @@ else {
 				coords.heading, coords.speed
 			]
 		);
+		if (storage) storage.setItem("GPS", JSON.stringify(GPS));
 		$GPS.time.textContent = string_from_Date(spacetime.timestamp);
 		$GPS.latitude.textContent = coords.latitude;
 		$GPS.longitude.textContent = coords.longitude;
