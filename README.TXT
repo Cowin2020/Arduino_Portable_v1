@@ -2,6 +2,7 @@ Required libraries:
 	RTClib
 	Adafruit SSD1306
 	Adafruit BME280
+	Adafruit SHT4x Library
 	ESP32_HTTPS_Server
 		in file
 			src/HTTPConnection.hpp
@@ -14,6 +15,9 @@ Setup:
 	Copy files in "SDCard" to SD card if SD card is used
 	Copy "config.h.example" to "config.h"
 	Edit "config.h"
+
+	SENSOR:
+		either "SENSOR_BME280" or "SENSOR_SHT40"
 
 	device_name:
 		Identity of the device
