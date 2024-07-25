@@ -1631,11 +1631,15 @@ void setup(void) {
 	#if SENSOR == SENSOR_BME280
 		while (!BME280.begin()) {
 			Serial.println("ERROR: BME280 not found");
+			Monitor.println("ERROR: BME280 not found");
+			Monitor.display();
 			delay(reinitialize_interval);
 		}
 	#elif SENSOR == SENSOR_SHT40
 		while (!SHT4x.begin()) {
 			Serial.println("ERROR: SHT40 not found");
+			Monitor.println("ERROR: SHT40 not found");
+			Monitor.display();
 			delay(reinitialize_interval);
 		}
 		SHT4x.setPrecision(SHT4X_HIGH_PRECISION);
