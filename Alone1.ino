@@ -36,8 +36,13 @@ static bool need_reboot = false;
 
 static Adafruit_SSD1306 Monitor(128, 64);
 
-/*****************************************************************************/
+/* *************************************************************************** / ************************************ */
 /* Data */
+
+struct Field {
+	char const *name;
+	char const *unit;
+};
 
 struct Data {
 	DateTime time;
@@ -46,11 +51,11 @@ struct Data {
 	float humidity;
 };
 
-static char const *data_fields[] = {
-	"time",
-	"temperature",
-	"pressure",
-	"humidity"
+static struct Field const data_fields[] = {
+	{"time", ""},
+	{"temperature", "\u2103"},
+	{"pressure", "Pa"},
+	{"humidity", "%"}
 };
 
 static String CSV_Data(struct Data const *const data) {
@@ -78,12 +83,32 @@ static String pretty_Data(struct Data const *const data) {
 		+ "Humidity:\r\n" + String(data->humidity) + "\r\n";
 }
 
-/*****************************************************************************/
+struct GPS {
+	DateTime time;
+	float latitude;
+	float longitude;
+	float altitude;
+};
+
+static char const *gps_fields[] = {
+	"time",
+	"latitude",
+	"longitude",
+	"altitude"
+};
+
+static String CSV_GPS(struct GPS const *const data) {
+	return show_time(&data->time) + ',' + data->latitude + ',' + data->longitude + ',' + data->altitude;
+}
+
+/* *************************************************************************** / ************************************ */
 /* SD card */
 
 static char const setting_filename[] = "/setting.txt";
 static char const data_filename[] = "/data.csv";
+static char const gps_filename[] = "/gps.csv";
 static String data_header;
+static String gps_header;
 
 // static SPIClass SPI_1(HSPI);
 static bool has_SD_card;
@@ -148,7 +173,7 @@ static bool load_settings(void) {
 	return true;
 }
 
-/*****************************************************************************/
+/* *************************************************************************** / ************************************ */
 /* Real-time clock */
 
 static RTC_Millis internal_clock;
@@ -187,16 +212,17 @@ static String show_time(DateTime const *const datetime) {
 		return String("?");
 }
 
-/*****************************************************************************/
+/* *************************************************************************** / ************************************ */
 /* Measurement */
 
-Adafruit_BME280 BME280;
+static Adafruit_BME280 BME280;
 
 static size_t const records_max_size = 60;
-static std::deque<Data> records;
+static std::deque<struct Data> data_records;
+static std::deque<struct GPS> gps_records;
 
 static void measure(void) {
-	Data data;
+	struct Data data;
 	if (clock_available())
 		data.time = get_time();
 	else
@@ -210,8 +236,8 @@ static void measure(void) {
 	Serial.print("Measure ");
 	Serial.println(data_string);
 
-	if (records.size() >= records_max_size) records.pop_front();
-	records.push_back(data);
+	if (data_records.size() >= records_max_size) data_records.pop_front();
+	data_records.push_back(data);
 
 	if (has_SD_card) {
 		File file = SD.open(data_filename, "a", true);
@@ -219,7 +245,7 @@ static void measure(void) {
 			file.println(data_string);
 		}
 		catch (...) {
-			Serial.println("ERROR: failed to write data into SD card");
+			Serial.println("ERROR: failed to write weather data into SD card");
 		}
 		file.close();
 	}
@@ -241,7 +267,7 @@ static void measure_thread(void) {
 		}
 }
 
-/*****************************************************************************/
+/* *************************************************************************** / ************************************ */
 /* WiFi */
 
 // static DNSServer DNSd;
@@ -436,7 +462,7 @@ static void setup_WiFi(void) {
 	}
 }
 
-/*****************************************************************************/
+/* *************************************************************************** / ************************************ */
 /* Web server */
 
 static httpsserver::HTTPServer HTTPd;
@@ -456,13 +482,16 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 <noscript>Javascript is required for this web page.</noscript>
 <script type='text/javascript'>
 	(function(p){document.readyState!=='loading'?p():document.addEventListener('DOMContentLoaded',p)})
-	(function(p){window.Alone={
+	(function(p){
+		window.Alone = {
+			operator: location.pathname === '/operator',
 
 )HTML";
 
 static PROGMEM char const web_home_html_2[] = R"HTML(
-
-	};return import('./script.js').then(function(){},p);}
+		};
+		return import('./script.js').then(function(){}, p);
+	}
 	(function(SD_load_error){
 		'use strict';
 		console.log('Failed to load script from SD card:', SD_load_error);
@@ -510,27 +539,35 @@ static PROGMEM char const web_home_html_2[] = R"HTML(
 			s_($p, 'display', 'flex');
 			s_($p, 'flex-flow', 'row wrap');
 			s_($p, 'text-align', 'center');
+			if (Alone.operator) {
+				$a = $E('a');
+				style_$a();
+				a_($a, 'href', 'setting.html');
+				c_($a, $T('Settings'));
+				c_($p, $a);
+			}
 			$a = $E('a');
 			style_$a();
-			a_($a, 'href', 'setting.html');
-			c_($a, $T('Settings'));
-			c_($p, $a);
-			$a = $E('a');
-			style_$a();
-			a_($a, 'href', 'recent.csv');
+			a_($a, 'href', 'data/recent.csv');
 			a_($a, 'download', '');
-			c_($a, $T('Download recent data'));
+			c_($a, $T('Recent weather data'));
 			c_($p, $a);
 			$a = $E('a');
 			style_$a();
 			a_($a, 'href', 'data.csv');
 			a_($a, 'download', '');
-			c_($a, $T('Download all data'));
+			c_($a, $T('All weather data'));
 			c_($p, $a);
 			$save_GPS = $a = $E('a');
 			style_$a();
 			a_($a, 'href', '.');
-			c_($a, $T('Save GPS data'));
+			c_($a, $T('Recent GPS data'));
+			c_($p, $a);
+			$a = $E('a');
+			style_$a();
+			a_($a, 'href', 'gps.csv');
+			a_($a, 'download', '');
+			c_($a, $T('All GPS data'));
 			c_($p, $a);
 			c_(document.body, $p);
 		}();
@@ -557,29 +594,31 @@ static PROGMEM char const web_home_html_2[] = R"HTML(
 			c_($form, $button);
 			c_(document.body, $form);
 		}();
-		var $report, $report_auto;
-		void function () {
-			var $form, $button, $label, $input;
-			$report = $form = $E('form');
-			s_($form, 'display', 'inline-block');
-			s_($form, 'margin', '1ex');
-			s_($form, 'border', 'solid thin gray');
-			s_($form, 'padding', '1ex');
-			$label = $E('label');
-			s_($label, 'margin-right', '1ex');
-			s_($label, 'padding', '1ex');
-			$report_auto = $input = $E('input');
-			a_($input, 'type', 'checkbox');
-			c_($label, $input);
-			c_($label, $T('Report to monitor'));
-			c_($form, $label);
-			$button = $E('button');
-			a_($button, 'type', 'submit');
-			s_($button, 'margin-left', '1ex');
-			c_($button, $T('Report now'));
-			c_($form, $button);
-			c_(document.body, $form);
-		}();
+		if (Alone.operator) {
+			var $report, $report_auto;
+			void function () {
+				var $form, $button, $label, $input;
+				$report = $form = $E('form');
+				s_($form, 'display', 'inline-block');
+				s_($form, 'margin', '1ex');
+				s_($form, 'border', 'solid thin gray');
+				s_($form, 'padding', '1ex');
+				$label = $E('label');
+				s_($label, 'margin-right', '1ex');
+				s_($label, 'padding', '1ex');
+				$report_auto = $input = $E('input');
+				a_($input, 'type', 'checkbox');
+				c_($label, $input);
+				c_($label, $T('Report to monitor'));
+				c_($form, $label);
+				$button = $E('button');
+				a_($button, 'type', 'submit');
+				s_($button, 'margin-left', '1ex');
+				c_($button, $T('Report now'));
+				c_($form, $button);
+				c_(document.body, $form);
+			}();
+		}
 		var latest = null;
 		var $list;
 		void function () {
@@ -596,8 +635,11 @@ static PROGMEM char const web_home_html_2[] = R"HTML(
 			$tr = $E('tr');
 			Alone.data_fields.forEach(
 				function (field) {
+					var text = field.name[0].toUpperCase() + field.name.substring(1);
+					if (field.unit)
+						text = text + ' (' + field.unit + ')';
 					$th = $E('th');
-					c_($th, $T(field[0].toUpperCase() + field.substring(1)));
+					c_($th, $T(text));
 					c_($tr, $th);
 				}
 			);
@@ -607,14 +649,16 @@ static PROGMEM char const web_home_html_2[] = R"HTML(
 			c_($table, $tbody);
 			c_(document.body, $table);
 		}();
+		var $loading = $E('p');
+		$loading.hidden = true;
+		c_($loading, $T('Loading...'));
+		c_(document.body, $loading);
 		function load() {
 			$list.textContent = null;
-			var $loading = $E('p');
-			c_($loading, $T('Loading...'));
-			c_(document.body, $loading);
+			$loading.hidden = false;
 			var xhr = new XMLHttpRequest();
 			xhr.onloadend = function (event) {
-				document.body.removeChild($loading);
+				$loading.hidden = true;
 				var text = xhr.responseText;
 				if (text == null || xhr.status !== 200) {
 					alert('Failed to load data');
@@ -641,22 +685,19 @@ static PROGMEM char const web_home_html_2[] = R"HTML(
 				}
 				latest = fields;
 			};
-			xhr.open('GET', '/recent.csv', true);
+			xhr.open('GET', 'data/recent.csv', true);
 			xhr.send(null);
 		}
 		function report() {
 			if (!GPS.length) return;
 			var position = GPS[GPS.length - 1];
-			var formdata = new FormData;
-			formdata.append('identity',  Alone.identity);
-			formdata.append('time',      position[0]);
-			formdata.append('latitude',  position[1]);
-			formdata.append('longitude', position[2]);
-			formdata.append('latitude',  position[3]);
-			if (Array.isArray(latest))
-				for (var i = 1; Alone.data_fields.length > i; ++i)
-					formdata.append(Alone.data_fields[i], latest[i]);
-			fetch(Alone.report, {method: 'POST', body: formdata})
+			var body = new URLSearchParams;
+			body.append('identity',  Alone.identity);
+			body.append('time',      position[0]);
+			body.append('latitude',  position[1]);
+			body.append('longitude', position[2]);
+			body.append('latitude',  position[3]);
+			fetch(Alone.report, {method: 'POST', body: body})
 				.catch(function () {});
 		}
 		$refresh.addEventListener(
@@ -681,29 +722,31 @@ static PROGMEM char const web_home_html_2[] = R"HTML(
 				}
 			}
 		);
-		$report.addEventListener(
-			'submit',
-			function (event) {
-				event.preventDefault();
-				report();
-			}
-		);
-		var report_timer = null;
-		$report_auto.addEventListener(
-			'change',
-			function (event) {
-				if ($report.checked) {
-					if (report_timer !== null) return;
-					report_timer = setInterval(report, 30000);
+		if (Alone.operator) {
+			$report.addEventListener(
+				'submit',
+				function (event) {
+					event.preventDefault();
+					report();
 				}
-				else {
-					if (report_timer === null) return;
-					clearInterval(report_timer);
-					report_timer = null;
+			);
+			var report_timer = null;
+			$report_auto.addEventListener(
+				'change',
+				function (event) {
+					if ($report.checked) {
+						if (report_timer !== null) return;
+						report_timer = setInterval(report, 30000);
+					}
+					else {
+						if (report_timer === null) return;
+						clearInterval(report_timer);
+						report_timer = null;
+					}
 				}
-			}
-		);
-		load();
+			);
+		}
+		setTimeout(load, 3000);
 		var GPS = new Array;
 		if ('geolocation' in navigator)
 			if (window.isSecureContext) {
@@ -733,15 +776,29 @@ static PROGMEM char const web_home_html_2[] = R"HTML(
 					c_(document.body, $table);
 				}();
 				function record_GPS(spacetime) {
+					if (spacetime === null || typeof spacetime === "undefined") return;
+					var timestamp = string_from_Date(spacetime.timestamp, "T");
 					var coords = spacetime.coords;
 					GPS.push(
 						[
-							string_from_Date(spacetime.timestamp, 'T'),
+							timestamp,
 							coords.latitude, coords.longitude, coords.altitude,
 							coords.accuracy, coords.altitudeAccuracy,
 							coords.heading, coords.speed
 						]
 					);
+
+					if (Alone.operator) {
+						var body = new URLSearchParams;
+						body.append('identity',  Alone.identity);
+						body.append('time',      timestamp);
+						body.append('latitude',  coords.latitude);
+						body.append('longitude', coords.longitude);
+						body.append('altitude',  coords.altitude);
+						fetch("/gps/upload.exe", {method: 'POST', body: body})
+							.catch(function () {alert('DEBUG: Failed to upload GPS record')});
+					}
+
 					var $tr = $E('tr');
 					function add_td(value) {
 						var $td = $E('td');
@@ -811,17 +868,32 @@ static String javascript_escape(String const &string) {
 	return result;
 }
 
+static char buffer[32768];
+
 static void web_home_handle(httpsserver::HTTPRequest *const request, httpsserver::HTTPResponse *const response) {
 	response->setHeader("CONTENT-TYPE", "application/xhtml+xml; charset=UTF-8");
 	response->setHeader("CONTENT-SECURITY-POLICY", "connect-src *");
 	response->write(reinterpret_cast<byte const *>(web_home_html_1), sizeof web_home_html_1 - 1);
-	response->print("\t\tidentity: '");
+	response->print("\t\t\tidentity: '");
 	response->print(javascript_escape(device_name));
-	response->print("',\r\n\t\treport: '");
+	response->print("',\r\n\t\t\treport: '");
 	response->print(javascript_escape(report_URL));
-	response->print("',\r\n\t\tdata_fields: [");
+	response->print("',\r\n\t\t\tdata_fields: [");
 	bool first = true;
-	for (char const *field: data_fields) {
+	for (struct Field const field: data_fields) {
+		if (first)
+			first = false;
+		else
+			response->print(", ");
+		response->print("{name:\'");
+		response->print(javascript_escape(field.name));
+		response->print("\',unit:\'");
+		response->print(javascript_escape(field.unit));
+		response->print("\'}");
+	}
+	response->print("],\r\n\t\t\tgps_fields: [");
+	first = true;
+	for (char const *field: gps_fields) {
 		if (first)
 			first = false;
 		else
@@ -836,6 +908,7 @@ static void web_home_handle(httpsserver::HTTPRequest *const request, httpsserver
 }
 
 static httpsserver::ResourceNode web_home_node("/", "GET", web_home_handle);
+static httpsserver::ResourceNode web_operator_node("/operator", "GET", web_home_handle);
 
 static PROGMEM char const web_icon_data[] = {
 	/* PNG signature */
@@ -873,12 +946,116 @@ static httpsserver::ResourceNode web_icon_node("/favicon.ico", "GET", web_icon_h
 static void web_data_handle(httpsserver::HTTPRequest *const request, httpsserver::HTTPResponse *const response) {
 	response->setHeader("CONTENT-TYPE", "text/csv");
 	response->println(data_header);
-	for (Data const &record: records)
+	for (struct Data const &record: data_records)
 		response->println(CSV_Data(&record));
 }
 
-static httpsserver::ResourceNode web_data_node("/recent.csv", "GET", web_data_handle);
-static char buffer[32768];
+static httpsserver::ResourceNode web_data_node("/data/recent.csv", "GET", web_data_handle);
+
+static void web_gps_recent_handle(httpsserver::HTTPRequest *const request, httpsserver::HTTPResponse *const response) {
+	/* TODO */
+	response->setHeader("CONTENT-TYPE", "text/csv");
+	response->println(gps_header);
+	for (struct GPS const &record: gps_records)
+		response->println(CSV_GPS(&record));
+}
+
+static httpsserver::ResourceNode web_gps_recent_node("/gps/recent.csv", "GET", web_gps_recent_handle);
+
+static std::string read_parser(httpsserver::HTTPBodyParser &parser) {
+	std::string result = "";
+	while (!parser.endOfField()) {
+		size_t const n = parser.read(reinterpret_cast<byte *>(buffer), sizeof buffer);
+		result.append(buffer, n);
+	}
+	return result;
+}
+
+static void web_gps_upload_handle(httpsserver::HTTPRequest *const request, httpsserver::HTTPResponse *const response) {
+	httpsserver::HTTPURLEncodedBodyParser parser(request);
+	struct GPS gps = {.time = (uint32_t)0, .latitude = NAN, .longitude = NAN, .altitude = NAN};
+	while (parser.nextField()) {
+		std::string const name = parser.getFieldName();
+		Serial.print("GPS upload name = ");
+		Serial.println(name.c_str());
+		if (name == "time") {
+			std::string const value = read_parser(parser);
+			Serial.print("GPS upload time = ");
+			Serial.println(value.c_str());
+			DateTime const datetime(value.c_str());
+			if (datetime.isValid())
+				gps.time = datetime;
+			else {
+				Serial.print("WARN: incorrect command time = ");
+				Serial.println(value.c_str());
+			}
+		}
+		else if (name == "latitude") {
+			std::string const value = read_parser(parser);
+			Serial.print("GPS upload latitude = ");
+			Serial.println(value.c_str());
+			char *end;
+			float const x = strtof(value.c_str(), &end);
+			if (!*end)
+				gps.latitude = x;
+			else {
+				Serial.print("WARN: incorrect GPS latitude = ");
+				Serial.println(value.c_str());
+			}
+		}
+		else if (name == "longitude") {
+			std::string const value = read_parser(parser);
+			Serial.print("GPS upload longitude = ");
+			Serial.println(value.c_str());
+			char *end;
+			float const x = strtof(value.c_str(), &end);
+			if (!*end)
+				gps.longitude = x;
+			else {
+				Serial.print("WARN: incorrect GPS longitude = ");
+				Serial.println(value.c_str());
+			}
+		}
+		else if (name == "altitude") {
+			std::string const value = read_parser(parser);
+			Serial.print("GPS upload altitude = ");
+			Serial.println(value.c_str());
+			char *end;
+			float const x = strtof(value.c_str(), &end);
+			if (!*end)
+				gps.altitude = x;
+			else {
+				Serial.print("WARN: incorrect GPS altitude = ");
+				Serial.println(value.c_str());
+			}
+		}
+	}
+
+	String const gps_string = CSV_GPS(&gps);
+	Serial.print("GPS ");
+	Serial.println(gps_string);
+
+	if (gps_records.size() >= records_max_size) gps_records.pop_front();
+	gps_records.push_back(gps);
+
+	if (has_SD_card) {
+		File file = SD.open(gps_filename, "a", true);
+		try {
+			file.println(gps_string);
+		}
+		catch (...) {
+			Serial.println("ERROR: failed to write GPS data into SD card");
+		}
+		file.close();
+	}
+
+	response->setStatusCode(204);
+	response->setStatusText("NO CONTENT");
+	response->setHeader("CONTENT-TYPE", "text/plain");
+	response->finalize();
+}
+
+static httpsserver::ResourceNode web_gps_upload_node("/gps/upload.exe", "POST", web_gps_upload_handle);
 
 static PROGMEM char const web_setting_html_1[] =
 R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
@@ -1102,15 +1279,6 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 </html>
 )HTML";
 
-static std::string read_parser(httpsserver::HTTPBodyParser &parser) {
-	std::string result = "";
-	while (!parser.endOfField()) {
-		size_t const n = parser.read(reinterpret_cast<byte *>(buffer), sizeof buffer);
-		result.append(buffer, n);
-	}
-	return result;
-}
-
 static void web_command_handle(httpsserver::HTTPRequest *const request, httpsserver::HTTPResponse *const response) {
 	httpsserver::HTTPURLEncodedBodyParser parser(request);
 	while (parser.nextField()) {
@@ -1140,7 +1308,7 @@ static void web_command_handle(httpsserver::HTTPRequest *const request, httpsser
 			Serial.println(value.c_str());
 			char *end;
 			unsigned long int const x = strtoul(value.c_str(), &end, 10);
-			if (*end == 0 && x >= 15 && x <= 900) {
+			if (!*end && x >= 15 && x <= 900) {
 				measure_interval = x * 1000;
 				need_save = true;
 			}
@@ -1207,7 +1375,7 @@ static void web_command_handle(httpsserver::HTTPRequest *const request, httpsser
 		}
 		else if (name == "delete") {
 			Serial.println("command delete");
-			records.clear();
+			data_records.clear();
 			SDCARD_LOCK(sdcard_lock)
 			//	SD.remove(data_filename);
 			File file = SD.open(data_filename, "w", true);
@@ -1293,10 +1461,16 @@ static void setup_webserver(void) {
 	}
 	HTTPd.registerNode(&web_home_node);
 	HTTPSd.registerNode(&web_home_node);
+	HTTPd.registerNode(&web_operator_node);
+	HTTPSd.registerNode(&web_operator_node);
 	HTTPd.registerNode(&web_icon_node);
 	HTTPSd.registerNode(&web_icon_node);
 	HTTPd.registerNode(&web_data_node);
 	HTTPSd.registerNode(&web_data_node);
+	HTTPd.registerNode(&web_gps_recent_node);
+	HTTPSd.registerNode(&web_gps_recent_node);
+	HTTPd.registerNode(&web_gps_upload_node);
+	HTTPSd.registerNode(&web_gps_upload_node);
 	HTTPd.registerNode(&web_setting_node);
 	HTTPSd.registerNode(&web_setting_node);
 	HTTPd.registerNode(&web_command_node);
@@ -1311,7 +1485,7 @@ static void setup_webserver(void) {
 	}
 }
 
-/*****************************************************************************/
+/* *************************************************************************** / ************************************ */
 /* Main procedures */
 
 static void redraw_display(void) {
@@ -1337,8 +1511,8 @@ static void redraw_display(void) {
 			Monitor.println(WiFi.localIP().toString());
 		}
 	}
-	if (records.size())
-		Monitor.println(pretty_Data(&records.back()));
+	if (data_records.size())
+		Monitor.println(pretty_Data(&data_records.back()));
 	Monitor.display();
 }
 
@@ -1376,10 +1550,18 @@ void loop(void) {
 
 void setup(void) {
 	/* Constants*/
-	data_header += data_fields[0];
+	data_header = data_header + data_fields[0].name;
+	if (*data_fields[0].unit)
+		data_header = data_header + " (" + data_fields[0].unit + ')';
 	for (unsigned int i = 0; i < sizeof data_fields / sizeof *data_fields; ++i) {
-		data_header += ',';
-		data_header += data_fields[i];
+		data_header = data_header + ',' + data_fields[i].name;
+		if (*data_fields[i].unit)
+			data_header = data_header + " (" + data_fields[i].unit + ')';
+	}
+	gps_header += gps_fields[0];
+	for (unsigned int i = 0; i < sizeof gps_fields / sizeof *gps_fields; ++i) {
+		gps_header += ',';
+		gps_header += gps_fields[i];
 	}
 
 	/* Reset pin */
@@ -1432,4 +1614,4 @@ void setup(void) {
 	std::thread(measure_thread).detach();
 }
 
-/*****************************************************************************/
+/* *************************************************************************** / ************************************ */

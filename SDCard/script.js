@@ -1,24 +1,5 @@
 import "./plotly.min.js";
 
-var data_fields = [
-	/* "Time" is excluded */
-	{
-		index: 1,
-		name: "Temperature",
-		unit: "\u2103"
-	},
-	{
-		index: 2,
-		name: "Pressure",
-		unit: "Pa"
-	},
-	{
-		index: 3,
-		name: "Humidity",
-		unit: "%"
-	}
-];
-
 function $T(string) {
 	return document.createTextNode(string);
 }
@@ -79,7 +60,7 @@ document.body.style["margin"] = "1ex";
 /* Dashboard */
 
 var $dashboard = new Object;
-$dashboard.items = new Array(data_fields.length);
+$dashboard.items = new Array(Alone.data_fields.length - 1);
 $dashboard.root = $E("div", {"id": "dashboard"}, [
 	$dashboard.nodata = $E("div", {"id": "nodata"}, [
 		$T("No data")
@@ -89,7 +70,7 @@ $dashboard.root = $E("div", {"id": "dashboard"}, [
 		$dashboard.time = $E("span")
 	]),
 	$E("div", {"id": "items"},
-		data_fields.map(
+		Alone.data_fields.slice(1).map(
 			function (field, index) {
 				return $E("div", {"class": "item"}, [
 					$E("span", {"class": "name"}, [$T(field.name)]),
@@ -120,11 +101,9 @@ function show_dashboard(row) {
 		var date_time = row[0].split("T");
 		$dashboard.date.textContent = date_time[0];
 		$dashboard.time.textContent = date_time[1];
-		data_fields.forEach(
-			function (field, index) {
-				$dashboard.items[index].textContent = row[field.index];
-			}
-		);
+		for (var i = 1; i < Alone.data_fields.length; ++i) {
+			$dashboard.items[i - 1].textContent = row[i];
+		}
 	}
 }
 
@@ -134,20 +113,38 @@ show_dashboard(null);
 
 var $save_GPS;
 document.body.appendChild(
-	$E("p", {"class": "download-links"}, [
-		$E("a", {"href": "setting.html"}, [
-			$T("Settings")
-		]),
-		$E("a", {"href": "recent.csv", "download": ""}, [
-			$T("Download recent data")
-		]),
-		$E("a", {"href": "all.csv", "download": ""}, [
-			$T("Download all data")
-		]),
-		$save_GPS = $E("a", {"href": "#"}, [
-			$T("Save GPS data")
-		])
-	])
+	$E("p", {"class": "download-links"},
+		(function (children) {
+			if (Alone.operator) {
+				children.push(
+					$E("a", {"href": "setting.html"}, [
+						$T("Settings")
+					])
+				);
+			}
+			children.push(
+				$E("a", {"href": "data/recent.csv", "download": ""}, [
+					$T("Recent weather data")
+				])
+			);
+			children.push(
+				$E("a", {"href": "data.csv", "download": ""}, [
+					$T("All weather data")
+				])
+			);
+			children.push(
+				$save_GPS = $E("a", {"href": "#"}, [
+					$T("Recent GPS data")
+				])
+			);
+			children.push(
+				$E("a", {"href": "gps.csv", "download": ""}, [
+					$T("All GPS data")
+				])
+			);
+			return children;
+		}(new Array))
+	)
 );
 
 /* Refresh */
@@ -171,6 +168,7 @@ document.body.appendChild(
 		])
 	])
 );
+if (!Alone.operator) $report.hidden = true;
 
 /* Sensor data */
 
@@ -189,7 +187,7 @@ document.body.appendChild(
 	])
 );
 
-var $plots = data_fields.map(
+var $plots = Alone.data_fields.slice(1).map(
 	function () {
 		var $plot = $E("div", {"class": "plot"});
 		$plot.hidden = true;
@@ -218,7 +216,7 @@ function show_plot(rows) {
 		var config = {
 			responsive: true
 		};
-		data_fields.forEach(
+		Alone.data_fields.slice(1).forEach(
 			function (field, index) {
 				Plotly.react(
 					$plots[index],
@@ -277,7 +275,7 @@ function load() {
 			);
 		}
 	};
-	xhr.open("GET", "/recent.csv", true);
+	xhr.open("GET", "data/recent.csv", true);
 	xhr.send(null);
 }
 
@@ -302,7 +300,7 @@ RefreshTimer.prototype = {
 
 var refresh_timer = new RefreshTimer();
 $auto_refresh.addEventListener("change", refresh_timer.update.bind(refresh_timer));
-load();
+setTimeout(load, 3000);
 
 /* GPS */
 
@@ -401,10 +399,11 @@ else {
 
 	function record_GPS(spacetime) {
 		if (spacetime === null || typeof spacetime === "undefined") return;
+		var timestamp = string_from_Date(spacetime.timestamp, "T");
 		var coords = spacetime.coords;
 		GPS.push(
 			[
-				string_from_Date(spacetime.timestamp, "T"),
+				timestamp,
 				coords.latitude, coords.longitude, coords.altitude,
 				coords.accuracy, coords.altitudeAccuracy,
 				coords.heading, coords.speed
@@ -416,6 +415,18 @@ else {
 		$GPS.longitude.textContent = coords.longitude;
 		$GPS.altitude.textContent = coords.altitude;
 		$GPS.table.hidden = false;
+
+		if (Alone.operator) {
+			var formdata = new URLSearchParams;
+			formdata.append('identity',  Alone.identity);
+			formdata.append('time',      timestamp);
+			formdata.append('latitude',  coords.latitude);
+			formdata.append('longitude', coords.longitude);
+			formdata.append('altitude',  coords.altitude);
+			fetch("/gps/upload.exe", {method: 'POST', body: formdata})
+				.catch(function () {});
+		}
+	
 		plot_GPS();
 	}
 
@@ -436,26 +447,24 @@ else {
 function report() {
 	if (!GPS.length) return;
 	var position = GPS[GPS.length - 1];
-	var formdata = new FormData;
+	var formdata = new URLSearchParams;
 	formdata.append('identity',  Alone.identity);
 	formdata.append('time',      position[0]);
 	formdata.append('latitude',  position[1]);
 	formdata.append('longitude', position[2]);
 	formdata.append('latitude',  position[3]);
-	if (Array.isArray(position))
-		for (var i = 1; Alone.data_fields.length > i; ++i)
-			formdata.append(Alone.data_fields[i], position[i]);
 	fetch(Alone.report, {method: 'POST', body: formdata})
 		.catch(function () {});
 }
 
-$report.addEventListener(
-	"submit",
-	function (event) {
-		event.preventDefault();
-		report();
-	}
-);
+if (Alone.operator)
+	$report.addEventListener(
+		"submit",
+		function (event) {
+			event.preventDefault();
+			report();
+		}
+	);
 
 function ReportTimer() {
 	Timer.call(this);
@@ -468,8 +477,10 @@ ReportTimer.prototype = {
 	}
 };
 
-var report_timer = new ReportTimer();
-$auto_report.addEventListener("change", report_timer.update.bind(report_timer));
+if (Alone.operator) {
+	var report_timer = new ReportTimer();
+	$auto_report.addEventListener("change", report_timer.update.bind(report_timer));
+}
 
 var $GPS_downloader = $E("a", {"download": "gps.csv"});
 $GPS_downloader.hidden = true;
