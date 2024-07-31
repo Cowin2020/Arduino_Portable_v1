@@ -33,6 +33,8 @@
 	#error Invalid sensor type
 #endif
 
+#define FONT_OFFSET 12
+
 static std::mutex mutex_1;
 #define DISPLAY_LOCK(lock) std::lock_guard<std::mutex> lock(mutex_1);
 #define DEVICE_LOCK(lock) std::lock_guard<std::mutex> lock(mutex_1);
@@ -238,11 +240,10 @@ static String show_time(DateTime const *const datetime) {
 /* Measurement */
 
 #if SENSOR == SENSOR_BME280
-static Adafruit_BME280 BME280;
+	static Adafruit_BME280 BME280;
 #elif SENSOR == SENSOR_SHT40
-static Adafruit_SHT4x SHT4x = Adafruit_SHT4x();;
+	static Adafruit_SHT4x SHT4x = Adafruit_SHT4x();;
 #endif
-
 
 static size_t const records_max_size = 60;
 static std::deque<struct Data> data_records;
@@ -1523,7 +1524,7 @@ static void setup_webserver(void) {
 
 static void redraw_display(void) {
 	Monitor.clearDisplay();
-	Monitor.setCursor(0, 12);
+	Monitor.setCursor(0, FONT_OFFSET);
 	if (has_SD_card)
 		Monitor.println("SD card found");
 	else
@@ -1610,7 +1611,7 @@ void setup(void) {
 	Monitor.setRotation(3);
 	Monitor.clearDisplay();
 	Monitor.display();
-	Monitor.setCursor(0, 0);
+	Monitor.setCursor(0, FONT_OFFSET);
 
 	/* Start-up delay */
 	delay(start_wait_time);
@@ -1626,24 +1627,38 @@ void setup(void) {
 
 	/* Clock */
 	external_clock_available = external_clock.begin();
+	if (external_clock_available) {
+		Serial.println("Clock found");
+		Monitor.println("Clock found");
+	}
+	else {
+		Serial.println("Clock not found");
+		Monitor.println("Clock not found");
+	}
 
 	/* Sensor */
 	#if SENSOR == SENSOR_BME280
 		while (!BME280.begin()) {
 			Serial.println("ERROR: BME280 not found");
-			Monitor.println("ERROR: BME280 not found");
+			Monitor.println("BME280 not found");
 			Monitor.display();
 			delay(reinitialize_interval);
 		}
+		Serial.println("BME280 found");
+		Monitor.println("BME280 found");
+		Monitor.display();
 	#elif SENSOR == SENSOR_SHT40
 		while (!SHT4x.begin()) {
 			Serial.println("ERROR: SHT40 not found");
-			Monitor.println("ERROR: SHT40 not found");
+			Monitor.println("SHT40 not found");
 			Monitor.display();
 			delay(reinitialize_interval);
 		}
 		SHT4x.setPrecision(SHT4X_HIGH_PRECISION);
 		SHT4x.setHeater(SHT4X_NO_HEATER);
+		Serial.println("SHT40 found");
+		Monitor.println("SHT40 found");
+		Monitor.display();
 	#endif
 
 	/* WiFi */
