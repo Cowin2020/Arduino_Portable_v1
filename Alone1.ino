@@ -274,6 +274,7 @@ static void measure(void) {
 	data_records.push_back(data);
 
 	if (has_SD_card) {
+		SDCARD_LOCK(sdcard_lock)
 		File file = SD.open(data_filename, "a", true);
 		try {
 			file.println(data_string);
@@ -1073,6 +1074,7 @@ static void web_gps_upload_handle(httpsserver::HTTPRequest *const request, https
 	gps_records.push_back(gps);
 
 	if (has_SD_card) {
+		SDCARD_LOCK(sdcard_lock)
 		File file = SD.open(gps_filename, "a", true);
 		try {
 			file.println(gps_string);
