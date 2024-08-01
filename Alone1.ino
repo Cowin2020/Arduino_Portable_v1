@@ -1601,7 +1601,7 @@ void setup(void) {
 	}
 
 	/* Reset pin */
-	pinMode(reset_pin, INPUT_PULLDOWN);
+	pinMode(reset_pin, INPUT);
 
 	/* Serial port */
 	Serial.begin(serial_baudrate);
