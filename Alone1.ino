@@ -109,20 +109,23 @@ static String pretty_Data(struct Data const *const data) {
 
 struct GPS {
 	DateTime time;
-	float latitude;
-	float longitude;
-	float altitude;
+	double latitude;
+	double longitude;
+	double altitude;
 };
 
-static char const *gps_fields[] = {
-	"time",
-	"latitude",
-	"longitude",
-	"altitude"
+static struct Field const gps_fields[] = {
+	{"time", ""},
+	{"latitude", "\u00B0"},
+	{"longitude", "\u00B0"},
+	{"altitude", "m"}
 };
 
 static String CSV_GPS(struct GPS const *const data) {
-	return show_time(&data->time) + ',' + data->latitude + ',' + data->longitude + ',' + data->altitude;
+	return show_time(&data->time) + ','
+		+ String(data->latitude,  7) + ','
+		+ String(data->longitude, 7) + ','
+		+ String(data->altitude,  7);
 }
 
 /* *************************************************************************** / ************************************ */
@@ -516,21 +519,19 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 <body>
 <noscript>Javascript is required for this web page.</noscript>
 <script type='text/javascript'>
-	(function(p){document.readyState!=='loading'?p():document.addEventListener('DOMContentLoaded',p)})
-	(function(p){
+	(function(p){document.readyState!=="loading"?p():document.addEventListener("DOMContentLoaded",p)})(function(p){
 		window.Alone = {
-			operator: location.pathname === '/operator',
+			operator: location.pathname === "/operator",
 
 )HTML";
 
 static PROGMEM char const web_home_html_2[] = R"HTML(
 		};
-		return import('./script.js').then(function(){}, p);
+		return import("./script.js").then(function(){}, p);
 	}
 	(function(SD_load_error){
-		'use strict';
-		console.log('Failed to load script from SD card:', SD_load_error);
-		document.body.textContent = '';
+		"use strict";
+		console.log("Failed to load script from SD card:", SD_load_error);
 		function $T(string) {
 			return document.createTextNode(string);
 		}
@@ -546,209 +547,275 @@ static PROGMEM char const web_home_html_2[] = R"HTML(
 		function a_(element, name, value) {
 			return element.setAttribute(name, value);
 		}
-		function string_from_Date(value, seperator = ' ') {
+		function string_from_Date(value, seperator = " ") {
 			var date = new Date(value);
 			return (
 				date.getFullYear().toString()
-					+ '-'
-					+ (date.getMonth() + 1).toString().padStart(2, '0')
-					+ '-'
-					+ date.getDate().toString().padStart(2, '0')
+					+ "-"
+					+ (date.getMonth() + 1).toString().padStart(2, "0")
+					+ "-"
+					+ date.getDate().toString().padStart(2, "0")
 					+ seperator
-					+ date.getHours().toString().padStart(2, '0')
-					+ ':'
-					+ date.getMinutes().toString().padStart(2, '0')
-					+ ':'
-					+ date.getSeconds().toString().padStart(2, '0')
+					+ date.getHours().toString().padStart(2, "0")
+					+ ":"
+					+ date.getMinutes().toString().padStart(2, "0")
+					+ ":"
+					+ date.getSeconds().toString().padStart(2, "0")
 			);
 		}
-		var $save_GPS;
+		document.body.textContent = "";
 		void function () {
 			var $p, $a;
 			function style_$a() {
-				s_($a, 'margin', '1ex');
-				s_($a, 'border', 'solid thin gray');
-				s_($a, 'padding', '1ex');
+				s_($a, "margin", "1ex");
+				s_($a, "border", "solid thin gray");
+				s_($a, "padding", "1ex");
 			}
-			$p = $E('p');
-			s_($p, 'display', 'flex');
-			s_($p, 'flex-flow', 'row wrap');
-			s_($p, 'text-align', 'center');
+			$p = $E("p");
+			s_($p, "display", "flex");
+			s_($p, "flex-flow", "row wrap");
+			s_($p, "text-align", "center");
 			if (Alone.operator) {
-				$a = $E('a');
+				$a = $E("a");
 				style_$a();
-				a_($a, 'href', 'setting.html');
-				c_($a, $T('Settings'));
+				a_($a, "href", "setting.html");
+				c_($a, $T("Settings"));
 				c_($p, $a);
 			}
-			$a = $E('a');
+			$a = $E("a");
 			style_$a();
-			a_($a, 'href', 'data/recent.csv');
-			a_($a, 'download', '');
-			c_($a, $T('Recent weather data'));
+			a_($a, "href", "data/recent.csv");
+			a_($a, "download", "data_recent.csv");
+			c_($a, $T("Recent weather data"));
 			c_($p, $a);
-			$a = $E('a');
+			$a = $E("a");
 			style_$a();
-			a_($a, 'href', 'data.csv');
-			a_($a, 'download', '');
-			c_($a, $T('All weather data'));
+			a_($a, "href", Alone.data_file);
+			a_($a, "download", "");
+			c_($a, $T("All weather data"));
 			c_($p, $a);
-			$save_GPS = $a = $E('a');
+			$a = $E("a");
 			style_$a();
-			a_($a, 'href', '.');
-			c_($a, $T('Recent GPS data'));
+			a_($a, "href", "gps/recent.csv");
+			a_($a, "download", "gps_recent.csv");
+			c_($a, $T("Recent GPS data"));
 			c_($p, $a);
-			$a = $E('a');
+			$a = $E("a");
 			style_$a();
-			a_($a, 'href', 'gps.csv');
-			a_($a, 'download', '');
-			c_($a, $T('All GPS data'));
+			a_($a, "href", Alone.gps_file);
+			a_($a, "download", "");
+			c_($a, $T("All GPS data"));
 			c_($p, $a);
 			c_(document.body, $p);
 		}();
 		var $refresh, $refresh_auto;
 		void function () {
 			var $form, $button, $label, $input;
-			$refresh = $form = $E('form');
-			s_($form, 'display', 'inline-block');
-			s_($form, 'margin', '1ex');
-			s_($form, 'border', 'solid thin gray');
-			s_($form, 'padding', '1ex');
-			$label = $E('label');
-			s_($label, 'margin-right', '1ex');
-			s_($label, 'padding', '1ex');
-			$refresh_auto = $input = $E('input');
-			a_($input, 'type', 'checkbox');
+			$refresh = $form = $E("form");
+			s_($form, "display", "inline-block");
+			s_($form, "margin", "1ex");
+			s_($form, "border", "solid thin gray");
+			s_($form, "padding", "1ex");
+			$label = $E("label");
+			s_($label, "margin-right", "1ex");
+			s_($label, "padding", "1ex");
+			$refresh_auto = $input = $E("input");
+			a_($input, "type", "checkbox");
 			c_($label, $input);
-			c_($label, $T('Auto refresh'));
+			c_($label, $T("Auto refresh"));
 			c_($form, $label);
-			$button = $E('button');
-			a_($button, 'type', 'submit');
-			s_($button, 'margin-left', '1ex');
-			c_($button, $T('Refresh now'));
+			$button = $E("button");
+			a_($button, "type", "submit");
+			s_($button, "margin-left", "1ex");
+			c_($button, $T("Refresh now"));
 			c_($form, $button);
 			c_(document.body, $form);
 		}();
 		if (Alone.operator) {
-			var $report, $report_auto;
+			var $report_auto;
 			void function () {
-				var $form, $button, $label, $input;
-				$report = $form = $E('form');
-				s_($form, 'display', 'inline-block');
-				s_($form, 'margin', '1ex');
-				s_($form, 'border', 'solid thin gray');
-				s_($form, 'padding', '1ex');
-				$label = $E('label');
-				s_($label, 'margin-right', '1ex');
-				s_($label, 'padding', '1ex');
-				$report_auto = $input = $E('input');
-				a_($input, 'type', 'checkbox');
-				c_($label, $input);
-				c_($label, $T('Report to monitor'));
-				c_($form, $label);
-				$button = $E('button');
-				a_($button, 'type', 'submit');
-				s_($button, 'margin-left', '1ex');
-				c_($button, $T('Report now'));
-				c_($form, $button);
-				c_(document.body, $form);
+				var $div, $label, $input;
+				$div = $E("div");
+				s_($div, "display", "inline-block");
+				s_($div, "margin-top", "1ex");
+				s_($div, "margin-bottom", "1ex");
+				s_($div, "margin-left", "1ex");
+				s_($div, "margin-right", "2ex");
+				s_($div, "border", "solid thin gray");
+				s_($div, "padding", "1ex");
+				$report_auto = $input = $E("input");
+				a_($input, "type", "checkbox");
+				c_($div, $input);
+				c_($div, $T("Report position"));
+				c_(document.body, $div);
 			}();
 		}
-		var latest = null;
-		var $list;
+		var $data_list;
 		void function () {
 			var $table, $caption, $thead, $tr, $th, $tbody;
-			$table = $E('table');
-			s_($table, 'margin-bottom', '3ex');
-			s_($table, 'border-collapse', 'collapse');
-			s_($table, 'width', '100%');
-			$caption = $E('caption');
-			c_($caption, $T('Sensor data'));
+			$table = $E("table");
+			s_($table, "margin-bottom", "3ex");
+			s_($table, "border-collapse", "collapse");
+			s_($table, "width", "100%");
+			$caption = $E("caption");
+			c_($caption, $T("Sensor data"));
 			c_($table, $caption);
-			$thead = $E('thead');
-			s_($thead, 'border-bottom-style', 'solid');
-			$tr = $E('tr');
+			$thead = $E("thead");
+			s_($thead, "border-bottom-style", "solid");
+			$tr = $E("tr");
 			Alone.data_fields.forEach(
 				function (field) {
 					var text = field.name[0].toUpperCase() + field.name.substring(1);
 					if (field.unit)
-						text = text + ' (' + field.unit + ')';
-					$th = $E('th');
+						text = text + " (" + field.unit + ")";
+					$th = $E("th");
 					c_($th, $T(text));
 					c_($tr, $th);
 				}
 			);
 			c_($thead, $tr);
 			c_($table, $thead);
-			$list = $tbody = $E('tbody');
+			$data_list = $tbody = $E("tbody");
 			c_($table, $tbody);
 			c_(document.body, $table);
 		}();
-		var $loading = $E('p');
-		$loading.hidden = true;
-		c_($loading, $T('Loading...'));
-		c_(document.body, $loading);
-		function load() {
-			$list.textContent = null;
-			$loading.hidden = false;
-			var xhr = new XMLHttpRequest();
-			xhr.onloadend = function (event) {
-				$loading.hidden = true;
-				var text = xhr.responseText;
-				if (text == null || xhr.status !== 200) {
-					alert('Failed to load data');
-					return;
+		var $data_loading = $E("p");
+		$data_loading.hidden = true;
+		c_($data_loading, $T("Loading..."));
+		c_(document.body, $data_loading);
+		var $GPS_list;
+		void function () {
+			var $table, $caption, $thead, $tr, $th, $tbody;
+			$table = $E("table");
+			s_($table, "margin-bottom", "3ex");
+			s_($table, "border-collapse", "collapse");
+			s_($table, "width", "100%");
+			$caption = $E("caption");
+			c_($caption, $T("Sensor data"));
+			c_($table, $caption);
+			$thead = $E("thead");
+			s_($thead, "border-bottom-style", "solid");
+			$tr = $E("tr");
+			Alone.gps_fields.forEach(
+				function (field) {
+					var text = field.name[0].toUpperCase() + field.name.substring(1);
+					if (field.unit)
+						text = text + " (" + field.unit + ")";
+					$th = $E("th");
+					c_($th, $T(text));
+					c_($tr, $th);
 				}
-				var fields = null;
-				var lines = text.split('\r\n');
-				if (!lines || !(lines.length > 0)) return;
-				for (var i = 1; lines.length > i; ++i) {
-					var line = lines[lines.length - i].trim();
-					if (!line || typeof line !== 'string') continue;
-					fields = line.split(',');
-					var $tr = $E('tr');
-					for (var j = 0; fields.length > j; ++j) {
-						var $td = $E('td');
-						s_($td, 'border-style', 'solid');
-						s_($td, 'border-width', 'thin');
-						s_($td, 'text-align', 'center');
-						if (j === 0) c_($td, $T(string_from_Date(fields[j])));
-						else c_($td, $T(fields[j]));
-						c_($tr, $td);
-					}
-					c_($list, $tr);
+			);
+			c_($thead, $tr);
+			c_($table, $thead);
+			$GPS_list = $tbody = $E("tbody");
+			c_($table, $tbody);
+			c_(document.body, $table);
+		}();
+		var $GPS_loading = $E("p");
+		$GPS_loading.hidden = true;
+		c_($GPS_loading, $T("Loading..."));
+		c_(document.body, $GPS_loading);
+
+		function data_load() {
+			return new Promise(
+				function (resolve, reject) {
+					$data_list.textContent = null;
+					$data_loading.hidden = false;
+					var xhr = new XMLHttpRequest();
+					xhr.onloadend = function (event) {
+						$data_loading.hidden = true;
+						var text = xhr.responseText;
+						if (text == null || xhr.status !== 200) {
+							alert("Failed to load data");
+							return reject(xhr);
+						}
+						var fields = null;
+						var lines = text.split("\r\n");
+						if (!lines || !(lines.length > 0)) return;
+						for (var i = 1; lines.length > i; ++i) {
+							var line = lines[lines.length - i].trim();
+							if (!line || typeof line !== "string") continue;
+							fields = line.split(",");
+							var $tr = $E("tr");
+							for (var j = 0; fields.length > j; ++j) {
+								var $td = $E("td");
+								s_($td, "border-style", "solid");
+								s_($td, "border-width", "thin");
+								s_($td, "text-align", "center");
+								if (j === 0) c_($td, $T(string_from_Date(fields[j])));
+								else c_($td, $T(fields[j]));
+								c_($tr, $td);
+							}
+							c_($data_list, $tr);
+						}
+						return resolve();
+					};
+					xhr.open("GET", "data/recent.csv", true);
+					xhr.send(null);
 				}
-				latest = fields;
-			};
-			xhr.open('GET', 'data/recent.csv', true);
-			xhr.send(null);
+			);
 		}
-		function report() {
-			if (!GPS.length) return;
-			var position = GPS[GPS.length - 1];
-			var body = new URLSearchParams;
-			body.append('identity',  Alone.identity);
-			body.append('time',      position[0]);
-			body.append('latitude',  position[1]);
-			body.append('longitude', position[2]);
-			body.append('latitude',  position[3]);
-			fetch(Alone.report, {method: 'POST', body: body})
-				.catch(function () {});
+		function GPS_load() {
+			return new Promise(
+				function (resolve, reject) {
+					$GPS_list.textContent = null;
+					$GPS_loading.hidden = false;
+					var xhr = new XMLHttpRequest();
+					xhr.onloadend = function (event) {
+						$GPS_loading.hidden = true;
+						var text = xhr.responseText;
+						if (text == null || xhr.status !== 200) {
+							alert("Failed to load GPS records");
+							return reject(xhr);
+						}
+						var lines = text.split("\r\n");
+						if (!lines || !(lines.length > 0)) return;
+						for (var i = 1; lines.length > i; ++i) {
+							var line = lines[lines.length - i].trim();
+							if (!line || typeof line !== "string") continue;
+							var fields = line.split(",");
+							var $tr = $E("tr");
+							for (var j = 0; fields.length > j; ++j) {
+								var $td = $E("td");
+								s_($td, "border-style", "solid");
+								s_($td, "border-width", "thin");
+								s_($td, "text-align", "center");
+								if (j === 0) c_($td, $T(string_from_Date(fields[j])));
+								else c_($td, $T(fields[j]));
+								c_($tr, $td);
+							}
+							c_($GPS_list, $tr);
+						}
+						return resolve();
+					};
+					xhr.open("GET", "gps/recent.csv", true);
+					xhr.send(null);
+				}
+			);
+		}
+		function load_all() {
+			return (
+				data_load()
+					.catch(function () {})
+					.then(function () {return GPS_load();})
+					.catch(function () {})
+			);
 		}
 		$refresh.addEventListener(
-			'submit',
+			"submit",
 			function (event) {
 				event.preventDefault();
-				load();
+				return load_all();
 			}
 		);
 		var refresh_timer = null;
 		$refresh_auto.addEventListener(
-			'change',
+			"change",
 			function (event) {
 				if ($refresh_auto.checked) {
 					if (refresh_timer !== null) return;
-					refresh_timer = setInterval(load, 30000);
+					refresh_timer = setInterval(data_load, Alone.measure_interval);
 				}
 				else {
 					if (refresh_timer === null) return;
@@ -757,130 +824,49 @@ static PROGMEM char const web_home_html_2[] = R"HTML(
 				}
 			}
 		);
-		if (Alone.operator) {
-			$report.addEventListener(
-				'submit',
-				function (event) {
-					event.preventDefault();
-					report();
-				}
-			);
-			var report_timer = null;
-			$report_auto.addEventListener(
-				'change',
-				function (event) {
-					if ($report.checked) {
-						if (report_timer !== null) return;
-						report_timer = setInterval(report, 30000);
-					}
-					else {
-						if (report_timer === null) return;
-						clearInterval(report_timer);
-						report_timer = null;
-					}
-				}
-			);
-		}
-		setTimeout(load, 3000);
-		var GPS = new Array;
-		if ('geolocation' in navigator)
-			if (window.isSecureContext) {
-				var $GPS;
-				void function () {
-					var $table, $caption, $thead, $tr, $th, $tbody;
-					$table = $E('table');
-					s_($table, 'border-collapse', 'collapse');
-					s_($table, 'width', '100%');
-					$caption = $E('caption');
-					c_($caption, $T('GPS data'));
-					c_($table, $caption);
-					$thead = $E('thead');
-					s_($thead, 'border-bottom-style', 'solid');
-					$tr = $E('tr');
-					['Time', 'Latitude', 'Longitude', 'Altitude'].forEach(
-						function (title) {
-							$th = $E('th');
-							c_($th, $T(title));
-							c_($tr, $th);
-						}
-					);
-					c_($thead, $tr);
-					c_($table, $thead);
-					$GPS = $tbody = $E('tbody');
-					c_($table, $tbody);
-					c_(document.body, $table);
-				}();
-				function record_GPS(spacetime) {
-					if (spacetime === null || typeof spacetime === "undefined") return;
-					var timestamp = string_from_Date(spacetime.timestamp, "T");
-					var coords = spacetime.coords;
-					GPS.push(
-						[
-							timestamp,
-							coords.latitude, coords.longitude, coords.altitude,
-							coords.accuracy, coords.altitudeAccuracy,
-							coords.heading, coords.speed
-						]
-					);
-
-					if (Alone.operator) {
-						var body = new URLSearchParams;
-						body.append('identity',  Alone.identity);
-						body.append('time',      timestamp);
-						body.append('latitude',  coords.latitude);
-						body.append('longitude', coords.longitude);
-						body.append('altitude',  coords.altitude);
-						fetch("/gps/upload.exe", {method: 'POST', body: body})
-							.catch(function () {alert('DEBUG: Failed to upload GPS record')});
-					}
-
-					var $tr = $E('tr');
-					function add_td(value) {
-						var $td = $E('td');
-						s_($td, 'border-style', 'solid');
-						s_($td, 'border-width', 'thin');
-						s_($td, 'text-align', 'center');
-						if (value != null) c_($td, $T(String(value)));
-						c_($tr, $td);
-					}
-					add_td(string_from_Date(spacetime.timestamp));
-					add_td(coords.latitude);
-					add_td(coords.longitude);
-					add_td(coords.altitude);
-					c_($GPS, $tr);
-				}
-				function get_GPS() {
-					navigator.geolocation.getCurrentPosition(
-						record_GPS,
-						function (error) {
-							console.error("GeoLocationError: ", error.message);
-						},
-						{timeout: 15000, enableHighAccuracy: true}
-					)
-				}
-				get_GPS();
-				setInterval(get_GPS, 30000);
+		setTimeout(load_all, 3000);
+		if (Alone.operator) if ("geolocation" in window.navigator) if (window.isSecureContext) void function () {
+			function make_body(timestamp, coords) {
+				var body = new URLSearchParams;
+				body.append("identity",  Alone.identity);
+				body.append("time",      timestamp);
+				body.append("latitude",  coords.latitude);
+				body.append("longitude", coords.longitude);
+				body.append("altitude",  coords.altitude);
+				return body;
 			}
-		var $GPS_downloader = $E('a');
-		a_($GPS_downloader, 'download', 'gps.csv');
-		$GPS_downloader.hidden = true;
-		document.body.appendChild($GPS_downloader);
-		function save_GPS() {
-			var content =
-				'Time,Latitude,Longitude,Altitude,Horizontal accuracy,Vertical accuracy,Heading,Speed\r\n'
-					+ GPS.map(function (record) {return record.join(',');}).join('\r\n');
-			var oldobj = $GPS_downloader.getAttribute('href');
-			if (oldobj) URL.revokeObjectURL(objurl);
-			$GPS_downloader.setAttribute('href', URL.createObjectURL(new Blob(Array.of(content), {type: 'text/csv'})));
-			setTimeout(function () {$GPS_downloader.click();}, 1000);
-		}
-		$GPS_downloader.addEventListener(
-			'click',
-			function (event) {
-				event.preventDefault();
-				save_GPS();
+			function upload_GPS(timestamp, coords) {
+				var body = make_body(timestamp, coords);
+				fetch("/gps/upload.exe", {method: "POST", body: body})
+					.catch(function () {});
 			}
-		);
+			function report_GPS(timestamp, coords) {
+				var body = make_body(timestamp, coords);
+				fetch(Alone.report, {method: "POST", body: body})
+					.catch(function () {});
+			}
+			function record_GPS(spacetime) {
+				if (spacetime === null || typeof spacetime === "undefined") return;
+				var timestamp = string_from_Date(spacetime.timestamp, "T");
+				var coords = spacetime.coords;
+				if (Alone.operator) {
+					upload_GPS(timestamp, coords);
+					if ($report_auto.checked)
+						report_GPS(timestamp, coords);
+				}
+			}
+			function get_GPS() {
+				navigator.geolocation.getCurrentPosition(
+					record_GPS,
+					function (error) {
+						console.error("GeoLocationError: ", error.message);
+					},
+					{timeout: 15000, enableHighAccuracy: true}
+				)
+			}
+			get_GPS();
+			setInterval(get_GPS, Alone.measure_interval);
+		}();
 	}));
 </script>
 </body>
@@ -911,6 +897,12 @@ static void web_home_handle(httpsserver::HTTPRequest *const request, httpsserver
 	response->write(reinterpret_cast<byte const *>(web_home_html_1), sizeof web_home_html_1 - 1);
 	response->print("\t\t\tidentity: '");
 	response->print(javascript_escape(device_name));
+	response->print("',\r\n\t\t\tmeasure_interval: '");
+	response->print(measure_interval);
+	response->print("',\r\n\t\t\tdata_file: '");
+	response->print(javascript_escape(data_filename));
+	response->print("',\r\n\t\t\tgps_file: '");
+	response->print(javascript_escape(gps_filename));
 	response->print("',\r\n\t\t\treport: '");
 	response->print(javascript_escape(report_URL));
 	response->print("',\r\n\t\t\tdata_fields: [");
@@ -928,14 +920,16 @@ static void web_home_handle(httpsserver::HTTPRequest *const request, httpsserver
 	}
 	response->print("],\r\n\t\t\tgps_fields: [");
 	first = true;
-	for (char const *field: gps_fields) {
+	for (struct Field const field: gps_fields) {
 		if (first)
 			first = false;
 		else
 			response->print(", ");
-		response->print('\'');
-		response->print(javascript_escape(field));
-		response->print('\'');
+		response->print("{name:\'");
+		response->print(javascript_escape(field.name));
+		response->print("\',unit:\'");
+		response->print(javascript_escape(field.unit));
+		response->print("\'}");
 	}
 	response->print("]\r\n");
 	response->write(reinterpret_cast<byte const *>(web_home_html_2), sizeof web_home_html_2 - 1);
@@ -988,7 +982,6 @@ static void web_data_handle(httpsserver::HTTPRequest *const request, httpsserver
 static httpsserver::ResourceNode web_data_node("/data/recent.csv", "GET", web_data_handle);
 
 static void web_gps_recent_handle(httpsserver::HTTPRequest *const request, httpsserver::HTTPResponse *const response) {
-	/* TODO */
 	response->setHeader("CONTENT-TYPE", "text/csv");
 	response->println(gps_header);
 	for (struct GPS const &record: gps_records)
@@ -1011,12 +1004,8 @@ static void web_gps_upload_handle(httpsserver::HTTPRequest *const request, https
 	struct GPS gps = {.time = (uint32_t)0, .latitude = NAN, .longitude = NAN, .altitude = NAN};
 	while (parser.nextField()) {
 		std::string const name = parser.getFieldName();
-		Serial.print("GPS upload name = ");
-		Serial.println(name.c_str());
 		if (name == "time") {
 			std::string const value = read_parser(parser);
-			Serial.print("GPS upload time = ");
-			Serial.println(value.c_str());
 			DateTime const datetime(value.c_str());
 			if (datetime.isValid())
 				gps.time = datetime;
@@ -1027,10 +1016,8 @@ static void web_gps_upload_handle(httpsserver::HTTPRequest *const request, https
 		}
 		else if (name == "latitude") {
 			std::string const value = read_parser(parser);
-			Serial.print("GPS upload latitude = ");
-			Serial.println(value.c_str());
 			char *end;
-			float const x = strtof(value.c_str(), &end);
+			double const x = strtod(value.c_str(), &end);
 			if (!*end)
 				gps.latitude = x;
 			else {
@@ -1040,10 +1027,8 @@ static void web_gps_upload_handle(httpsserver::HTTPRequest *const request, https
 		}
 		else if (name == "longitude") {
 			std::string const value = read_parser(parser);
-			Serial.print("GPS upload longitude = ");
-			Serial.println(value.c_str());
 			char *end;
-			float const x = strtof(value.c_str(), &end);
+			double const x = strtod(value.c_str(), &end);
 			if (!*end)
 				gps.longitude = x;
 			else {
@@ -1053,10 +1038,8 @@ static void web_gps_upload_handle(httpsserver::HTTPRequest *const request, https
 		}
 		else if (name == "altitude") {
 			std::string const value = read_parser(parser);
-			Serial.print("GPS upload altitude = ");
-			Serial.println(value.c_str());
 			char *end;
-			float const x = strtof(value.c_str(), &end);
+			double const x = strtod(value.c_str(), &end);
 			if (!*end)
 				gps.altitude = x;
 			else {
@@ -1489,7 +1472,7 @@ static void web_file_handle(httpsserver::HTTPRequest *const request, httpsserver
 
 static httpsserver::ResourceNode web_file_node("", "", web_file_handle);
 
-static void setup_webserver(void) {
+static void webserver_setup(void) {
 	static char const DN[] = "CN=weather.station,O=hku,C=HK";
 	while (httpsserver::createSelfSignedCert(certificate, httpsserver::KEYSIZE_2048, DN)) {
 		Serial.println("ERROR: failed to create signed certificate");
@@ -1586,7 +1569,7 @@ void loop(void) {
 
 void setup(void) {
 	/* Constants*/
-	data_header = data_header + data_fields[0].name;
+	data_header = data_fields[0].name;
 	if (*data_fields[0].unit)
 		data_header = data_header + " (" + data_fields[0].unit + ')';
 	for (unsigned int i = 0; i < sizeof data_fields / sizeof *data_fields; ++i) {
@@ -1594,10 +1577,13 @@ void setup(void) {
 		if (*data_fields[i].unit)
 			data_header = data_header + " (" + data_fields[i].unit + ')';
 	}
-	gps_header += gps_fields[0];
+	gps_header = gps_fields[0].name;
+	if (*gps_fields[0].unit)
+		gps_header = gps_header + " (" + gps_fields[0].unit + ')';
 	for (unsigned int i = 0; i < sizeof gps_fields / sizeof *gps_fields; ++i) {
-		gps_header += ',';
-		gps_header += gps_fields[i];
+		gps_header = gps_header + ',' + gps_fields[i].name;
+		if (*gps_fields[i].unit)
+			gps_header = gps_header + " (" + gps_fields[i].unit + ')';
 	}
 
 	/* Reset pin */
@@ -1667,7 +1653,7 @@ void setup(void) {
 	setup_WiFi();
 
 	/* Web server */
-	setup_webserver();
+	webserver_setup();
 
 	/* Spawn measurement thread */
 	static esp_pthread_cfg_t esp_pthread_cfg = esp_pthread_get_default_config();
