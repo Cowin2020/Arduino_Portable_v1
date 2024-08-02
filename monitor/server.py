@@ -1,4 +1,3 @@
-import sys
 import os
 import urllib.parse
 import http
@@ -9,7 +8,7 @@ try:
 except:
 	PORT = 8880
 
-data_fields = ["time", "latitude", "longitude", "altitude", "temperature", "pressure", "humidity"]
+data_fields = ["time", "latitude", "longitude", "altitude"]
 id_fields = "identity"
 
 table = dict()
@@ -67,15 +66,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
 			self.wfile.write(
 				b"table {"
 					b"width:100%;"
-					b"border-collapse:collapse"
-				b"}"
+					b"border-collapse:collapse}"
 				b"td {"
 					b"border:solid thin;"
-					b"text-align:center"
-				b"}"
+					b"text-align:center}"
 				b"#map {"
-					b"height:90vh"
-				b"}"
+					b"height:90vh}"
 			)
 		elif self.path == "/script.js":
 			self.send_response_only(http.HTTPStatus.OK, "OK")
