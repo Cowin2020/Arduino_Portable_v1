@@ -241,6 +241,7 @@ function data_plots(rows) {
 		}
 		var time = column(0);
 		var layout = {
+			uirevision: true,
 			dragmode: false,
 			margin: {r: 8}
 		};
@@ -366,6 +367,7 @@ function GPS_show() {
 						opacity: 0.75
 					}
 				],
+				uirevision: true,
 				dragmode: false,
 				margin: {
 					r: 8
