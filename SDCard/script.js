@@ -1,5 +1,9 @@
 import "./plotly.min.js";
 
+var start_delay = 3000; /* milliseconds */
+
+/* Utilities */
+
 function $T(string) {
 	return document.createTextNode(string);
 }
@@ -18,8 +22,7 @@ function $E(name, attributes, children) {
 	return element;
 }
 
-function string_from_Date(value, seperator = " ") {
-	var date = new Date(value);
+function string_from_Date(date, seperator = " ") {
 	return (
 		date.getFullYear().toString()
 			+ "-"
@@ -42,10 +45,10 @@ function Timer() {
 Timer.prototype = {
 	run() {},
 	update() {},
-	set(checked) {
-		if (checked) {
+	set(enabled) {
+		if (enabled) {
 			if (this.interval !== null) return;
-			this.interval = setInterval(this.run.bind(this), 30000);
+			this.interval = setInterval(this.run.bind(this), Alone.measure_interval);
 		}
 		else {
 			if (this.interval === null) return;
@@ -55,9 +58,9 @@ Timer.prototype = {
 	}
 };
 
-document.body.style["margin"] = "1ex";
+/* Page structure */
 
-/* Dashboard */
+document.body.style["margin"] = "1ex";
 
 var $dashboard = new Object;
 $dashboard.items = new Array(Alone.data_fields.length - 1);
@@ -109,9 +112,6 @@ function show_dashboard(row) {
 
 show_dashboard(null);
 
-/* Download links */
-
-var $save_GPS;
 document.body.appendChild(
 	$E("p", {"class": "download-links"},
 		(function (children) {
@@ -123,17 +123,17 @@ document.body.appendChild(
 				);
 			}
 			children.push(
-				$E("a", {"href": "data/recent.csv", "download": ""}, [
+				$E("a", {"href": "data/recent.csv", "download": "data_recent.csv"}, [
 					$T("Recent weather data")
 				])
 			);
 			children.push(
-				$E("a", {"href": "data.csv", "download": ""}, [
+				$E("a", {"href": Alone.data_file, "download": ""}, [
 					$T("All weather data")
 				])
 			);
 			children.push(
-				$save_GPS = $E("a", {"href": "#"}, [
+				$E("a", {"href": "gps/recent.csv", "download": "gps_recent.csv"}, [
 					$T("Recent GPS data")
 				])
 			);
@@ -147,30 +147,28 @@ document.body.appendChild(
 	)
 );
 
-/* Refresh */
-
-var $refresh, $auto_refresh, $report, $auto_report;
-document.body.appendChild(
-	$E("p", {"class": "timers"}, [
-		$refresh = $E("form", {"class": "refresh"}, [
-			$E("label", null, [
-				$auto_refresh = $E("input", {"type": "checkbox", "checked": ""}),
-				$T("Auto refresh")
-			]),
-			$E("button", {"type": "submit"}, [$T("Refresh now")])
-		]),
-		$report = $E("form", {"class": "report"}, [
-			$E("label", null, [
-				$auto_report = $E("input", {"type": "checkbox", "checked": ""}),
-				$T("Auto report")
-			]),
-			$E("button", {"type": "submit"}, [$T("Report now")])
-		])
-	])
-);
-if (!Alone.operator) $report.hidden = true;
-
-/* Sensor data */
+var $refresh, $auto_refresh, $auto_report;
+$refresh = $E("form", {"class": "refresh"}, [
+	$E("label", null, [
+		$auto_refresh = $E("input", {"type": "checkbox", "checked": ""}),
+		$T("Auto refresh")
+	]),
+	$E("button", {"type": "submit"}, [$T("Refresh now")])
+]);
+void function () {
+	var $forms = [$refresh];
+	if (Alone.operator)
+		$forms.push(
+			$E("p", {"class": "timers"}, [
+				$refresh,
+				$E("label", {"class": "report"}, [
+					$auto_report = $E("input", {"type": "checkbox", "checked": ""}),
+					$T("Auto report")
+				])
+			])
+		);
+	document.body.appendChild($E("p", {"class": "timers"}, $forms))
+}();
 
 var $list;
 document.body.appendChild(
@@ -196,125 +194,11 @@ var $plots = Alone.data_fields.slice(1).map(
 	}
 );
 
-function hide_plot() {
-	$plots.forEach(function ($plot) {$plot.hidden = true;});
-}
+var $data_loading = $E("h1", null, [$T("Loading...")]);
+$data_loading.hidden = true;
+document.body.appendChild($data_loading);
 
-function show_plot(rows) {
-	if (!Array.isArray(rows))
-		hide_plot();
-	else {
-		$plots.forEach(function ($plot) {$plot.hidden = false;});
-		function column(n) {
-			return rows.map(function (row) {return row[n]});
-		}
-		var time = column(0);
-		var layout = {
-			dragmode: false,
-			margin: {r: 8}
-		};
-		var config = {
-			responsive: true
-		};
-		Alone.data_fields.slice(1).forEach(
-			function (field, index) {
-				Plotly.react(
-					$plots[index],
-					{
-						data: [{x: time, y: column(field.index)}],
-						layout: {title: field.name + " (" + field.unit + ")", ...layout},
-						config: config
-					}
-				);
-			}
-		);
-	}
-}
-
-var $loading = $E("h1", null, [$T("Loading...")]);
-$loading.hidden = true;
-document.body.appendChild($loading);
-
-function load() {
-	hide_plot();
-	$list.textContent = null;
-	$loading.hidden = false;
-	var xhr = new XMLHttpRequest();
-	xhr.onloadend = function (event) {
-		$loading.hidden = true;
-		var text = xhr.responseText;
-		if (text == null || xhr.status !== 200) {
-			alert("Failed to load data");
-			return;
-		}
-		var rows = text.split("\n").map(
-			function (line) {
-				return line.trim().split(",");
-			}
-		);
-		rows.shift();
-		while (rows.length && rows[rows.length - 1].length < 4)
-			rows.pop();
-		if (!(rows.length > 0)) {
-			show_dashboard(null);
-			show_plot(null);
-			return;
-		}
-		show_dashboard(rows[rows.length - 1]);
-		show_plot(rows);
-		for (var i = 0; rows.length > i; ++i) {
-			var fields = rows[rows.length - i - 1];
-			$list.appendChild(
-				$E("tr", null,
-					fields.map(
-						function (field) {
-							return $E("td", null, [$T(field)]);
-						}
-					)
-				)
-			);
-		}
-	};
-	xhr.open("GET", "data/recent.csv", true);
-	xhr.send(null);
-}
-
-$refresh.addEventListener(
-	"submit",
-	function (event) {
-		event.preventDefault();
-		load();
-	}
-);
-
-function RefreshTimer() {
-	Timer.call(this);
-}
-RefreshTimer.prototype = {
-	__proto__: Timer.prototype,
-	run: load,
-	update() {
-		this.set($auto_refresh.checked);
-	}
-};
-
-var refresh_timer = new RefreshTimer();
-$auto_refresh.addEventListener("change", refresh_timer.update.bind(refresh_timer));
-setTimeout(load, 3000);
-
-/* GPS */
-
-var storage = window.sessionStorage;
-var GPS = null;
 var $GPS = new Object;
-
-try {
-	if (storage) GPS = JSON.parse(storage.getItem("GPS"));
-}
-catch {
-}
-if (!Array.isArray(GPS)) GPS = new Array;
-
 $GPS.table = $E("table", null, [
 	$E("tbody", null, [
 		$E("tr", null, [
@@ -342,165 +226,275 @@ $GPS.plot = $E("div", {"class": "plot"});
 $GPS.plot.hidden = true;
 document.body.appendChild($GPS.plot);
 
-if (!("geolocation" in navigator)) {
-	document.body.appendChild($E("p", null, [$T("Geo-location is not support in this browser")]));
+/* Actions */
+
+function hide_plots() {
+	$plots.forEach(function ($plot) {$plot.hidden = true;});
 }
-else {
-	function plot_GPS() {
-		$GPS.plot.hidden = false;
-		Plotly.react(
-			$GPS.plot,
-			{
-				data: [
+
+function data_plots(rows) {
+	if (!Array.isArray(rows))
+		hide_plots();
+	else {
+		function column(n) {
+			return rows.map(function (row) {return row[n]});
+		}
+		var time = column(0);
+		var layout = {
+			dragmode: false,
+			margin: {r: 8}
+		};
+		var config = {
+			responsive: true
+		};
+		Alone.data_fields.slice(1).forEach(
+			function (field, index) {
+				$plots[index].hidden = false;
+				Plotly.react(
+					$plots[index],
 					{
-						type: "scatter",
-						mode: "lines+markers",
-						marker: {color: "red"},
-						x: GPS.map(function (record) {return record[2];}),
-						y: GPS.map(function (record) {return record[1];})
+						data: [{x: time, y: column(index + 1)}],
+						layout: {title: field.name + " (" + field.unit + ")", ...layout},
+						config: config
 					}
-				],
-				layout: {
-					title: "Position",
-					xaxis: {
-						title: "Longitude (E)"
-					},
-					yaxis: {
-						title: "Latitude (N)",
-						scaleanchor: "x"
-					},
-					images: [
-						{
-							source: "HK.jpg",
-							layer: "below",
-							xref: "x",
-							yref: "y",
-							x: 113.8303978,
-							y: 22.1501391,
-							sizex: 0.61396362,
-							sizey: 0.41495771,
-							xanchor: "left",
-							yanchor: "bottom",
-							sizing: "stretch",
-							opacity: 0.75
-						}
-					],
-					dragmode: false,
-					margin: {
-						r: 8
-					}
-				},
-				config: {
-					responsive: true
-				}
+				);
 			}
 		);
 	}
-
-	function record_GPS(spacetime) {
-		if (spacetime === null || typeof spacetime === "undefined") return;
-		var timestamp = string_from_Date(spacetime.timestamp, "T");
-		var coords = spacetime.coords;
-		GPS.push(
-			[
-				timestamp,
-				coords.latitude, coords.longitude, coords.altitude,
-				coords.accuracy, coords.altitudeAccuracy,
-				coords.heading, coords.speed
-			]
-		);
-		if (storage) storage.setItem("GPS", JSON.stringify(GPS));
-		$GPS.time.textContent = string_from_Date(spacetime.timestamp);
-		$GPS.latitude.textContent = coords.latitude;
-		$GPS.longitude.textContent = coords.longitude;
-		$GPS.altitude.textContent = coords.altitude;
-		$GPS.table.hidden = false;
-
-		if (Alone.operator) {
-			var formdata = new URLSearchParams;
-			formdata.append('identity',  Alone.identity);
-			formdata.append('time',      timestamp);
-			formdata.append('latitude',  coords.latitude);
-			formdata.append('longitude', coords.longitude);
-			formdata.append('altitude',  coords.altitude);
-			fetch("/gps/upload.exe", {method: 'POST', body: formdata})
-				.catch(function () {});
-		}
-	
-		plot_GPS();
-	}
-
-	function get_GPS() {
-		navigator.geolocation.getCurrentPosition(
-			record_GPS,
-			function (error) {
-				console.error("GeoLocationError: ", error.message);
-			},
-			{timeout: 15000, enableHighAccuracy: true}
-		)
-	}
-	get_GPS();
-	setInterval(get_GPS, 30000);
-	// navigator.geolocation.watchPosition(record_GPS);
 }
 
-function report() {
-	if (!GPS.length) return;
-	var position = GPS[GPS.length - 1];
-	var formdata = new URLSearchParams;
-	formdata.append('identity',  Alone.identity);
-	formdata.append('time',      position[0]);
-	formdata.append('latitude',  position[1]);
-	formdata.append('longitude', position[2]);
-	formdata.append('latitude',  position[3]);
-	fetch(Alone.report, {method: 'POST', body: formdata})
-		.catch(function () {});
-}
-
-if (Alone.operator)
-	$report.addEventListener(
-		"submit",
-		function (event) {
-			event.preventDefault();
-			report();
+function data_load() {
+	return new Promise(
+		function (resolve, reject) {
+			hide_plots();
+			$list.textContent = null;
+			$data_loading.hidden = false;
+			var xhr = new XMLHttpRequest();
+			xhr.onloadend = function (event) {
+				$data_loading.hidden = true;
+				var text = xhr.responseText;
+				if (text == null || xhr.status !== 200) {
+					alert("Failed to load data");
+					return reject(xhr);
+				}
+				var rows = text.split("\n").map(
+					function (line) {
+						return line.trim().split(",");
+					}
+				);
+				rows.shift();
+				while (rows.length && rows[rows.length - 1].length < 4)
+					rows.pop();
+				if (!(rows.length > 0)) {
+					show_dashboard(null);
+					data_plots(null);
+					return resolve();
+				}
+				show_dashboard(rows[rows.length - 1]);
+				data_plots(rows);
+				for (var i = 0; rows.length > i; ++i) {
+					var fields = rows[rows.length - i - 1];
+					$list.appendChild(
+						$E("tr", null,
+							fields.map(
+								function (field) {
+									return $E("td", null, [$T(field)]);
+								}
+							)
+						)
+					);
+				}
+				return resolve();
+			};
+			xhr.open("GET", "data/recent.csv", true);
+			xhr.send(null);
 		}
 	);
+}
 
-function ReportTimer() {
+var GPS = new Array;
+
+function GPS_show() {
+	if (!GPS.length) {
+		$GPS.table.hidden = true;
+		$GPS.plot.hidden = true;
+		return;
+	}
+
+	var last = GPS[GPS.length - 1];
+	$GPS.time.textContent = string_from_Date(last[0]);
+	$GPS.latitude.textContent = last[1];
+	$GPS.longitude.textContent = last[2];
+	$GPS.altitude.textContent = last[3];
+	$GPS.table.hidden = false;
+
+	$GPS.plot.hidden = false;
+	Plotly.react(
+		$GPS.plot,
+		{
+			data: [
+				{
+					type: "scatter",
+					mode: "lines+markers",
+					marker: {color: "red"},
+					x: GPS.map(function (record) {return record[2];}),
+					y: GPS.map(function (record) {return record[1];})
+				}
+			],
+			layout: {
+				title: "Position",
+				xaxis: {
+					title: "Longitude (E)"
+				},
+				yaxis: {
+					title: "Latitude (N)",
+					scaleanchor: "x"
+				},
+				images: [
+					{
+						source: "HK.jpg",
+						layer: "below",
+						xref: "x",
+						yref: "y",
+						x: 113.8303978,
+						y: 22.1501391,
+						sizex: 0.61396362,
+						sizey: 0.41495771,
+						xanchor: "left",
+						yanchor: "bottom",
+						sizing: "stretch",
+						opacity: 0.75
+					}
+				],
+				dragmode: false,
+				margin: {
+					r: 8
+				}
+			},
+			config: {
+				responsive: true,
+				scrollZoom: true
+			}
+		}
+	);
+}
+
+function GPS_load() {
+	return new Promise(
+		function (resolve, reject) {
+			var xhr = new XMLHttpRequest();
+			xhr.onloadend = function (event) {
+				var text = xhr.responseText;
+				if (text == null || xhr.status !== 200) {
+					alert("Failed to load GPS records");
+					return reject(xhr);
+				}
+				var lines = text.split("\r\n");
+				if (!lines || !(lines.length > 0)) return;
+				var records = new Array;
+				for (var i = 1; i < lines.length; ++i) {
+					var line = lines[i].trim();
+					if (!line || typeof line !== "string") continue;
+					var fields = line.split(",");
+					var record = new Array;
+					if (fields.length > 0) {
+						record.push(new Date(fields[0]));
+						for (var j = 1; j < fields.length; ++j)
+							record.push(Number.parseFloat(fields[j]));
+					}
+					records.push(record);
+				}
+				GPS = records;
+				GPS_show();
+				return resolve();
+			};
+			xhr.open("GET", "gps/recent.csv", true);
+			xhr.send(null);
+		}
+	);
+}
+
+function load_all() {
+	return (
+		data_load()
+			.catch(function () {})
+			.then(function () {return GPS_load();})
+			.catch(function () {})
+	);
+}
+
+$refresh.addEventListener(
+	"submit",
+	function (event) {
+		event.preventDefault();
+		return load_all();
+	}
+);
+
+function RefreshTimer() {
 	Timer.call(this);
 }
-ReportTimer.prototype = {
+RefreshTimer.prototype = {
 	__proto__: Timer.prototype,
-	run: report,
+	run: load_all,
 	update() {
-		this.set($auto_report.checked);
+		this.set($auto_refresh.checked);
 	}
 };
 
+var refresh_timer = new RefreshTimer();
+$auto_refresh.addEventListener("change", refresh_timer.update.bind(refresh_timer));
+setTimeout(load_all, start_delay);
+
 if (Alone.operator) {
-	var report_timer = new ReportTimer();
-	$auto_report.addEventListener("change", report_timer.update.bind(report_timer));
-}
+	if (!("geolocation" in navigator))
+		document.body.appendChild($E("p", null, [$T("Geo-location is not support in this browser")]));
+	else {
+		function make_body(timestamp, coords) {
+			var body = new URLSearchParams;
+			body.append("identity",  Alone.identity);
+			body.append("time",      timestamp);
+			body.append("latitude",  coords.latitude);
+			body.append("longitude", coords.longitude);
+			body.append("altitude",  coords.altitude);
+			return body;
+		}
+		function GPS_upload(timestamp, coords) {
+			var body = make_body(timestamp, coords);
+			fetch("/gps/upload.exe", {method: "POST", body: body})
+				.catch(function () {});
+		}
+		function GPS_report(timestamp, coords) {
+			var body = make_body(timestamp, coords);
+			fetch(Alone.report, {method: "POST", body: body})
+				.catch(function () {});
+		}
 
-var $GPS_downloader = $E("a", {"download": "gps.csv"});
-$GPS_downloader.hidden = true;
-document.body.appendChild($GPS_downloader);
-function save_GPS() {
-	var content =
-		"Time,Latitude,Longitude,Altitude,Horizontal accuracy,Vertical accuracy,Heading,Speed\r\n"
-			+ GPS.map(function (record) {return record.join(",");}).join("\r\n");
-	var oldobj = $GPS_downloader.getAttribute("href");
-	if (oldobj) URL.revokeObjectURL(objurl);
-	$GPS_downloader.setAttribute("href", URL.createObjectURL(new Blob(Array.of(content), {type: "text/csv"})));
-	setTimeout(function () {$GPS_downloader.click();}, 1000);
-}
+		function GPS_record(spacetime) {
+			if (spacetime === null || typeof spacetime === "undefined") return;
+			var time = new Date(spacetime.timestamp);
+			var timestamp = string_from_Date(time, "T");
+			var coords = spacetime.coords;
+			GPS.push([time, coords.latitude, coords.longitude, coords.altitude]);
+			GPS_show();
+			GPS_upload(timestamp, coords);
+			if ($auto_report.checked)
+				GPS_report(timestamp, coords);
+		}
 
-$save_GPS.addEventListener(
-	"click",
-	function (event) {
-		event.preventDefault();
-		save_GPS();
+		function GPS_request() {
+			navigator.geolocation.getCurrentPosition(
+				GPS_record,
+				function (error) {
+					console.error("GeoLocationError: ", error.message);
+				},
+				{timeout: 15000, enableHighAccuracy: true}
+			)
+		}
+		setTimeout(GPS_request, start_delay);
+		setInterval(GPS_request, Alone.measure_interval);
+		// navigator.geolocation.watchPosition(GPS_record);
 	}
-);
+}
 
 /* ************************************************************************* */

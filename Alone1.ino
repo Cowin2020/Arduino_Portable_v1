@@ -972,14 +972,23 @@ static void web_icon_handle(httpsserver::HTTPRequest *const request, httpsserver
 
 static httpsserver::ResourceNode web_icon_node("/favicon.ico", "GET", web_icon_handle);
 
-static void web_data_handle(httpsserver::HTTPRequest *const request, httpsserver::HTTPResponse *const response) {
+static void web_data_recent_handle(httpsserver::HTTPRequest *const request, httpsserver::HTTPResponse *const response) {
 	response->setHeader("CONTENT-TYPE", "text/csv");
 	response->println(data_header);
 	for (struct Data const &record: data_records)
 		response->println(CSV_Data(&record));
 }
 
-static httpsserver::ResourceNode web_data_node("/data/recent.csv", "GET", web_data_handle);
+static httpsserver::ResourceNode web_data_recent_node("/data/recent.csv", "GET", web_data_recent_handle);
+
+static void web_data_latest_handle(httpsserver::HTTPRequest *const request, httpsserver::HTTPResponse *const response) {
+	response->setHeader("CONTENT-TYPE", "text/csv");
+	response->println(data_header);
+	if (!data_records.empty())
+		response->println(CSV_Data(&data_records.back()));
+}
+
+static httpsserver::ResourceNode web_data_latest_node("/data/latest.csv", "GET", web_data_latest_handle);
 
 static void web_gps_recent_handle(httpsserver::HTTPRequest *const request, httpsserver::HTTPResponse *const response) {
 	response->setHeader("CONTENT-TYPE", "text/csv");
@@ -989,6 +998,15 @@ static void web_gps_recent_handle(httpsserver::HTTPRequest *const request, https
 }
 
 static httpsserver::ResourceNode web_gps_recent_node("/gps/recent.csv", "GET", web_gps_recent_handle);
+
+static void web_gps_latest_handle(httpsserver::HTTPRequest *const request, httpsserver::HTTPResponse *const response) {
+	response->setHeader("CONTENT-TYPE", "text/csv");
+	response->println(data_header);
+	if (!data_records.empty())
+		response->println(CSV_Data(&data_records.back()));
+}
+
+static httpsserver::ResourceNode web_gps_latest_node("/gps/latest.csv", "GET", web_gps_latest_handle);
 
 static std::string read_parser(httpsserver::HTTPBodyParser &parser) {
 	std::string result = "";
@@ -1484,10 +1502,14 @@ static void webserver_setup(void) {
 	HTTPSd.registerNode(&web_operator_node);
 	HTTPd.registerNode(&web_icon_node);
 	HTTPSd.registerNode(&web_icon_node);
-	HTTPd.registerNode(&web_data_node);
-	HTTPSd.registerNode(&web_data_node);
+	HTTPd.registerNode(&web_data_recent_node);
+	HTTPSd.registerNode(&web_data_recent_node);
+	HTTPd.registerNode(&web_data_latest_node);
+	HTTPSd.registerNode(&web_data_latest_node);
 	HTTPd.registerNode(&web_gps_recent_node);
 	HTTPSd.registerNode(&web_gps_recent_node);
+	HTTPd.registerNode(&web_gps_latest_node);
+	HTTPSd.registerNode(&web_gps_latest_node);
 	HTTPd.registerNode(&web_gps_upload_node);
 	HTTPSd.registerNode(&web_gps_upload_node);
 	HTTPd.registerNode(&web_setting_node);
