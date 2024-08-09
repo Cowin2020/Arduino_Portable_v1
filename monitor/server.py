@@ -6,7 +6,7 @@ import http.server
 try:
 	PORT = int(os.environ["PORT"])
 except:
-	PORT = 8880
+	PORT = 8080
 
 data_fields = ["time", "latitude", "longitude", "altitude"]
 id_fields = "identity"
