@@ -35,6 +35,8 @@
 
 #define FONT_OFFSET 12
 
+static void redraw_display(void);
+
 static std::mutex mutex_1;
 #define DISPLAY_LOCK(lock) std::lock_guard<std::mutex> lock(mutex_1);
 #define DEVICE_LOCK(lock) std::lock_guard<std::mutex> lock(mutex_1);
@@ -48,6 +50,7 @@ static bool need_save = false;
 static bool need_reboot = false;
 
 static Adafruit_SSD1306 Monitor(128, 64);
+
 
 /* *************************************************************************** / ************************************ */
 /* Data */
@@ -459,7 +462,6 @@ static void setup_WiFi(void) {
 
 	if (use_AP_mode) {
 		/* WiFi access-point */
-		WiFi.disconnect();
 		WiFi.mode(WIFI_AP);
 		WiFi.setHostname("WeatherStation");
 		// IPAddress my_IP_address = IPAddress(8, 8, 8, 8);
@@ -525,7 +527,8 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 
 )HTML";
 
-static PROGMEM char const web_home_html_2[] = R"HTML(
+static PROGMEM char const web_home_html_2[] =
+R"HTML(
 		};
 		return import("./script.js").then(function(){}, p);
 	}
@@ -691,7 +694,7 @@ static PROGMEM char const web_home_html_2[] = R"HTML(
 			s_($table, "border-collapse", "collapse");
 			s_($table, "width", "100%");
 			$caption = $E("caption");
-			c_($caption, $T("Sensor data"));
+			c_($caption, $T("GPS data"));
 			c_($table, $caption);
 			$thead = $E("thead");
 			s_($thead, "border-bottom-style", "solid");
@@ -973,10 +976,13 @@ static void web_icon_handle(httpsserver::HTTPRequest *const request, httpsserver
 static httpsserver::ResourceNode web_icon_node("/favicon.ico", "GET", web_icon_handle);
 
 static void web_data_recent_handle(httpsserver::HTTPRequest *const request, httpsserver::HTTPResponse *const response) {
+	Serial.println("DEBUG: web_data_recent_handle");
+	Serial.flush();
 	response->setHeader("CONTENT-TYPE", "text/csv");
 	response->println(data_header);
 	for (struct Data const &record: data_records)
 		response->println(CSV_Data(&record));
+	response->finalize();
 }
 
 static httpsserver::ResourceNode web_data_recent_node("/data/recent.csv", "GET", web_data_recent_handle);
@@ -986,6 +992,7 @@ static void web_data_latest_handle(httpsserver::HTTPRequest *const request, http
 	response->println(data_header);
 	if (!data_records.empty())
 		response->println(CSV_Data(&data_records.back()));
+	response->finalize();
 }
 
 static httpsserver::ResourceNode web_data_latest_node("/data/latest.csv", "GET", web_data_latest_handle);
@@ -995,6 +1002,7 @@ static void web_gps_recent_handle(httpsserver::HTTPRequest *const request, https
 	response->println(gps_header);
 	for (struct GPS const &record: gps_records)
 		response->println(CSV_GPS(&record));
+	response->finalize();
 }
 
 static httpsserver::ResourceNode web_gps_recent_node("/gps/recent.csv", "GET", web_gps_recent_handle);
@@ -1004,6 +1012,7 @@ static void web_gps_latest_handle(httpsserver::HTTPRequest *const request, https
 	response->println(data_header);
 	if (!data_records.empty())
 		response->println(CSV_Data(&data_records.back()));
+	response->finalize();
 }
 
 static httpsserver::ResourceNode web_gps_latest_node("/gps/latest.csv", "GET", web_gps_latest_handle);
@@ -1151,6 +1160,7 @@ static void web_setting_form(httpsserver::HTTPResponse *const response, char con
 	response->write(reinterpret_cast<byte const *>(web_setting_form_1), sizeof web_setting_form_1 - 1);
 	response->print(XML_escape(id));
 	response->write(reinterpret_cast<byte const *>(web_setting_form_2), sizeof web_setting_form_2 - 1);
+	response->finalize();
 }
 
 static void web_setting_handle(httpsserver::HTTPRequest *const request, httpsserver::HTTPResponse *const response) {
@@ -1451,6 +1461,7 @@ static void web_file_handle(httpsserver::HTTPRequest *const request, httpsserver
 	if (request->getMethod() != "GET") {
 		response->setStatusCode(405);
 		response->setStatusText("METHOD NOT ALLOWED");
+		response->finalize();
 		return;
 	}
 	File file = SD.open(name.c_str(), "r");
@@ -1480,11 +1491,11 @@ static void web_file_handle(httpsserver::HTTPRequest *const request, httpsserver
 			response->write(reinterpret_cast<byte *>(buffer), n);
 			yield();
 		}
-		response->finalize();
 	}
 	catch (...) {
 		Serial.println("ERROR: response file");
 	}
+	response->finalize();
 	file.close();
 }
 
@@ -1520,10 +1531,16 @@ static void webserver_setup(void) {
 	HTTPSd.setDefaultNode(&web_file_node);
 	for (;;) {
 		HTTPd.start();
+		if (HTTPd.isRunning()) break;
+		Serial.println("ERROR: failed to start HTTP server");
+	}
+	Serial.println("HTTP server started");
+	for (;;) {
 		HTTPSd.start();
-		if (HTTPd.isRunning() && HTTPSd.isRunning()) break;
+		if (HTTPSd.isRunning()) break;
 		Serial.println("ERROR: failed to start HTTPS server");
 	}
+	Serial.println("HTTPS server started");
 }
 
 /* *************************************************************************** / ************************************ */
@@ -1633,7 +1650,7 @@ void setup(void) {
 	if (has_SD_card)
 		load_settings();
 	else
-		Serial.println("WARN: SD card not found");
+		Serial.println("SD card not found");
 
 	/* Clock */
 	external_clock_available = external_clock.begin();
