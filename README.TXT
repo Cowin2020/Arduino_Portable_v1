@@ -10,6 +10,21 @@ Required libraries:
 			#include <hwcrypto/sha.h>
 		to
 			#include <sha/sha_parallel_engine.h>
+	PsychicHttp
+		for 1.1.0
+		in file
+			src/PsychicHttpsServer.cpp
+		replace at line 28
+			this->ssl_config.cacert_pem = (uint8_t *)cert;
+			this->ssl_config.cacert_len = strlen(cert)+1;
+		to
+		#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 2)
+			this->ssl_config.servercert = (uint8_t *)cert;
+			this->ssl_config.servercert_len = strlen(cert)+1;
+		#else
+			this->ssl_config.cacert_pem = (uint8_t *)cert;
+			this->ssl_config.cacert_len = strlen(cert)+1;
+		#endif
 
 Setup:
 	Copy files in "SDCard" to SD card if SD card is used

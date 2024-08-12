@@ -5,19 +5,18 @@
 #include <thread>
 #include <mutex>
 #include <condition_variable>
-#include <Arduino.h>
+
 #include <esp_pthread.h>
 #include <WiFi.h>
 // #include <DNSServer.h>
-#include <SSLCert.hpp>
-#include <HTTPRequest.hpp>
-#include <HTTPResponse.hpp>
-#include <HTTPURLEncodedBodyParser.hpp>
-#include <HTTPSServer.hpp>
-#include <SD.h>
+#include <PsychicHttp.h>
+#include <PsychicHttpServer.h>
+#include <PsychicHttpsServer.h>
+#include <PsychicStreamResponse.h>
 #include <RTClib.h>
 #include <Adafruit_SSD1306.h>
 #include <Fonts/TomThumb.h>
+#include <SD.h>
 
 #define SENSOR_BME280 1
 #define SENSOR_SHT40 2
@@ -438,7 +437,9 @@ static signed int check_WiFi_status(void) {
 			Serial.print("WiFi SSID: ");
 			Serial.println(WiFi.SSID());
 			Serial.print("IP address: ");
-			Serial.println(WiFi.localIP().toString());
+			//	Serial.println(WiFi.localIP().toString());
+			WiFi.localIP().printTo(Serial);
+			Serial.println();
 		}
 		redraw_display();
 	}
@@ -459,14 +460,14 @@ static void wifi_thread(void) {
 static void setup_WiFi(void) {
 	WiFi.disconnect();
 	WiFi.onEvent(handle_WiFi_event);
+	WiFi.setHostname("WeatherStation");
 
 	if (use_AP_mode) {
 		/* WiFi access-point */
 		WiFi.mode(WIFI_AP);
-		WiFi.setHostname("WeatherStation");
 		// IPAddress my_IP_address = IPAddress(8, 8, 8, 8);
 		// WiFi.softAPConfig(my_IP_address, my_IP_address, IPAddress(255, 255, 255, 0));
-		while (!WiFi.softAP(AP_SSID.c_str(), AP_PASS, 1, 0, 2)) {
+		while (!WiFi.softAP(AP_SSID.c_str(), AP_PASS, 1, 0, 4)) {
 			Serial.println("ERROR: failed to create soft AP");
 			Monitor.println("ERROR: WiFi AP");
 			Monitor.display();
@@ -475,7 +476,9 @@ static void setup_WiFi(void) {
 		Serial.print("WiFi SSID: ");
 		Serial.println(WiFi.softAPSSID());
 		Serial.print("IP address: ");
-		Serial.println(WiFi.softAPIP().toString());
+		//	Serial.println(WiFi.softAPIP().toString());
+		WiFi.softAPIP().printTo(Serial);
+		Serial.println();
 
 		/* DNS server */
 		// static uint16_t const DNS_port = 53;
@@ -492,22 +495,73 @@ static void setup_WiFi(void) {
 		WiFi.begin(STA_SSID, STA_PASS);
 		while (WiFi.status() == WL_NO_SHIELD) {
 			Serial.println("ERROR: no WiFi shield");
-			Monitor.println("ERROR: WiFi shield");
+			Monitor.println("No WiFi shield");
 			Monitor.display();
 			delay(reinitialize_interval);
 		}
 		while (millis() < WiFi_wait_time && WiFi.status() != WL_CONNECTED)
 			delay(1);
-		std::thread(wifi_thread).detach();
+		/* TODO: move to loop() */
+		// std::thread(wifi_thread).detach();
 	}
 }
 
 /* *************************************************************************** / ************************************ */
 /* Web server */
 
-static httpsserver::HTTPServer HTTPd;
-static httpsserver::SSLCert certificate;
-static httpsserver::HTTPSServer HTTPSd(&certificate);
+static PsychicHttpServer HTTPd;
+static PsychicHttpsServer HTTPSd;
+
+static PROGMEM char const tls_key[] =
+R"(-----BEGIN PRIVATE KEY-----
+MIICdwIBADANBgkqhkiG9w0BAQEFAASCAmEwggJdAgEAAoGBAMNgxUb2U45aziNv
+J+VWYP0CUOvjVwxe9pW8lrSevsX+thjYHiU3OOridQ/Q/GocJaZgCQDFAnL54FYN
+pSmSIXtIuwjWEk+nYK7chDSwnkZ191dIQGTqI7BWglckqHc4y2auWD7JZCGIEFjK
+yEyraHv2S2cAd0pwlWcUCICgte0PAgMBAAECgYEAicaI92SnQYCpUvWEtcX2+RQU
+CnQzo2aoDqmBwPcc4rSepuBoSagqfACbuj6OcSlOJ4gbcS58bqXk2+odaTZCYtlC
++3ME9A+WNQCVjHm8qXugLyuw6LHHQkKZ0D5T4uiTCQCF4eGkfPwke3o8/H/0Dzqe
+l49zwfT/xxHL16I4KgECQQDk1Fe0jVLjhVYbmODB3Zp81oktxo283oaTLnCMO09M
+l9sM1WzZXS7ZiJe5jq6LY8ysiQMUMxl1TAxbGT+WZSUBAkEA2pOdXG78FhYuojpz
+hwF8eMoQ3p+BfZ+4R5K+y2jeANoui4JrQ2XC23UJ9I51nzFO+7BlyKynvZXf0Ai4
+tL7CDwJAAvbhP/yIs1vZ1revSbOmObHJyycEVQsI8UUrvhVSnKpm8w6cv2AeqEDF
+vmijyDh9wUpxGMTksolOq6tzEG61AQJBAKRUhuKProcMdlMRjvnZbDOD99roIPrJ
+skpdUYSsevw5DPVmQC6Tu0QzYiCzWkstTyx7GosdA5/Npk9Jv1RkdpECQCS/fBnl
+nY7gZGKfoTbwiTBjAvRt+zfX7Ur0CUCYrZpTNTKtHNFh/8bImR+nnhGMqWV5DCUH
+2yH9XHBPj+9AXdA=
+-----END PRIVATE KEY-----
+)";
+
+static PROGMEM char const tls_cert[] =
+R"(-----BEGIN CERTIFICATE-----
+MIICAjCCAWsCFDEQA8xXkoJCKRZu7sn1fd0h9AsgMA0GCSqGSIb3DQEBCwUAMEAx
+CzAJBgNVBAYTAkhLMQwwCgYDVQQKDANIS1UxDTALBgNVBAsMBEdlb2cxFDASBgNV
+BAMMCzE5Mi4xNjguNC4xMB4XDTI0MDgwODA4MzEwM1oXDTI0MDkwNzA4MzEwM1ow
+QDELMAkGA1UEBhMCSEsxDDAKBgNVBAoMA0hLVTENMAsGA1UECwwER2VvZzEUMBIG
+A1UEAwwLMTkyLjE2OC40LjEwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAMNg
+xUb2U45aziNvJ+VWYP0CUOvjVwxe9pW8lrSevsX+thjYHiU3OOridQ/Q/GocJaZg
+CQDFAnL54FYNpSmSIXtIuwjWEk+nYK7chDSwnkZ191dIQGTqI7BWglckqHc4y2au
+WD7JZCGIEFjKyEyraHv2S2cAd0pwlWcUCICgte0PAgMBAAEwDQYJKoZIhvcNAQEL
+BQADgYEAaruQki3Ot6X3wuu26HdA9V0S+ZwjrjOAaRPO1liO1qkkNyXKenL6yRpC
+i2lVLW/CxmGgT6nT64MFUh4wIlZmbNuK+yTNdCaJI7I713YEjDAuomzS/myPyLDm
+fPQsAPOfXW3x3SDYwVp+V8rcl/xegEyo1BQaKbTloCEKFmNfEAI=
+-----END CERTIFICATE-----
+)";
+
+static String javascript_escape(String const &string) {
+	String result;
+	for (char const c: string)
+		switch (c) {
+		case '\"':
+			result.concat("\\\"");
+			break;
+		case '\'':
+			result.concat("\\\'");
+			break;
+		default:
+			result.concat(c);
+		}
+	return result;
+}
 
 static PROGMEM char const web_home_html_1[] =
 R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
@@ -876,71 +930,51 @@ R"HTML(
 </html>
 )HTML";
 
-static String javascript_escape(String const &string) {
-	String result;
-	for (char const c: string)
-		switch (c) {
-		case '\"':
-			result.concat("\\\"");
-			break;
-		case '\'':
-			result.concat("\\\'");
-			break;
-		default:
-			result.concat(c);
-		}
-	return result;
-}
-
-static char buffer[32768];
-
-static void web_home_handle(httpsserver::HTTPRequest *const request, httpsserver::HTTPResponse *const response) {
-	response->setHeader("CONTENT-TYPE", "application/xhtml+xml; charset=UTF-8");
-	response->setHeader("CONTENT-SECURITY-POLICY", "connect-src *");
-	response->write(reinterpret_cast<byte const *>(web_home_html_1), sizeof web_home_html_1 - 1);
-	response->print("\t\t\tidentity: '");
-	response->print(javascript_escape(device_name));
-	response->print("',\r\n\t\t\tmeasure_interval: '");
-	response->print(measure_interval);
-	response->print("',\r\n\t\t\tdata_file: '");
-	response->print(javascript_escape(data_filename));
-	response->print("',\r\n\t\t\tgps_file: '");
-	response->print(javascript_escape(gps_filename));
-	response->print("',\r\n\t\t\treport: '");
-	response->print(javascript_escape(report_URL));
-	response->print("',\r\n\t\t\tdata_fields: [");
+static esp_err_t web_home_handle(PsychicRequest *const request) {
+	PsychicStreamResponse response(request, "application/xhtml+xml; charset=UTF-8");
+	response.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
+	response.beginSend();
+	response.write(reinterpret_cast<uint8_t const *>(web_home_html_1), sizeof web_home_html_1 - 1);
+	response.print("\t\t\tidentity: '");
+	response.print(javascript_escape(device_name));
+	response.print("',\r\n\t\t\tmeasure_interval: '");
+	response.print(measure_interval);
+	response.print("',\r\n\t\t\tdata_file: '");
+	response.print(javascript_escape(data_filename));
+	response.print("',\r\n\t\t\tgps_file: '");
+	response.print(javascript_escape(gps_filename));
+	response.print("',\r\n\t\t\treport: '");
+	response.print(javascript_escape(report_URL));
+	response.print("',\r\n\t\t\tdata_fields: [");
 	bool first = true;
 	for (struct Field const field: data_fields) {
 		if (first)
 			first = false;
 		else
-			response->print(", ");
-		response->print("{name:\'");
-		response->print(javascript_escape(field.name));
-		response->print("\',unit:\'");
-		response->print(javascript_escape(field.unit));
-		response->print("\'}");
+			response.print(", ");
+		response.print("{name:\'");
+		response.print(javascript_escape(field.name));
+		response.print("\',unit:\'");
+		response.print(javascript_escape(field.unit));
+		response.print("\'}");
 	}
-	response->print("],\r\n\t\t\tgps_fields: [");
+	response.print("],\r\n\t\t\tgps_fields: [");
 	first = true;
 	for (struct Field const field: gps_fields) {
 		if (first)
 			first = false;
 		else
-			response->print(", ");
-		response->print("{name:\'");
-		response->print(javascript_escape(field.name));
-		response->print("\',unit:\'");
-		response->print(javascript_escape(field.unit));
-		response->print("\'}");
+			response.print(", ");
+		response.print("{name:\'");
+		response.print(javascript_escape(field.name));
+		response.print("\',unit:\'");
+		response.print(javascript_escape(field.unit));
+		response.print("\'}");
 	}
-	response->print("]\r\n");
-	response->write(reinterpret_cast<byte const *>(web_home_html_2), sizeof web_home_html_2 - 1);
-	response->finalize();
+	response.print("]\r\n");
+	response.write(reinterpret_cast<uint8_t const *>(web_home_html_2), sizeof web_home_html_2 - 1);
+	response.endSend();
 }
-
-static httpsserver::ResourceNode web_home_node("/", "GET", web_home_handle);
-static httpsserver::ResourceNode web_operator_node("/operator", "GET", web_home_handle);
 
 static PROGMEM char const web_icon_data[] = {
 	/* PNG signature */
@@ -967,127 +1001,110 @@ static PROGMEM char const web_icon_data[] = {
 	0x37, 0x6E, 0xF9, 0x24
 };
 
-static void web_icon_handle(httpsserver::HTTPRequest *const request, httpsserver::HTTPResponse *const response) {
-	response->setHeader("CONTENT-TYPE", "image/png");
-	response->write(reinterpret_cast<byte const *>(web_icon_data), sizeof web_icon_data - 1);
-	response->finalize();
+static esp_err_t web_icon_handle(PsychicRequest *const request) {
+	request->reply(200, "image/png", web_icon_data);
 }
 
-static httpsserver::ResourceNode web_icon_node("/favicon.ico", "GET", web_icon_handle);
-
-static void web_data_recent_handle(httpsserver::HTTPRequest *const request, httpsserver::HTTPResponse *const response) {
-	Serial.println("DEBUG: web_data_recent_handle");
-	Serial.flush();
-	response->setHeader("CONTENT-TYPE", "text/csv");
-	response->println(data_header);
+static esp_err_t web_data_recent_handle(PsychicRequest *const request) {
+	PsychicStreamResponse response(request, "text/csv");
+	response.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
+	response.beginSend();
+	response.println(data_header);
 	for (struct Data const &record: data_records)
-		response->println(CSV_Data(&record));
-	response->finalize();
+		response.println(CSV_Data(&record));
+	response.endSend();
 }
 
-static httpsserver::ResourceNode web_data_recent_node("/data/recent.csv", "GET", web_data_recent_handle);
-
-static void web_data_latest_handle(httpsserver::HTTPRequest *const request, httpsserver::HTTPResponse *const response) {
-	response->setHeader("CONTENT-TYPE", "text/csv");
-	response->println(data_header);
+static esp_err_t web_data_latest_handle(PsychicRequest *const request) {
+	PsychicStreamResponse response(request, "text/csv");
+	response.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
+	response.beginSend();
+	response.println(data_header);
 	if (!data_records.empty())
-		response->println(CSV_Data(&data_records.back()));
-	response->finalize();
+		response.println(CSV_Data(&data_records.back()));
+	response.endSend();
 }
 
-static httpsserver::ResourceNode web_data_latest_node("/data/latest.csv", "GET", web_data_latest_handle);
-
-static void web_gps_recent_handle(httpsserver::HTTPRequest *const request, httpsserver::HTTPResponse *const response) {
-	response->setHeader("CONTENT-TYPE", "text/csv");
-	response->println(gps_header);
+static esp_err_t web_gps_recent_handle(PsychicRequest *const request) {
+	PsychicStreamResponse response(request, "text/csv");
+	response.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
+	response.beginSend();
+	response.println(gps_header);
 	for (struct GPS const &record: gps_records)
-		response->println(CSV_GPS(&record));
-	response->finalize();
+		response.println(CSV_GPS(&record));
+	response.endSend();
 }
 
-static httpsserver::ResourceNode web_gps_recent_node("/gps/recent.csv", "GET", web_gps_recent_handle);
-
-static void web_gps_latest_handle(httpsserver::HTTPRequest *const request, httpsserver::HTTPResponse *const response) {
-	response->setHeader("CONTENT-TYPE", "text/csv");
-	response->println(data_header);
+static esp_err_t web_gps_latest_handle(PsychicRequest *const request) {
+	PsychicStreamResponse response(request, "text/csv");
+	response.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
+	response.beginSend();
+	response.println(data_header);
 	if (!data_records.empty())
-		response->println(CSV_Data(&data_records.back()));
-	response->finalize();
+		response.println(CSV_Data(&data_records.back()));
+	response.endSend();
 }
 
-static httpsserver::ResourceNode web_gps_latest_node("/gps/latest.csv", "GET", web_gps_latest_handle);
-
-static std::string read_parser(httpsserver::HTTPBodyParser &parser) {
-	std::string result = "";
-	while (!parser.endOfField()) {
-		size_t const n = parser.read(reinterpret_cast<byte *>(buffer), sizeof buffer);
-		result.append(buffer, n);
-	}
-	return result;
-}
-
-static void web_gps_upload_handle(httpsserver::HTTPRequest *const request, httpsserver::HTTPResponse *const response) {
-	httpsserver::HTTPURLEncodedBodyParser parser(request);
+static esp_err_t web_gps_upload_handle(PsychicRequest *const request) {
 	struct GPS gps = {.time = (uint32_t)0, .latitude = NAN, .longitude = NAN, .altitude = NAN};
-	while (parser.nextField()) {
-		std::string const name = parser.getFieldName();
-		if (name == "time") {
-			std::string const value = read_parser(parser);
-			DateTime const datetime(value.c_str());
-			if (datetime.isValid())
-				gps.time = datetime;
-			else {
-				Serial.print("WARN: incorrect command time = ");
-				Serial.println(value.c_str());
-			}
+	PsychicWebParameter *parameter;
+	parameter = request->getParam("time");
+	if (parameter != nullptr) {
+		char const *const value = parameter->value().c_str();
+		DateTime const datetime(value);
+		if (datetime.isValid())
+			gps.time = datetime;
+		else {
+			Serial.print("WARN: incorrect command time = ");
+			Serial.println(value);
 		}
-		else if (name == "latitude") {
-			std::string const value = read_parser(parser);
-			char *end;
-			double const x = strtod(value.c_str(), &end);
-			if (!*end)
-				gps.latitude = x;
-			else {
-				Serial.print("WARN: incorrect GPS latitude = ");
-				Serial.println(value.c_str());
-			}
+	}
+	parameter = request->getParam("latitude");
+	if (parameter != nullptr) {
+		char const *const value = parameter->value().c_str();
+		char *end;
+		double const x = strtod(value, &end);
+		if (!*end)
+			gps.latitude = x;
+		else {
+			Serial.print("WARN: incorrect GPS latitude = ");
+			Serial.println(value);
 		}
-		else if (name == "longitude") {
-			std::string const value = read_parser(parser);
-			char *end;
-			double const x = strtod(value.c_str(), &end);
-			if (!*end)
-				gps.longitude = x;
-			else {
-				Serial.print("WARN: incorrect GPS longitude = ");
-				Serial.println(value.c_str());
-			}
+	}
+	parameter = request->getParam("longitude");
+	if (parameter != nullptr) {
+		char const *const value = parameter->value().c_str();
+		char *end;
+		double const x = strtod(value, &end);
+		if (!*end)
+			gps.longitude = x;
+		else {
+			Serial.print("WARN: incorrect GPS longitude = ");
+			Serial.println(value);
 		}
-		else if (name == "altitude") {
-			std::string const value = read_parser(parser);
-			char *end;
-			double const x = strtod(value.c_str(), &end);
-			if (!*end)
-				gps.altitude = x;
-			else {
-				Serial.print("WARN: incorrect GPS altitude = ");
-				Serial.println(value.c_str());
-			}
+	}
+	parameter = request->getParam("altitude");
+	if (parameter != nullptr) {
+		char const *const value = parameter->value().c_str();
+		char *end;
+		double const x = strtod(value, &end);
+		if (!*end)
+			gps.altitude = x;
+		else {
+			Serial.print("WARN: incorrect GPS altitude = ");
+			Serial.println(value);
 		}
 	}
 
-	String const gps_string = CSV_GPS(&gps);
-	Serial.print("GPS ");
-	Serial.println(gps_string);
-
-	if (gps_records.size() >= records_max_size) gps_records.pop_front();
+	if (gps_records.size() >= records_max_size)
+		gps_records.pop_front();
 	gps_records.push_back(gps);
 
 	if (has_SD_card) {
 		SDCARD_LOCK(sdcard_lock)
 		File file = SD.open(gps_filename, "a", true);
 		try {
-			file.println(gps_string);
+			file.println(CSV_GPS(&gps));
 		}
 		catch (...) {
 			Serial.println("ERROR: failed to write GPS data into SD card");
@@ -1095,13 +1112,8 @@ static void web_gps_upload_handle(httpsserver::HTTPRequest *const request, https
 		file.close();
 	}
 
-	response->setStatusCode(204);
-	response->setStatusText("NO CONTENT");
-	response->setHeader("CONTENT-TYPE", "text/plain");
-	response->finalize();
+	request->reply(204, "text/plain", "");
 }
-
-static httpsserver::ResourceNode web_gps_upload_node("/gps/upload.exe", "POST", web_gps_upload_handle);
 
 static PROGMEM char const web_setting_html_1[] =
 R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
@@ -1156,19 +1168,21 @@ static String XML_escape(String const &string) {
 	return result;
 }
 
-static void web_setting_form(httpsserver::HTTPResponse *const response, char const *const id) {
-	response->write(reinterpret_cast<byte const *>(web_setting_form_1), sizeof web_setting_form_1 - 1);
+static void web_setting_form(PsychicStreamResponse *const response, char const *const id) {
+	response->write(reinterpret_cast<uint8_t const *>(web_setting_form_1), sizeof web_setting_form_1 - 1);
 	response->print(XML_escape(id));
-	response->write(reinterpret_cast<byte const *>(web_setting_form_2), sizeof web_setting_form_2 - 1);
-	response->finalize();
+	response->write(reinterpret_cast<uint8_t const *>(web_setting_form_2), sizeof web_setting_form_2 - 1);
 }
 
-static void web_setting_handle(httpsserver::HTTPRequest *const request, httpsserver::HTTPResponse *const response) {
-	response->setHeader("CONTENT-TYPE", "application/xhtml+xml; charset=UTF-8");
-	response->write(reinterpret_cast<byte const *>(web_setting_html_1), sizeof web_setting_html_1 - 1);
+static esp_err_t web_setting_handle(PsychicRequest *const request) {
+	PsychicStreamResponse response(request, "application/xhtml+xml; charset=UTF-8");
+	response.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
+	response.beginSend();
 
-	web_setting_form(response, "set_time");
-	response->print(
+	response.write(reinterpret_cast<uint8_t const *>(web_setting_html_1), sizeof web_setting_html_1 - 1);
+
+	web_setting_form(&response, "set_time");
+	response.print(
 		"\t<label>\r\n"
 		"\t\tCurrent time \r\n"
 		"\t\t<input type='datetime-local' name='time' required='' />\r\n"
@@ -1177,50 +1191,50 @@ static void web_setting_handle(httpsserver::HTTPRequest *const request, httpsser
 		"</form>\r\n"
 	);
 
-	web_setting_form(response, "set_name");
-	response->print(
+	web_setting_form(&response, "set_name");
+	response.print(
 		"\t<label>\r\n"
 		"\t\tDevice ID\r\n"
 		"\t\t<input type='text' name='name' required='' value='"
 	);
-	response->print(XML_escape(device_name));
-	response->print(
+	response.print(XML_escape(device_name));
+	response.print(
 		"' />\r\n"
 		"\t</label>\r\n"
 		"\t<button type='submit'>Set</button>\r\n"
 		"</form>\r\n"
 	);
 
-	web_setting_form(response, "set_interval");
-	response->print(
+	web_setting_form(&response, "set_interval");
+	response.print(
 		"\t<label>\r\n"
 		"\t\tMeasure interval / seconds\r\n"
 		"\t\t<input type='number' name='interval' min='10' max='900' required='' value='"
 	);
-	response->print(String(measure_interval / 1000));
-	response->print(
+	response.print(String(measure_interval / 1000));
+	response.print(
 		"' />"
 		"\t</label>\r\n"
 		"\t<button type='submit'>Set</button>\r\n"
 		"</form>\r\n"
 	);
 
-	web_setting_form(response, "set_wifi");
-	response->print(
+	web_setting_form(&response, "set_wifi");
+	response.print(
 		"\t<label style='display: block'>\r\n"
 		"\t\tProvide WiFi\r\n"
 		"\t\t<select name='WiFi'>\r\n"
 		"\t\t\t<option value='AP'"
 	);
-	if (use_AP_mode) response->print(" selected=''");
-	response->print(
+	if (use_AP_mode) response.print(" selected=''");
+	response.print(
 		">\r\n"
 		"\t\t\t\tAccess point\r\n"
 		"\t\t\t</option>\r\n"
 		"\t\t\t<option value='STA'"
 	);
-	if (!use_AP_mode) response->print(" selected=''");
-	response->print(
+	if (!use_AP_mode) response.print(" selected=''");
+	response.print(
 		">\r\n"
 		"\t\t\t\tStation\r\n"
 		"\t\t\t</option>\r\n"
@@ -1230,54 +1244,54 @@ static void web_setting_handle(httpsserver::HTTPRequest *const request, httpsser
 		"\t\tAP SSID\r\n"
 		"\t\t<input name='APSSID' value='"
 	);
-	response->print(XML_escape(AP_SSID));
-	response->print(
+	response.print(XML_escape(AP_SSID));
+	response.print(
 		"' />\r\n"
 		"\t</label>\r\n"
 		"\t<label style='display: block'>\r\n"
 		"\t\tAP PASS\r\n"
 		"\t\t<input name='APPASS' value='"
 	);
-	response->print(XML_escape(AP_PASS));
-	response->print(
+	response.print(XML_escape(AP_PASS));
+	response.print(
 		"' />\r\n"
 		"\t</label>\r\n"
 		"\t<label style='display: block'>\r\n"
 		"\t\tSTA SSID\r\n"
 		"\t\t<input name='STASSID' value='"
 	);
-	response->print(XML_escape(STA_SSID));
-	response->print(
+	response.print(XML_escape(STA_SSID));
+	response.print(
 		"' />\r\n"
 		"\t</label>\r\n"
 		"\t<label style='display: block'>\r\n"
 		"\t\tSTA PASS\r\n"
 		"\t\t<input name='STAPASS' value='"
 	);
-	response->print(XML_escape(STA_PASS));
-	response->print(
+	response.print(XML_escape(STA_PASS));
+	response.print(
 		"' />\r\n"
 		"\t</label>\r\n"
 		"\t<button type='submit'>Set</button>\r\n\r\n"
 		"</form>\r\n"
 	);
 
-	web_setting_form(response, "set_report");
-	response->print(
+	web_setting_form(&response, "set_report");
+	response.print(
 		"\t<label>\r\n"
 		"\t\tReport URL\r\n"
 		"\t\t<input type='text' name='report' required='' value='"
 	);
-	response->print(XML_escape(report_URL));
-	response->print(
+	response.print(XML_escape(report_URL));
+	response.print(
 		"' />\r\n"
 		"\t</label>\r\n"
 		"\t<button type='submit'>Set</button>\r\n"
 		"</form>\r\n"
 	);
 
-	web_setting_form(response, "do_measure");
-	response->print(
+	web_setting_form(&response, "do_measure");
+	response.print(
 		"\t<label style='display: block'>\r\n"
 		"\t\tConfirm\r\n"
 		"\t\t<input type='checkbox' name='measure' />\r\n"
@@ -1286,8 +1300,8 @@ static void web_setting_handle(httpsserver::HTTPRequest *const request, httpsser
 		"</form>\r\n"
 	);
 
-	web_setting_form(response, "do_delete");
-	response->print(
+	web_setting_form(&response, "do_delete");
+	response.print(
 		"\t<label style='display: block'>\r\n"
 		"\t\tConfirm\r\n"
 		"\t\t<input type='checkbox' name='delete' />\r\n"
@@ -1296,8 +1310,8 @@ static void web_setting_handle(httpsserver::HTTPRequest *const request, httpsser
 		"</form>\r\n"
 	);
 
-	web_setting_form(response, "do_reboot");
-	response->print(
+	web_setting_form(&response, "do_reboot");
+	response.print(
 		"\t<label style='display: block'>Confirm \r\n"
 		"\t\t<input type='checkbox' name='reboot' />\r\n"
 		"\t</label>\r\n"
@@ -1305,11 +1319,9 @@ static void web_setting_handle(httpsserver::HTTPRequest *const request, httpsser
 		"</form>\r\n"
 	);
 
-	response->write(reinterpret_cast<byte const *>(web_setting_html_2), sizeof web_setting_html_2 - 1);
-	response->finalize();
+	response.write(reinterpret_cast<uint8_t const *>(web_setting_html_2), sizeof web_setting_html_2 - 1);
+	response.endSend();
 }
-
-static httpsserver::ResourceNode web_setting_node("/setting.html", "GET", web_setting_handle);
 
 static PROGMEM char const web_command_html[] =
 R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
@@ -1326,221 +1338,177 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 </html>
 )HTML";
 
-static void web_command_handle(httpsserver::HTTPRequest *const request, httpsserver::HTTPResponse *const response) {
-	httpsserver::HTTPURLEncodedBodyParser parser(request);
-	while (parser.nextField()) {
-		std::string const name = parser.getFieldName();
-		if (name == "time") {
-			std::string const value = read_parser(parser);
-			Serial.print("command time = ");
-			Serial.println(value.c_str());
-			DateTime const datetime(value.c_str());
-			if (datetime.isValid())
-				set_time(datetime);
-			else {
-				Serial.print("WARN: incorrect command time = ");
-				Serial.println(value.c_str());
-			}
+static esp_err_t web_command_handle(PsychicRequest *const request) {
+	PsychicWebParameter *parameter;
+	parameter = request->getParam("time");
+	if (parameter != nullptr) {
+		char const *const value = parameter->value().c_str();
+		Serial.print("command time = ");
+		Serial.println(value);
+		DateTime const datetime(value);
+		if (datetime.isValid())
+			set_time(datetime);
+		else {
+			Serial.print("WARN: incorrect command time = ");
+			Serial.println(value);
 		}
-		else if (name == "name") {
-			std::string const value = read_parser(parser);
-			Serial.print("command name = ");
-			Serial.println(value.c_str());
-			device_name = value.c_str();
+	}
+	parameter = request->getParam("name");
+	if (parameter != nullptr) {
+		char const *const value = parameter->value().c_str();
+		Serial.print("command name = ");
+		Serial.println(value);
+		device_name = value;
+		need_save = true;
+	}
+	parameter = request->getParam("interval");
+	if (parameter != nullptr) {
+		char const *const value = parameter->value().c_str();
+		Serial.print("command interval = ");
+		Serial.println(value);
+		char *end;
+		unsigned long int const x = strtoul(value, &end, 10);
+		if (!*end && x >= 15 && x <= 900) {
+			measure_interval = x * 1000;
 			need_save = true;
-		}
-		else if (name == "interval") {
-			std::string const value = read_parser(parser);
-			Serial.print("command interval = ");
-			Serial.println(value.c_str());
-			char *end;
-			unsigned long int const x = strtoul(value.c_str(), &end, 10);
-			if (!*end && x >= 15 && x <= 900) {
-				measure_interval = x * 1000;
-				need_save = true;
-			}
-			else {
-				Serial.print("WARN: incorrect command interval = ");
-				Serial.println(value.c_str());
-			}
-		}
-		else if (name == "WiFi") {
-			std::string const value = read_parser(parser);
-			Serial.print("command WiFi = ");
-			Serial.println(value.c_str());
-			if (value == "AP") {
-				use_AP_mode = true;
-				need_save = true;
-			}
-			else if (value == "STA") {
-				use_AP_mode = false;
-				need_save = true;
-			}
-			else {
-				Serial.println("WARN: incorrect command WiFi = ");
-				Serial.println(value.c_str());
-			}
-		}
-		else if (name == "APSSID") {
-			std::string const value = read_parser(parser);
-			Serial.print("command APSSID = ");
-			Serial.println(value.c_str());
-			AP_SSID = value.c_str();
-			need_save = true;
-		}
-		else if (name == "APPASS") {
-			std::string const value = read_parser(parser);
-			Serial.print("command APPASS = ");
-			Serial.println(value.c_str());
-			AP_PASS = value.c_str();
-			need_save = true;
-		}
-		else if (name == "STASSID") {
-			std::string const value = read_parser(parser);
-			Serial.print("command STASSID = ");
-			Serial.println(value.c_str());
-			STA_SSID = value.c_str();
-			need_save = true;
-		}
-		else if (name == "STAPASS") {
-			std::string const value = read_parser(parser);
-			Serial.print("command STAPASS = ");
-			Serial.println(value.c_str());
-			STA_PASS = value.c_str();
-			need_save = true;
-		}
-		else if (name == "report") {
-			std::string const value = read_parser(parser);
-			Serial.print("command report = ");
-			Serial.println(value.c_str());
-			report_URL = value.c_str();
-			need_save = true;
-		}
-		else if (name == "measure") {
-			Serial.println("command measure");
-			wait_measure_condition.notify_all();
-		}
-		else if (name == "delete") {
-			Serial.println("command delete");
-			data_records.clear();
-			SDCARD_LOCK(sdcard_lock)
-			//	SD.remove(data_filename);
-			File file = SD.open(data_filename, "w", true);
-			try {
-				file.println(data_header);
-			}
-			catch (...) {
-				Serial.println("ERROR: failed to write header into data file");
-			}
-			file.close();
-		}
-		else if (name == "reboot") {
-			Serial.println("command reboot");
-			Serial.flush();
-			need_reboot = true;
-			need_save = false;
 		}
 		else {
-			Serial.print("WARN: unknown command parameter = ");
-			Serial.println(name.c_str());
+			Serial.print("WARN: incorrect command interval = ");
+			Serial.println(value);
 		}
 	}
-
-	response->setStatusCode(303);
-	response->setStatusText("SEE OTHER");
-	response->setHeader("LOCATION", "/setting.html");
-	response->setHeader("CONTENT-TYPE", "application/xhtml+xml; charset=UTF-8");
-	response->write(reinterpret_cast<byte const *>(web_command_html), sizeof web_command_html - 1);
-	response->finalize();
-}
-
-static httpsserver::ResourceNode web_command_node("/setting.exe", "POST", web_command_handle);
-
-static void web_file_handle(httpsserver::HTTPRequest *const request, httpsserver::HTTPResponse *const response) {
-	std::string const name = request->getRequestString();
-	if (request->getMethod() != "GET") {
-		response->setStatusCode(405);
-		response->setStatusText("METHOD NOT ALLOWED");
-		response->finalize();
-		return;
-	}
-	File file = SD.open(name.c_str(), "r");
-	if (!file) {
-		Serial.print("File not found: ");
-		Serial.println(name.c_str());
-		response->setStatusCode(404);
-		response->setStatusText("NOT FOUND");
-		response->finalize();
-		return;
-	}
-	try {
-		if (name.substr(name.length() - 3) == ".js")
-			response->setHeader("CONTENT-TYPE", "text/javascript");
-		else if (name.substr(name.length() - 4) == ".css")
-			response->setHeader("CONTENT-TYPE", "text/css");
-		else if (name.substr(name.length() - 4) == ".csv")
-			response->setHeader("CONTENT-TYPE", "text/csv");
-		else if (name.substr(name.length() - 4) == ".png")
-			response->setHeader("CONTENT-TYPE", "image/png");
-		else if (name.substr(name.length() - 4) == ".ico")
-			response->setHeader("CONTENT-TYPE", "image/png");
-		else
-			response->setHeader("CONTENT-TYPE", "application/octet-stream");
-		response->setHeader("CACHE-CONTROL", "max-age=604800, immutable");
-		while (size_t const n = file.readBytes(buffer, sizeof buffer)) {
-			response->write(reinterpret_cast<byte *>(buffer), n);
-			yield();
+	parameter = request->getParam("WiFi");
+	if (parameter != nullptr) {
+		char const *const value = parameter->value().c_str();
+		Serial.print("command WiFi = ");
+		Serial.println(value);
+		if (value == "AP") {
+			use_AP_mode = true;
+			need_save = true;
+		}
+		else if (value == "STA") {
+			use_AP_mode = false;
+			need_save = true;
+		}
+		else {
+			Serial.println("WARN: incorrect command WiFi = ");
+			Serial.println(value);
 		}
 	}
-	catch (...) {
-		Serial.println("ERROR: response file");
+	parameter = request->getParam("APSSID");
+	if (parameter != nullptr) {
+		char const *const value = parameter->value().c_str();
+		Serial.print("command APSSID = ");
+		Serial.println(value);
+		AP_SSID = value;
+		need_save = true;
 	}
-	response->finalize();
-	file.close();
-}
+	parameter = request->getParam("APPASS");
+	if (parameter != nullptr) {
+		char const *const value = parameter->value().c_str();
+		Serial.print("command APPASS = ");
+		Serial.println(value);
+		AP_PASS = value;
+		need_save = true;
+	}
+	parameter = request->getParam("STASSID");
+	if (parameter != nullptr) {
+		char const *const value = parameter->value().c_str();
+		Serial.print("command STASSID = ");
+		Serial.println(value);
+		STA_SSID = value;
+		need_save = true;
+	}
+	parameter = request->getParam("STAPASS");
+	if (parameter != nullptr) {
+		char const *const value = parameter->value().c_str();
+		Serial.print("command STAPASS = ");
+		Serial.println(value);
+		STA_PASS = value;
+		need_save = true;
+	}
+	parameter = request->getParam("report");
+	if (parameter != nullptr) {
+		char const *const value = parameter->value().c_str();
+		Serial.print("command report = ");
+		Serial.println(value);
+		report_URL = value;
+		need_save = true;
+	}
+	if (request->hasParam("measure")) {
+		Serial.println("command measure");
+		wait_measure_condition.notify_all();
+	}
+	if (request->hasParam("delete")) {
+		Serial.println("command delete");
+		data_records.clear();
+		SDCARD_LOCK(sdcard_lock)
+		//	SD.remove(data_filename);
+		File file = SD.open(data_filename, "w", true);
+		try {
+			file.println(data_header);
+		}
+		catch (...) {
+			Serial.println("ERROR: failed to write header into data file");
+		}
+		file.close();
+	}
+	if (request->hasParam("reboot")) {
+		Serial.println("command reboot");
+		Serial.flush();
+		need_reboot = true;
+		need_save = false;
+	}
 
-static httpsserver::ResourceNode web_file_node("", "", web_file_handle);
+	PsychicResponse response(request);
+	response.setCode(303);
+	response.setContentType("application/xhtml+xml; charset=UTF-8");
+	response.addHeader("LOCATION", "/setting.html");
+	response.setContent(reinterpret_cast<uint8_t const *>(web_command_html), sizeof web_command_html - 1);
+	response.send();
+}
 
 static void webserver_setup(void) {
-	static char const DN[] = "CN=weather.station,O=hku,C=HK";
-	while (httpsserver::createSelfSignedCert(certificate, httpsserver::KEYSIZE_2048, DN)) {
-		Serial.println("ERROR: failed to create signed certificate");
+	HTTPd.config.max_uri_handlers = 20;
+	while (HTTPd.listen(HTTP_port) != ESP_OK) {
+		Serial.println("ERROR: failed to start HTTP server");
+		Monitor.println("Failed to start HTTPS server");
+		Monitor.display();
 		delay(reinitialize_interval);
 	}
-	HTTPd.registerNode(&web_home_node);
-	HTTPSd.registerNode(&web_home_node);
-	HTTPd.registerNode(&web_operator_node);
-	HTTPSd.registerNode(&web_operator_node);
-	HTTPd.registerNode(&web_icon_node);
-	HTTPSd.registerNode(&web_icon_node);
-	HTTPd.registerNode(&web_data_recent_node);
-	HTTPSd.registerNode(&web_data_recent_node);
-	HTTPd.registerNode(&web_data_latest_node);
-	HTTPSd.registerNode(&web_data_latest_node);
-	HTTPd.registerNode(&web_gps_recent_node);
-	HTTPSd.registerNode(&web_gps_recent_node);
-	HTTPd.registerNode(&web_gps_latest_node);
-	HTTPSd.registerNode(&web_gps_latest_node);
-	HTTPd.registerNode(&web_gps_upload_node);
-	HTTPSd.registerNode(&web_gps_upload_node);
-	HTTPd.registerNode(&web_setting_node);
-	HTTPSd.registerNode(&web_setting_node);
-	HTTPd.registerNode(&web_command_node);
-	HTTPSd.registerNode(&web_command_node);
-	HTTPd.setDefaultNode(&web_file_node);
-	HTTPSd.setDefaultNode(&web_file_node);
-	for (;;) {
-		HTTPd.start();
-		if (HTTPd.isRunning()) break;
-		Serial.println("ERROR: failed to start HTTP server");
-	}
 	Serial.println("HTTP server started");
-	for (;;) {
-		HTTPSd.start();
-		if (HTTPSd.isRunning()) break;
+	HTTPSd.config.max_uri_handlers = 20;
+	while (HTTPSd.listen(HTTPS_port, tls_cert, tls_key) != ESP_OK) {
 		Serial.println("ERROR: failed to start HTTPS server");
+		Monitor.println("Failed to start HTTPS server");
+		Monitor.display();
+		delay(reinitialize_interval);
 	}
 	Serial.println("HTTPS server started");
+	HTTPd .on("/",                HTTP_GET, web_home_handle);
+	HTTPSd.on("/",                HTTP_GET, web_home_handle);
+	HTTPd .on("/operator",        HTTP_GET, web_home_handle);
+	HTTPSd.on("/operator",        HTTP_GET, web_home_handle);
+	HTTPd .on("/favicon.ico",     HTTP_GET, web_icon_handle);
+	HTTPSd.on("/favicon.ico",     HTTP_GET, web_icon_handle);
+	HTTPd .on("/data/recent.csv", HTTP_GET, web_data_recent_handle);
+	HTTPSd.on("/data/recent.csv", HTTP_GET, web_data_recent_handle);
+	HTTPd .on("/data/latest.csv", HTTP_GET, web_data_latest_handle);
+	HTTPSd.on("/data/latest.csv", HTTP_GET, web_data_latest_handle);
+	HTTPd .on("/gps/recent.csv",  HTTP_GET, web_gps_recent_handle);
+	HTTPSd.on("/gps/recent.csv",  HTTP_GET, web_gps_recent_handle);
+	HTTPd .on("/gps/latest.csv",  HTTP_GET, web_gps_latest_handle);
+	HTTPSd.on("/gps/latest.csv",  HTTP_GET, web_gps_latest_handle);
+	HTTPd .on("/gps/upload.exe", HTTP_POST, web_gps_upload_handle);
+	HTTPSd.on("/gps/upload.exe", HTTP_POST, web_gps_upload_handle);
+	HTTPd .on("/setting.html",    HTTP_GET, web_setting_handle);
+	HTTPSd.on("/setting.html",    HTTP_GET, web_setting_handle);
+	HTTPd .on("/setting.exe",    HTTP_POST, web_command_handle);
+	HTTPSd.on("/setting.exe",    HTTP_POST, web_command_handle);
+	if (has_SD_card) {
+		HTTPd .serveStatic("/", SD, "/");
+		HTTPSd.serveStatic("/", SD, "/");
+	};
 }
 
 /* *************************************************************************** / ************************************ */
@@ -1557,7 +1525,9 @@ static void redraw_display(void) {
 		Monitor.println("WiFi SSID:");
 		Monitor.println(WiFi.softAPSSID());
 		Monitor.println("IP address:");
-		Monitor.println(WiFi.softAPIP().toString());
+		//	Monitor.println(WiFi.softAPIP().toString());
+		WiFi.softAPIP().printTo(Monitor);
+		Monitor.println();
 	}
 	else {
 		signed int status = WiFi.status();
@@ -1566,7 +1536,9 @@ static void redraw_display(void) {
 			Monitor.println("WiFi SSID:");
 			Monitor.println(WiFi.SSID());
 			Monitor.println("IP address:");
-			Monitor.println(WiFi.localIP().toString());
+			//	Monitor.println(WiFi.localIP().toString());
+			WiFi.localIP().printTo(Monitor);
+			Monitor.println();
 		}
 	}
 	if (data_records.size())
@@ -1575,13 +1547,7 @@ static void redraw_display(void) {
 }
 
 void loop(void) {
-	delay(1);
-	{
-		NETWORK_LOCK(network)
-		// if (use_AP_mode) DNSd.processNextRequest();
-		HTTPd.loop();
-		HTTPSd.loop();
-	}
+	delay(1000);
 
 	if (need_save) {
 		save_settings();
@@ -1649,8 +1615,10 @@ void setup(void) {
 	has_SD_card = SD.begin(SD_CS, SPI);
 	if (has_SD_card)
 		load_settings();
-	else
+	else {
 		Serial.println("SD card not found");
+		Monitor.println("SD card not found");
+	}
 
 	/* Clock */
 	external_clock_available = external_clock.begin();
@@ -1691,15 +1659,21 @@ void setup(void) {
 	/* WiFi */
 	setup_WiFi();
 
-	/* Web server */
-	webserver_setup();
-
-	/* Spawn measurement thread */
+	/* Increase thread stack size */
 	static esp_pthread_cfg_t esp_pthread_cfg = esp_pthread_get_default_config();
 	esp_pthread_cfg.stack_size = 4096;
 	esp_pthread_cfg.inherit_cfg = true;
 	esp_pthread_set_cfg(&esp_pthread_cfg);
-	std::thread(measure_thread).detach();
+
+	/* Web server */
+	webserver_setup();
+
+	/* Spawn measurement thread */
+	//	static esp_pthread_cfg_t esp_pthread_cfg = esp_pthread_get_default_config();
+	//	esp_pthread_cfg.stack_size = 4096;
+	//	esp_pthread_cfg.inherit_cfg = true;
+	//	esp_pthread_set_cfg(&esp_pthread_cfg);
+	//	std::thread(measure_thread).detach();
 }
 
 /* *************************************************************************** / ************************************ */
