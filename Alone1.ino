@@ -1126,7 +1126,7 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 <link rel='stylesheet' type='text/css' href='style.css' />
 </head>
 <body>
-<p><a href='./'>&#x2190; Back</a></p>
+<p><a href='operator'>&#x2190; Back</a></p>
 )HTML";
 
 static PROGMEM char const web_setting_html_2[] = R"HTML(
