@@ -1,17 +1,28 @@
-import os
+import config
+
+import csv
+import json
 import urllib.parse
 import http
 import http.server
-
-try:
-	PORT = int(os.environ["PORT"])
-except:
-	PORT = 8080
+import sqlite3
 
 data_fields = ["time", "latitude", "longitude", "altitude"]
 id_fields = "identity"
 
-table = dict()
+current = dict()
+
+try:
+	with open("script.js", "rb") as file:
+		script = file.read()
+except:
+	script = None
+
+try:
+	with open("style.css", "rb") as file:
+		style = file.read()
+except:
+	style = None
 
 class Handler(http.server.BaseHTTPRequestHandler):
 	def content(self):
@@ -20,6 +31,50 @@ class Handler(http.server.BaseHTTPRequestHandler):
 		except:
 			length = -1
 		return self.rfile.read(length)
+	def get_data(self, table_name, fields, url):
+		query = urllib.parse.parse_qs(url.query)
+		device = query.get("device")
+		if not device:
+			return self.send_error(400, "missing parameter", "missing device name")
+		database = sqlite3.connect(config.database)
+		try:
+			cursor = database.cursor()
+			cursor.execute(
+				"SELECT device, time, " + ", ".join(fields) +  " FROM " + table_name
+					+ " WHERE device = ? ORDER BY time ASC",
+				[device[0]])
+			table = list(cursor)
+		finally:
+			database.close()
+		self.send_response_only(http.HTTPStatus.OK, "OK")
+		self.send_header("CONTENT-TYPE", "application/json")
+		self.end_headers()
+		self.wfile.write(bytes(json.dumps(table), "UTF-8"))
+	def post_data(self, table_name, fields):
+		body = self.content()
+		lines = body.decode("UTF-8").split("\r\n")
+		if len(lines) < 2:
+			return self.send_error(400, "malformat", "invalid number of rows")
+		device = lines[0]
+		parsed = list(csv.reader(lines[1:]))
+		rows = parsed[1:]
+		database = sqlite3.connect(config.database)
+		try:
+			cursor = database.cursor()
+			for row in rows:
+				if len(row) != len(fields) + 1:
+					continue
+				cursor.execute(
+					"INSERT INTO " + table_name + " (device, time, " + ", ".join(fields) + ") "
+						"VALUES (?, ?, " + ", ".join(map(lambda x: "?", fields)) + ") "
+						"ON CONFLICT DO NOTHING",
+					[device] + row)
+			database.commit()
+		finally:
+			database.close()
+		self.send_response_only(http.HTTPStatus.OK, "OK")
+		self.send_header("CONTENT-TYPE", "text/plain")
+		self.end_headers()
 	def do_GET(self):
 		self.log_request()
 		if self.path == "/":
@@ -40,11 +95,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
 				self.wfile.write(bytes(field, "UTF-8"))
 				self.wfile.write(b"</th>")
 			self.wfile.write(b"</thead><tbody>")
-			for name in table:
+			for name in current:
 				self.wfile.write(b"<tr><td>")
 				self.wfile.write(bytes(name, "UTF-8"))
 				self.wfile.write(b"</td>")
-				for field in table[name]:
+				for field in current[name]:
 					self.wfile.write(b"<td>")
 					if field is not None:
 						self.wfile.write(bytes(field, "UTF-8"))
@@ -59,93 +114,47 @@ class Handler(http.server.BaseHTTPRequestHandler):
 				b"<script type='text/javascript' src='script.js'></script>"
 				b"</body></html>"
 			)
-		elif self.path == "/style.css":
+		elif self.path == "/style.css" and style:
 			self.send_response_only(http.HTTPStatus.OK, "OK")
 			self.send_header("CONTENT-TYPE", "text/css")
 			self.end_headers()
-			self.wfile.write(
-				b"table {"
-					b"width:100%;"
-					b"border-collapse:collapse}"
-				b"td {"
-					b"border:solid thin;"
-					b"text-align:center}"
-				b"#map {"
-					b"height:90vh}"
-			)
-		elif self.path == "/script.js":
+			self.wfile.write(style)
+		elif self.path == "/script.js" and script:
 			self.send_response_only(http.HTTPStatus.OK, "OK")
 			self.send_header("CONTENT-TYPE", "text/javascript")
 			self.end_headers()
-			self.wfile.write(
-				b'''"use strict";
-
-var map = L.map(
-	"map",
-	{
-		center: L.latLng(22.35, 114.130),
-		zoom: 12,
-		zoomSnap: 0.25,
-		zoomDelta: 0.25
-	}
-)
-
-var tile_layer = new L.TileLayer(
-	"https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-	{
-		attribution: "Map data &#xA9; <a href='https://www.openstreetmap.org/about/'>OpenStreetMap</a>"
-	}
-)
-map.addLayer(tile_layer);
-
-var marker_layer = new L.LayerGroup();
-map.addLayer(marker_layer);
-
-var devices = new Array;
-void function () {
-	var tbody = document.querySelector("tbody");
-	for (var i = 0; i < tbody.children.length; ++i) {
-		var tr = tbody.children.item(i);
-		var latitude = Number.parseFloat(tr.children.item(2).textContent);
-		var longitude = Number.parseFloat(tr.children.item(3).textContent);
-		if (latitude != null && longitude != null)
-			devices.push(
-				{
-					identity: tr.children.item(0).textContent,
-					latitude: latitude,
-					longitude: longitude
-				}
-			);
-	}
-}();
-
-devices.forEach(
-	function (device) {
-		var tooltip = L.tooltip(
-			L.latLng(device.latitude, device.longitude),
-			{content: device.identity}
-		);
-		tooltip.openOn(map);
-	}
-);
-'''
-			)
+			self.wfile.write(script)
 		else:
-			self.send_error(404)
+			url = urllib.parse.urlparse(self.path)
+			if url.path == "/current":
+				self.send_response_only(http.HTTPStatus.OK, "OK")
+				self.send_header("CONTENT-TYPE", "application/json")
+				self.end_headers()
+				self.wfile.write(bytes(json.dumps(current), "UTF-8"))
+			elif url.path == "/data":
+				self.get_data("data", ["temperature", "humidity"], url)
+			elif url.path == "/position":
+				self.get_data("position", ["latitude", "longitude", "altitude"], url)
+			else:
+				self.send_error(404)
 	def do_POST(self):
 		self.log_request()
-		if self.path == "/":
+		if self.path == "/report":
 			body = self.content()
 			queries = {k: v[0] for k, v in urllib.parse.parse_qs(body.decode("UTF-8")).items()}
 			identity = queries.get(id_fields)
 			if identity is None:
-				self.send_error(400, "INCORRECT CONTENT", "Identity is missed")
+				self.send_error(400, "INCORRECT CONTENT", "identity is missed")
 				return
-			table[identity] = [queries.get(field) for field in data_fields]
+			current[identity] = [queries.get(field) for field in data_fields]
 			self.send_response_only(http.HTTPStatus.NO_CONTENT)
 			self.end_headers()
+		elif self.path == "/upload/data":
+			self.post_data("data", ["temperature", "humidity"])
+		elif self.path == "/upload/position":
+			self.post_data("position", ["latitude", "longitude", "altitude"])
 		else:
 			self.send_error(404)
 
-httpd = http.server.ThreadingHTTPServer(("", PORT), Handler)
+httpd = http.server.ThreadingHTTPServer(("", config.PORT), Handler)
 httpd.serve_forever()

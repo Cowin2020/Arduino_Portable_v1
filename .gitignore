@@ -4,3 +4,4 @@
 /monitor/config.py
 /monitor/__pycache__/**
 /.vscode/**
+*.sqlite3

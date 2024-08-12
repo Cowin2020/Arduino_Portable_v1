@@ -1,0 +1,13 @@
+table {
+	width:100%;
+	border-collapse:collapse;
+}
+
+td {
+	border:solid thin;
+	text-align:center;
+}
+
+#map {
+	height:90vh;
+}

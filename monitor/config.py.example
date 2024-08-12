@@ -5,4 +5,4 @@ try:
 except:
 	PORT = 8080
 
-database = "../development/database.sqlite3"
+database = "database.sqlite3"
