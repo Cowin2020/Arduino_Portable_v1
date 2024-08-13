@@ -1551,7 +1551,7 @@ static void redraw_display(void) {
 	else {
 		signed int status = WiFi.status();
 		Monitor.println(status_message(status));
-		if (WL_CONNECTED) {
+		if (WiFi.status() == WL_CONNECTED) {
 			Monitor.println("WiFi SSID:");
 			Monitor.println(WiFi.SSID());
 			Monitor.println("IP address:");
