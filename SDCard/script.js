@@ -174,12 +174,13 @@ var $list;
 document.body.appendChild(
 	$E("table", null, [
 		$E("thead", null, [
-			$E("tr", null, [
-				$E("th", null, [$T("Time")]),
-				$E("th", null, [$T("Temperature")]),
-				$E("th", null, [$T("Pressure")]),
-				$E("th", null, [$T("Humidity")])
-			])
+			$E("tr", null,
+				Alone.data_fields.map(
+					function (field) {
+						return $E("th", null, [$T(field.name)]);
+					}
+				)
+			)
 		]),
 		$list = $E("tbody")
 	])
@@ -271,7 +272,7 @@ function data_load() {
 			$list.textContent = null;
 			$data_loading.hidden = false;
 			var xhr = new XMLHttpRequest();
-			xhr.onloadend = function (event) {
+			xhr.onloadend = function () {
 				$data_loading.hidden = true;
 				var text = xhr.responseText;
 				if (text == null || xhr.status !== 200) {
@@ -284,7 +285,7 @@ function data_load() {
 					}
 				);
 				rows.shift();
-				while (rows.length && rows[rows.length - 1].length < 4)
+				while (rows.length && rows[rows.length - 1].length < Alone.data_fields.length)
 					rows.pop();
 				if (!(rows.length > 0)) {
 					show_dashboard(null);
