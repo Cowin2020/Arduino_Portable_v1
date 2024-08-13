@@ -55,7 +55,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 		except:
 			length = -1
 		return self.rfile.read(length)
-	def get_data(self, table_name, fields, url):
+	def get_data_JSON(self, table_name, fields, url):
 		query = urllib.parse.parse_qs(url.query)
 		sql = "SELECT device, time, " + ", ".join(fields) +  " FROM " + table_name
 		bindings = []
@@ -72,6 +72,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
 		self.send_header("CONTENT-TYPE", "application/json")
 		self.end_headers()
 		self.wfile.write(bytes(json.dumps(table), "UTF-8"))
+	def get_data_CSV(self, table_name, fields, url):
+		query = urllib.parse.parse_qs(url.query)
+		sql = "SELECT device, time, " + ", ".join(fields) +  " FROM " + table_name
+		bindings = []
+		device = query.get("device")
+		if not device:
+			sql = sql + " WHERE device = ?"
+			bindings.append(device)
+		begin = query.get("begin")
+		sql = sql + " ORDER BY time ASC"
+		cursor = database.cursor()
+		cursor.execute(sql, bindings)
+		table = list(cursor)
+		self.send_response_only(http.HTTPStatus.OK, "OK")
+		self.send_header("CONTENT-TYPE", "text/csv; charset=UTF-8")
+		self.end_headers()
+		self.wfile.write(b"device,time,")
+		self.wfile.write(bytes(",".join(fields) + "\n", "UTF-8"))
+		for row in cursor:
+			self.wfile.write(bytes(",".join(row) + "\n", "UTF-8"))
 	def post_data(self, table_name, fields):
 		body = self.content()
 		lines = body.decode("UTF-8").split("\r\n")
@@ -134,9 +154,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
 				self.end_headers()
 				self.wfile.write(bytes(json.dumps(current), "UTF-8"))
 			elif url.path == "/data.json":
-				self.get_data("data", ["temperature", "humidity"], url)
+				self.get_data_JSON("data", ["temperature", "humidity"], url)
 			elif url.path == "/position.json":
-				self.get_data("position", ["latitude", "longitude", "altitude"], url)
+				self.get_data_JSON("position", ["latitude", "longitude", "altitude"], url)
+			elif url.path == "/data.csv":
+				self.get_data_CSV("data", ["temperature", "humidity"], url)
+			elif url.path == "/position.csv":
+				self.get_data_CSV("position", ["latitude", "longitude", "altitude"], url)
 			else:
 				self.send_error(404)
 	def do_POST(self):
