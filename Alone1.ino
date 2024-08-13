@@ -690,8 +690,9 @@ R"HTML(
 		}();
 		if (Alone.operator) {
 			var $report_auto;
+			var $upload;
 			void function () {
-				var $div, $label, $input;
+				var $div, $input, $button;
 				$div = $E("div");
 				s_($div, "display", "inline-block");
 				s_($div, "margin-top", "1ex");
@@ -704,6 +705,19 @@ R"HTML(
 				a_($input, "type", "checkbox");
 				c_($div, $input);
 				c_($div, $T("Report position"));
+				c_(document.body, $div);
+				$div = $E("div");
+				s_($div, "display", "inline-block");
+				s_($div, "margin-top", "1ex");
+				s_($div, "margin-bottom", "1ex");
+				s_($div, "margin-left", "1ex");
+				s_($div, "margin-right", "2ex");
+				s_($div, "border", "solid thin gray");
+				s_($div, "padding", "1ex");
+				$upload = $button = $E("button");
+				a_($button, "type", "button");
+				c_($button, $T("Upload data"));
+				c_($div, $button);
 				c_(document.body, $div);
 			}();
 		}
@@ -928,6 +942,85 @@ R"HTML(
 					get_GPS();
 					setInterval(get_GPS, Alone.measure_interval);
 				}
+				void function () {
+					$upload.addEventListener(
+						"click",
+						function (event) {
+							event.preventDefault();
+							new Promise(
+								function (resolve, reject) {
+									var xhr = new XMLHttpRequest();
+									xhr.onloadend = function () {
+										var text = xhr.responseText;
+										if (xhr.status !== 200 || text == null)
+											return reject();
+										return resolve(text);
+									};
+									xhr.open("GET", "data/recent.csv", true);
+									xhr.send(null);
+								}
+							).then(
+								function (text) {
+									return new Promise(
+										function (resolve, reject) {
+											var xhr = new XMLHttpRequest();
+											xhr.onloadend = function () {
+												if (xhr.status !== 200)
+													return reject();
+												return resolve();
+											};
+											xhr.open("POST", Alone.upload_data_URL, true);
+											xhr.send(Alone.identity + "\r\n" + text);
+										}
+									);
+								}
+							).then(
+								function (text) {
+									return new Promise(
+										function (resolve, reject) {
+											var xhr = new XMLHttpRequest();
+											xhr.onloadend = function () {
+												var text = xhr.responseText;
+												if (xhr.status !== 200 || text == null)
+													return reject();
+												return resolve(text);
+											};
+											xhr.open("GET", "gps/recent.csv", true);
+											xhr.send(null);
+										}
+									);
+								}
+							).then(
+								function (text) {
+									return new Promise(
+										function (resolve, reject) {
+											var xhr = new XMLHttpRequest();
+											xhr.onloadend = function () {
+												if (xhr.status !== 200)
+													return reject();
+												return resolve();
+											};
+											xhr.open("POST", Alone.upload_position_URL, true);
+											xhr.send(Alone.identity + "\r\n" + text);
+										}
+									);
+								}
+							).catch(
+								function () {
+									alert("Failed to upload data");
+								}
+							);
+						}
+					);
+				}();
+				void function () {
+					/* set device time */
+					var xhr = new XMLHttpRequest();
+					var body = new URLSearchParams();
+					body.append("time", string_from_Date(new Date(), "T"));
+					xhr.open("POST", "setting.exe", true);
+					xhr.send(body);
+				}();
 			}();
 	}));
 </script>

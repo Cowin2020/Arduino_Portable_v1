@@ -60,7 +60,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 		sql = "SELECT device, time, " + ", ".join(fields) +  " FROM " + table_name
 		bindings = []
 		device = query.get("device")
-		if not device:
+		if device:
 			sql = sql + " WHERE device = ?"
 			bindings.append(device)
 		begin = query.get("begin")
@@ -77,7 +77,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 		sql = "SELECT device, time, " + ", ".join(fields) +  " FROM " + table_name
 		bindings = []
 		device = query.get("device")
-		if not device:
+		if device:
 			sql = sql + " WHERE device = ?"
 			bindings.append(device)
 		begin = query.get("begin")
