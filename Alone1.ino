@@ -69,7 +69,7 @@ struct Data {
 };
 
 static struct Field const data_fields[] = {
-	{"time", ""},
+	{"time", nullptr},
 	{"temperature", "\u2103"},
 #if SENSOR == SENSOR_BME280
 	{"pressure", "Pa"},
@@ -117,7 +117,7 @@ struct GPS {
 };
 
 static struct Field const gps_fields[] = {
-	{"time", ""},
+	{"time", nullptr},
 	{"latitude", "\u00B0"},
 	{"longitude", "\u00B0"},
 	{"altitude", "m"}
@@ -1600,19 +1600,19 @@ static void set_pthread_stack_size(size_t const stack_size) {
 void setup(void) {
 	/* Constants*/
 	data_header = data_fields[0].name;
-	if (*data_fields[0].unit)
+	if (data_fields[0].unit)
 		data_header = data_header + " (" + data_fields[0].unit + ')';
-	for (unsigned int i = 0; i < sizeof data_fields / sizeof *data_fields; ++i) {
+	for (unsigned int i = 1; i < sizeof data_fields / sizeof *data_fields; ++i) {
 		data_header = data_header + ',' + data_fields[i].name;
-		if (*data_fields[i].unit)
+		if (data_fields[i].unit)
 			data_header = data_header + " (" + data_fields[i].unit + ')';
 	}
 	gps_header = gps_fields[0].name;
-	if (*gps_fields[0].unit)
+	if (gps_fields[0].unit)
 		gps_header = gps_header + " (" + gps_fields[0].unit + ')';
-	for (unsigned int i = 0; i < sizeof gps_fields / sizeof *gps_fields; ++i) {
+	for (unsigned int i = 1; i < sizeof gps_fields / sizeof *gps_fields; ++i) {
 		gps_header = gps_header + ',' + gps_fields[i].name;
-		if (*gps_fields[i].unit)
+		if (gps_fields[i].unit)
 			gps_header = gps_header + " (" + gps_fields[i].unit + ')';
 	}
 
