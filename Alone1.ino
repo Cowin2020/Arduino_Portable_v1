@@ -882,48 +882,53 @@ R"HTML(
 			}
 		);
 		setTimeout(load_all, 3000);
-		if (Alone.operator) if ("geolocation" in window.navigator) if (window.isSecureContext) void function () {
-			function make_body(timestamp, coords) {
-				var body = new URLSearchParams;
-				body.append("identity",  Alone.identity);
-				body.append("time",      timestamp);
-				body.append("latitude",  coords.latitude);
-				body.append("longitude", coords.longitude);
-				body.append("altitude",  coords.altitude);
-				return body;
-			}
-			function upload_GPS(timestamp, coords) {
-				var body = make_body(timestamp, coords);
-				fetch("/gps/upload.exe", {method: "POST", body: body})
-					.catch(function () {});
-			}
-			function report_GPS(timestamp, coords) {
-				var body = make_body(timestamp, coords);
-				fetch(Alone.report, {method: "POST", body: body})
-					.catch(function () {});
-			}
-			function record_GPS(spacetime) {
-				if (spacetime === null || typeof spacetime === "undefined") return;
-				var timestamp = string_from_Date(spacetime.timestamp, "T");
-				var coords = spacetime.coords;
-				if (Alone.operator) {
-					upload_GPS(timestamp, coords);
-					if ($report_auto.checked)
-						report_GPS(timestamp, coords);
+		if (Alone.operator)
+			void function () {
+				if ("geolocation" in window.navigator) if (window.isSecureContext) {
+					function make_body(timestamp, coords) {
+						var body = new URLSearchParams;
+						body.append("identity",  Alone.identity);
+						body.append("time",      timestamp);
+						body.append("latitude",  coords.latitude);
+						body.append("longitude", coords.longitude);
+						body.append("altitude",  coords.altitude);
+						return body;
+					}
+					function upload_GPS(timestamp, coords) {
+						var body = make_body(timestamp, coords);
+						var xhr = new XMLHttpRequest();
+						xhr.open("POST", "/gps/upload.exe", true);
+						xhr.send(body);
+					}
+					function report_GPS(timestamp, coords) {
+						var body = make_body(timestamp, coords);
+						var xhr = new XMLHttpRequest();
+						xhr.open("POST", Alone.report, true);
+						xhr.send(body);
+					}
+					function record_GPS(spacetime) {
+						if (spacetime === null || typeof spacetime === "undefined") return;
+						var timestamp = string_from_Date(spacetime.timestamp, "T");
+						var coords = spacetime.coords;
+						if (Alone.operator) {
+							upload_GPS(timestamp, coords);
+							if ($report_auto.checked)
+								report_GPS(timestamp, coords);
+						}
+					}
+					function get_GPS() {
+						navigator.geolocation.getCurrentPosition(
+							record_GPS,
+							function (error) {
+								console.error("GeoLocationError: ", error.message);
+							},
+							{timeout: 15000, enableHighAccuracy: true}
+						)
+					}
+					get_GPS();
+					setInterval(get_GPS, Alone.measure_interval);
 				}
-			}
-			function get_GPS() {
-				navigator.geolocation.getCurrentPosition(
-					record_GPS,
-					function (error) {
-						console.error("GeoLocationError: ", error.message);
-					},
-					{timeout: 15000, enableHighAccuracy: true}
-				)
-			}
-			get_GPS();
-			setInterval(get_GPS, Alone.measure_interval);
-		}();
+			}();
 	}));
 </script>
 </body>
@@ -997,8 +1002,20 @@ static PROGMEM char const web_icon_data[] = {
 	0x00,
 	/* interlace method */
 	0x00,
-	/* checksum */
-	0x37, 0x6E, 0xF9, 0x24
+	/* header checksum */
+	0x37, 0x6E, 0xF9, 0x24,
+	/* data length */
+	0x00, 0x00, 0x00, 0x0A,
+	/* chunk type "IDAT" */
+	0x49, 0x44, 0x41, 0x54,
+	/* zlib header */
+	0x78, 0x01,
+	/* compressed DEFLATE block */
+	0x63, 0x60, 0x00, 0x00,
+	/* zlib checksum */
+	0x00, 0x02, 0x00, 0x01,
+	/* chunk checksum */
+	0x73, 0x75, 0x01, 0x18
 };
 
 static esp_err_t web_icon_handle(PsychicRequest *const request) {

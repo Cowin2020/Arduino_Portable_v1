@@ -7,10 +7,16 @@ import http
 import http.server
 import sqlite3
 
-data_fields = ["time", "latitude", "longitude", "altitude"]
-id_fields = "identity"
+current_fields = ["time", "latitude", "longitude", "altitude"]
+id_field = "identity"
 
 current = dict()
+
+try:
+	with open("homepage.html", "rb") as file:
+		homepage = file.read()
+except:
+	homepage = None
 
 try:
 	with open("script.js", "rb") as file:
@@ -24,6 +30,24 @@ try:
 except:
 	style = None
 
+favicon = bytes(
+	[
+		0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+		0x00, 0x00, 0x00, 0x0D,
+		0x49, 0x48, 0x44, 0x52,
+		0x00, 0x00, 0x00, 0x01,
+		0x00, 0x00, 0x00, 0x01,
+		0x01, 0x00, 0x00, 0x00, 0x00,
+		0x37, 0x6E, 0xF9, 0x24,
+		0x00, 0x00, 0x00, 0x0A,
+		0x49, 0x44, 0x41, 0x54,
+		0x78, 0x01,
+		0x63, 0x60, 0x00, 0x00,
+		0x00, 0x02, 0x00, 0x01,
+		0x73, 0x75, 0x01, 0x18])
+
+database = sqlite3.connect(config.database)
+
 class Handler(http.server.BaseHTTPRequestHandler):
 	def content(self):
 		try:
@@ -33,19 +57,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
 		return self.rfile.read(length)
 	def get_data(self, table_name, fields, url):
 		query = urllib.parse.parse_qs(url.query)
+		sql = "SELECT device, time, " + ", ".join(fields) +  " FROM " + table_name
+		bindings = []
 		device = query.get("device")
 		if not device:
-			return self.send_error(400, "missing parameter", "missing device name")
-		database = sqlite3.connect(config.database)
-		try:
-			cursor = database.cursor()
-			cursor.execute(
-				"SELECT device, time, " + ", ".join(fields) +  " FROM " + table_name
-					+ " WHERE device = ? ORDER BY time ASC",
-				[device[0]])
-			table = list(cursor)
-		finally:
-			database.close()
+			sql = sql + " WHERE device = ?"
+			bindings.append(device)
+		begin = query.get("begin")
+		sql = sql + " ORDER BY time ASC"
+		cursor = database.cursor()
+		cursor.execute(sql, bindings)
+		table = list(cursor)
 		self.send_response_only(http.HTTPStatus.OK, "OK")
 		self.send_header("CONTENT-TYPE", "application/json")
 		self.end_headers()
@@ -58,62 +80,28 @@ class Handler(http.server.BaseHTTPRequestHandler):
 		device = lines[0]
 		parsed = list(csv.reader(lines[1:]))
 		rows = parsed[1:]
-		database = sqlite3.connect(config.database)
-		try:
-			cursor = database.cursor()
-			for row in rows:
-				if len(row) != len(fields) + 1:
-					continue
-				cursor.execute(
-					"INSERT INTO " + table_name + " (device, time, " + ", ".join(fields) + ") "
-						"VALUES (?, ?, " + ", ".join(map(lambda x: "?", fields)) + ") "
-						"ON CONFLICT DO NOTHING",
-					[device] + row)
-			database.commit()
-		finally:
-			database.close()
+		cursor = database.cursor()
+		for row in rows:
+			if len(row) != len(fields) + 1:
+				continue
+			cursor.execute(
+				"INSERT INTO " + table_name + " (device, time, " + ", ".join(fields) + ") "
+					"VALUES (?, ?, " + ", ".join(map(lambda x: "?", fields)) + ") "
+					"ON CONFLICT DO NOTHING",
+				[device] + row)
+		database.commit()
 		self.send_response_only(http.HTTPStatus.OK, "OK")
 		self.send_header("CONTENT-TYPE", "text/plain")
 		self.end_headers()
 	def do_GET(self):
 		self.log_request()
-		if self.path == "/":
+		if self.path == "/" and homepage:
 			self.send_response_only(http.HTTPStatus.OK, "OK")
 			self.send_header("CONTENT-TYPE", "application/xhtml+xml")
 			# self.send_header("CONTENT-TYPE", "text/html")
 			self.end_headers()
-			self.wfile.write(
-				b"<html xmlns='http://www.w3.org/1999/xhtml'>"
-				b"<head><meta encoding='UTF-8'/><title>Monitor</title>"
-				b"<link rel='stylesheet' href='style.css' />"
-				b"<link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'"
-				b" integrity='sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=' crossorigin='' />"
-				b"</head><body><table><thead><th>Identity</th>",
-			)
-			for field in data_fields:
-				self.wfile.write(b"<th>")
-				self.wfile.write(bytes(field, "UTF-8"))
-				self.wfile.write(b"</th>")
-			self.wfile.write(b"</thead><tbody>")
-			for name in current:
-				self.wfile.write(b"<tr><td>")
-				self.wfile.write(bytes(name, "UTF-8"))
-				self.wfile.write(b"</td>")
-				for field in current[name]:
-					self.wfile.write(b"<td>")
-					if field is not None:
-						self.wfile.write(bytes(field, "UTF-8"))
-					self.wfile.write(b"</td>")
-				self.wfile.write(b"</tr>")
-			self.wfile.write(
-				b"</tbody></table>"
-				b"<hr />"
-				b"<div id='map'></div>"
-				b"<script type='text/javascript' src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'"
-				b" integrity='sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=' crossorigin=''></script>"
-				b"<script type='text/javascript' src='script.js'></script>"
-				b"</body></html>"
-			)
+			if homepage:
+				self.wfile.write(homepage)
 		elif self.path == "/style.css" and style:
 			self.send_response_only(http.HTTPStatus.OK, "OK")
 			self.send_header("CONTENT-TYPE", "text/css")
@@ -124,16 +112,30 @@ class Handler(http.server.BaseHTTPRequestHandler):
 			self.send_header("CONTENT-TYPE", "text/javascript")
 			self.end_headers()
 			self.wfile.write(script)
+		elif self.path == "/favicon.ico" and script:
+			self.send_response_only(http.HTTPStatus.OK, "OK")
+			self.send_header("CONTENT-TYPE", "image/png")
+			self.end_headers()
+			self.wfile.write(favicon)
+		elif self.path == "/devices.txt":
+			self.send_response_only(http.HTTPStatus.OK, "OK")
+			self.send_header("CONTENT-TYPE", "text/plain")
+			self.end_headers()
+			cursor = database.cursor()
+			cursor.execute("SELECT DISTINCT device FROM data ORDER BY device ASC")
+			for device in cursor:
+				self.wfile.write(bytes(device[0], "UTF-8"))
+				self.wfile.write(bytes("\n", "UTF-8"))
 		else:
 			url = urllib.parse.urlparse(self.path)
-			if url.path == "/current":
+			if url.path == "/current.json":
 				self.send_response_only(http.HTTPStatus.OK, "OK")
 				self.send_header("CONTENT-TYPE", "application/json")
 				self.end_headers()
 				self.wfile.write(bytes(json.dumps(current), "UTF-8"))
-			elif url.path == "/data":
+			elif url.path == "/data.json":
 				self.get_data("data", ["temperature", "humidity"], url)
-			elif url.path == "/position":
+			elif url.path == "/position.json":
 				self.get_data("position", ["latitude", "longitude", "altitude"], url)
 			else:
 				self.send_error(404)
@@ -142,11 +144,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
 		if self.path == "/report":
 			body = self.content()
 			queries = {k: v[0] for k, v in urllib.parse.parse_qs(body.decode("UTF-8")).items()}
-			identity = queries.get(id_fields)
+			identity = queries.get(id_field)
 			if identity is None:
 				self.send_error(400, "INCORRECT CONTENT", "identity is missed")
 				return
-			current[identity] = [queries.get(field) for field in data_fields]
+			current[identity] = [queries.get(field) for field in current_fields]
 			self.send_response_only(http.HTTPStatus.NO_CONTENT)
 			self.end_headers()
 		elif self.path == "/upload/data":
@@ -156,5 +158,5 @@ class Handler(http.server.BaseHTTPRequestHandler):
 		else:
 			self.send_error(404)
 
-httpd = http.server.ThreadingHTTPServer(("", config.PORT), Handler)
+httpd = http.server.HTTPServer(("", config.PORT), Handler)
 httpd.serve_forever()

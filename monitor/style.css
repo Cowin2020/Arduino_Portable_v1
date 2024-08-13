@@ -1,13 +1,19 @@
+div#map {
+	height:90vh;
+}
+
 table {
 	width:100%;
 	border-collapse:collapse;
 }
 
+th {
+	border: thick white solid;
+	background: lightgray;
+	color: black;
+}
+
 td {
 	border:solid thin;
 	text-align:center;
-}
-
-#map {
-	height:90vh;
 }
