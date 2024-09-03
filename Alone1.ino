@@ -1778,11 +1778,11 @@ void setup(void) {
 	setup_WiFi();
 
 	/* Web server */
-	set_pthread_stack_size(32768);
+	set_pthread_stack_size(16384);
 	webserver_setup();
 
 	/* Spawn measurement thread */
-	//	set_pthread_stack_size(4096);
+	set_pthread_stack_size(4096);
 	std::thread(measure_thread).detach();
 }
 
