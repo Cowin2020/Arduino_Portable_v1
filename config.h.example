@@ -12,8 +12,8 @@ static String STA_SSID = "Use this SSID";
 static String STA_PASS = "and password";
 static String report_URL = "http://api.example.com:80/";
 
-static uint16_t const HTTP_PORT = 80;
-static uint16_t const HTTPS_PORT = 443;
+static uint16_t const HTTP_port = 80;
+static uint16_t const HTTPS_port = 443;
 
 static unsigned int const start_wait_time = 6000;
 static unsigned int const reboot_wait_time = 6000;

@@ -1,4 +1,6 @@
-config.h
+/config.h
 /build/**
 /development/**
+/monitor/config.py
+/monitor/__pycache__/**
 /.vscode/**

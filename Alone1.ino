@@ -973,7 +973,7 @@ static esp_err_t web_home_handle(PsychicRequest *const request) {
 	}
 	response.print("]\r\n");
 	response.write(reinterpret_cast<uint8_t const *>(web_home_html_2), sizeof web_home_html_2 - 1);
-	response.endSend();
+	return response.endSend();
 }
 
 static PROGMEM char const web_icon_data[] = {
@@ -1002,7 +1002,7 @@ static PROGMEM char const web_icon_data[] = {
 };
 
 static esp_err_t web_icon_handle(PsychicRequest *const request) {
-	request->reply(200, "image/png", web_icon_data);
+	return request->reply(200, "image/png", web_icon_data);
 }
 
 static esp_err_t web_data_recent_handle(PsychicRequest *const request) {
@@ -1012,7 +1012,7 @@ static esp_err_t web_data_recent_handle(PsychicRequest *const request) {
 	response.println(data_header);
 	for (struct Data const &record: data_records)
 		response.println(CSV_Data(&record));
-	response.endSend();
+	return response.endSend();
 }
 
 static esp_err_t web_data_latest_handle(PsychicRequest *const request) {
@@ -1022,7 +1022,7 @@ static esp_err_t web_data_latest_handle(PsychicRequest *const request) {
 	response.println(data_header);
 	if (!data_records.empty())
 		response.println(CSV_Data(&data_records.back()));
-	response.endSend();
+	return response.endSend();
 }
 
 static esp_err_t web_gps_recent_handle(PsychicRequest *const request) {
@@ -1032,7 +1032,7 @@ static esp_err_t web_gps_recent_handle(PsychicRequest *const request) {
 	response.println(gps_header);
 	for (struct GPS const &record: gps_records)
 		response.println(CSV_GPS(&record));
-	response.endSend();
+	return response.endSend();
 }
 
 static esp_err_t web_gps_latest_handle(PsychicRequest *const request) {
@@ -1042,7 +1042,7 @@ static esp_err_t web_gps_latest_handle(PsychicRequest *const request) {
 	response.println(data_header);
 	if (!data_records.empty())
 		response.println(CSV_Data(&data_records.back()));
-	response.endSend();
+	return response.endSend();
 }
 
 static esp_err_t web_gps_upload_handle(PsychicRequest *const request) {
@@ -1112,7 +1112,7 @@ static esp_err_t web_gps_upload_handle(PsychicRequest *const request) {
 		file.close();
 	}
 
-	request->reply(204, "text/plain", "");
+	return request->reply(204, "text/plain", "");
 }
 
 static PROGMEM char const web_setting_html_1[] =
@@ -1320,7 +1320,7 @@ static esp_err_t web_setting_handle(PsychicRequest *const request) {
 	);
 
 	response.write(reinterpret_cast<uint8_t const *>(web_setting_html_2), sizeof web_setting_html_2 - 1);
-	response.endSend();
+	return response.endSend();
 }
 
 static PROGMEM char const web_command_html[] =
@@ -1465,7 +1465,7 @@ static esp_err_t web_command_handle(PsychicRequest *const request) {
 	response.setContentType("application/xhtml+xml; charset=UTF-8");
 	response.addHeader("LOCATION", "/setting.html");
 	response.setContent(reinterpret_cast<uint8_t const *>(web_command_html), sizeof web_command_html - 1);
-	response.send();
+	return response.send();
 }
 
 static void webserver_setup(void) {
@@ -1477,6 +1477,7 @@ static void webserver_setup(void) {
 		delay(reinitialize_interval);
 	}
 	Serial.println("HTTP server started");
+
 	HTTPSd.config.max_uri_handlers = 20;
 	while (HTTPSd.listen(HTTPS_port, tls_cert, tls_key) != ESP_OK) {
 		Serial.println("ERROR: failed to start HTTPS server");
@@ -1485,6 +1486,7 @@ static void webserver_setup(void) {
 		delay(reinitialize_interval);
 	}
 	Serial.println("HTTPS server started");
+
 	HTTPd .on("/",                HTTP_GET, web_home_handle);
 	HTTPSd.on("/",                HTTP_GET, web_home_handle);
 	HTTPd .on("/operator",        HTTP_GET, web_home_handle);
@@ -1570,6 +1572,12 @@ void loop(void) {
 			esp_restart();
 		}
 	}
+}
+
+static void set_pthread_stack_size(size_t const stack_size) {
+	static esp_pthread_cfg_t esp_pthread_cfg = esp_pthread_get_default_config();
+	esp_pthread_cfg.stack_size = stack_size;
+	esp_pthread_set_cfg(&esp_pthread_cfg);
 }
 
 void setup(void) {
@@ -1659,21 +1667,13 @@ void setup(void) {
 	/* WiFi */
 	setup_WiFi();
 
-	/* Increase thread stack size */
-	static esp_pthread_cfg_t esp_pthread_cfg = esp_pthread_get_default_config();
-	esp_pthread_cfg.stack_size = 4096;
-	esp_pthread_cfg.inherit_cfg = true;
-	esp_pthread_set_cfg(&esp_pthread_cfg);
-
 	/* Web server */
+	set_pthread_stack_size(32768);
 	webserver_setup();
 
 	/* Spawn measurement thread */
-	//	static esp_pthread_cfg_t esp_pthread_cfg = esp_pthread_get_default_config();
-	//	esp_pthread_cfg.stack_size = 4096;
-	//	esp_pthread_cfg.inherit_cfg = true;
-	//	esp_pthread_set_cfg(&esp_pthread_cfg);
-	//	std::thread(measure_thread).detach();
+	//	set_pthread_stack_size(4096);
+	std::thread(measure_thread).detach();
 }
 
 /* *************************************************************************** / ************************************ */
