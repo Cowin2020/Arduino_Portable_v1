@@ -1,0 +1,8 @@
+import os
+
+try:
+	PORT = int(os.environ["PORT"])
+except:
+	PORT = 8080
+
+database = "../development/database.sqlite3"
