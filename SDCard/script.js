@@ -204,6 +204,7 @@ document.body.appendChild($data_loading);
 
 var $GPS = new Object;
 $GPS.table = $E("table", null, [
+	$E("caption", null, [$T("Last GPS position")]),
 	$E("tbody", null, [
 		$E("tr", null, [
 			$E("th", null, [$T("Time")]),

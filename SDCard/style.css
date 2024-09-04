@@ -100,12 +100,16 @@ table {
 	width: 100%;
 }
 
-thead {
-	border-bottom-style: solid;
+caption {
+	border-style: solid;
+	border-width: thin;
+	background-color: darkslateblue;
+	color: white;
 }
 
 th {
 	border-style: solid;
+	border-width: thin;
 	background-color: darkslategray;
 	color: snow;
 }

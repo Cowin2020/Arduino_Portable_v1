@@ -1483,13 +1483,14 @@ static esp_err_t web_command_handle(PsychicRequest *const request) {
 			need_save = true;
 		}
 		else {
-			Serial.print("WARN: incorrect command interval = ");
-			Serial.println(value);
+			Serial.print("WARN: incorrect command interval = \"");
+			Serial.print(value);
+			Serial.println('"');
 		}
 	}
 	parameter = request->getParam("WiFi");
 	if (parameter != nullptr) {
-		char const *const value = parameter->value().c_str();
+		String const &value = parameter->value();
 		Serial.print("INFO: command WiFi = ");
 		Serial.println(value);
 		if (value == "AP") {
@@ -1501,8 +1502,9 @@ static esp_err_t web_command_handle(PsychicRequest *const request) {
 			need_save = true;
 		}
 		else {
-			Serial.println("WARN: incorrect command WiFi = ");
-			Serial.println(value);
+			Serial.print("WARN: incorrect command WiFi = \"");
+			Serial.print(value);
+			Serial.println('"');
 		}
 	}
 	parameter = request->getParam("APSSID");
