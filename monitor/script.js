@@ -83,11 +83,15 @@ function current_load() {
 	xhr.send();
 }
 
+var current_interval = null;
+
 setTimeout(
 	function () {
 		current_load();
+		if (current_interval) clearInterval(current_interval);
 		setInterval(current_load, 60000);
-	}, 1000
+	},
+	1000
 );
 
 var table_node = document.getElementById("table");
@@ -124,13 +128,14 @@ function data_load() {
 
 var data_interval = null;
 
-function data_schedule() {
-	data_load();
-	if (data_interval) clearInterval(data_interval);
-	data_interval = setInterval(data_load, 60000);
-}
-
-setTimeout(data_schedule, 2000);
+setTimeout(
+	function () {
+		data_load();
+		if (data_interval) clearInterval(data_interval);
+		data_interval = setInterval(data_load, 60000);
+	},
+	2000
+);
 
 function position_load() {
 	var xhr = new XMLHttpRequest();
@@ -149,12 +154,5 @@ function position_load() {
 	xhr.open("GET", "position.json");
 	xhr.send();
 }
-
-// setTimeout(
-// 	function () {
-// 		data_load();
-// 		setInterval(position_load, 60000);
-// 	}, 3000
-// );
 
 });

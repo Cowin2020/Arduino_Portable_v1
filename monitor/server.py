@@ -30,21 +30,25 @@ try:
 except:
 	style = None
 
-favicon = bytes(
-	[
-		0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
-		0x00, 0x00, 0x00, 0x0D,
-		0x49, 0x48, 0x44, 0x52,
-		0x00, 0x00, 0x00, 0x01,
-		0x00, 0x00, 0x00, 0x01,
-		0x01, 0x00, 0x00, 0x00, 0x00,
-		0x37, 0x6E, 0xF9, 0x24,
-		0x00, 0x00, 0x00, 0x0A,
-		0x49, 0x44, 0x41, 0x54,
-		0x78, 0x01,
-		0x63, 0x60, 0x00, 0x00,
-		0x00, 0x02, 0x00, 0x01,
-		0x73, 0x75, 0x01, 0x18])
+try:
+	with open("favicon.ico", "rb") as file:
+		favicon = file.read()
+except:
+	favicon = bytes(
+		[
+			0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+			0x00, 0x00, 0x00, 0x0D,
+			0x49, 0x48, 0x44, 0x52,
+			0x00, 0x00, 0x00, 0x01,
+			0x00, 0x00, 0x00, 0x01,
+			0x01, 0x00, 0x00, 0x00, 0x00,
+			0x37, 0x6E, 0xF9, 0x24,
+			0x00, 0x00, 0x00, 0x0A,
+			0x49, 0x44, 0x41, 0x54,
+			0x78, 0x01,
+			0x63, 0x60, 0x00, 0x00,
+			0x00, 0x02, 0x00, 0x01,
+			0x73, 0x75, 0x01, 0x18])
 
 database = sqlite3.connect(config.database)
 
@@ -55,7 +59,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 		except:
 			length = -1
 		return self.rfile.read(length)
-	def get_data_JSON(self, table_name, fields, url):
+	def get_data_DB(self, table_name, fields, url):
 		query = urllib.parse.parse_qs(url.query)
 		sql = "SELECT device, time, " + ", ".join(fields) +  " FROM " + table_name
 		bindings = []
@@ -67,24 +71,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
 		sql = sql + " ORDER BY time ASC"
 		cursor = database.cursor()
 		cursor.execute(sql, bindings)
-		table = list(cursor)
+		return cursor
+	def get_data_JSON(self, table_name, fields, url):
+		cursor = self.get_data_DB(table_name, fields, url)
 		self.send_response_only(http.HTTPStatus.OK, "OK")
 		self.send_header("CONTENT-TYPE", "application/json")
 		self.end_headers()
-		self.wfile.write(bytes(json.dumps(table), "UTF-8"))
+		self.wfile.write(bytes(json.dumps(list(cursor)), "UTF-8"))
 	def get_data_CSV(self, table_name, fields, url):
-		query = urllib.parse.parse_qs(url.query)
-		sql = "SELECT device, time, " + ", ".join(fields) +  " FROM " + table_name
-		bindings = []
-		device = query.get("device")
-		if device:
-			sql = sql + " WHERE device = ?"
-			bindings.append(device)
-		begin = query.get("begin")
-		sql = sql + " ORDER BY time ASC"
-		cursor = database.cursor()
-		cursor.execute(sql, bindings)
-		table = list(cursor)
+		cursor = self.get_data_DB(table_name, fields, url)
 		self.send_response_only(http.HTTPStatus.OK, "OK")
 		self.send_header("CONTENT-TYPE", "text/csv; charset=UTF-8")
 		self.end_headers()
@@ -115,24 +110,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
 		self.end_headers()
 	def do_GET(self):
 		self.log_request()
-		if self.path == "/" and homepage:
+		if homepage and self.path == "/":
 			self.send_response_only(http.HTTPStatus.OK, "OK")
 			self.send_header("CONTENT-TYPE", "application/xhtml+xml")
-			# self.send_header("CONTENT-TYPE", "text/html")
 			self.end_headers()
-			if homepage:
-				self.wfile.write(homepage)
-		elif self.path == "/style.css" and style:
+			self.wfile.write(homepage)
+		elif style and self.path == "/style.css":
 			self.send_response_only(http.HTTPStatus.OK, "OK")
 			self.send_header("CONTENT-TYPE", "text/css")
 			self.end_headers()
 			self.wfile.write(style)
-		elif self.path == "/script.js" and script:
+		elif script and self.path == "/script.js":
 			self.send_response_only(http.HTTPStatus.OK, "OK")
 			self.send_header("CONTENT-TYPE", "text/javascript")
 			self.end_headers()
 			self.wfile.write(script)
-		elif self.path == "/favicon.ico" and script:
+		elif favicon and self.path == "/favicon.ico":
 			self.send_response_only(http.HTTPStatus.OK, "OK")
 			self.send_header("CONTENT-TYPE", "image/png")
 			self.end_headers()
@@ -146,14 +139,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
 			for device in cursor:
 				self.wfile.write(bytes(device[0], "UTF-8"))
 				self.wfile.write(bytes("\n", "UTF-8"))
+		elif self.path == "/current.json":
+			self.send_response_only(http.HTTPStatus.OK, "OK")
+			self.send_header("CONTENT-TYPE", "application/json")
+			self.end_headers()
+			self.wfile.write(bytes(json.dumps(current), "UTF-8"))
 		else:
 			url = urllib.parse.urlparse(self.path)
-			if url.path == "/current.json":
-				self.send_response_only(http.HTTPStatus.OK, "OK")
-				self.send_header("CONTENT-TYPE", "application/json")
-				self.end_headers()
-				self.wfile.write(bytes(json.dumps(current), "UTF-8"))
-			elif url.path == "/data.json":
+			if url.path == "/data.json":
 				self.get_data_JSON("data", ["temperature", "humidity"], url)
 			elif url.path == "/position.json":
 				self.get_data_JSON("position", ["latitude", "longitude", "altitude"], url)
@@ -182,5 +175,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
 		else:
 			self.send_error(404)
 
-httpd = http.server.HTTPServer(("", config.PORT), Handler)
-httpd.serve_forever()
+print("HTTPd listen on \"{}\" port {}".format(config.HOST, config.PORT))
+httpd = http.server.HTTPServer((config.HOST, config.PORT), Handler)
+
+try:
+	httpd.serve_forever()
+except KeyboardInterrupt:
+	pass
