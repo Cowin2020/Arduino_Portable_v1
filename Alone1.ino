@@ -1622,8 +1622,8 @@ static void webserver_setup(void) {
 	HTTPd .on("/setting.exe",    HTTP_POST, web_command_handle);
 	HTTPSd.on("/setting.exe",    HTTP_POST, web_command_handle);
 	if (has_SD_card) {
-		HTTPd .serveStatic("/", SD, "/");
-		HTTPSd.serveStatic("/", SD, "/");
+		HTTPd .serveStatic("/", SD, "/", "max-age=604800");
+		HTTPSd.serveStatic("/", SD, "/", "max-age=604800");
 	};
 }
 
