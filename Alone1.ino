@@ -1453,7 +1453,7 @@ static esp_err_t web_command_handle(PsychicRequest *const request) {
 	parameter = request->getParam("time");
 	if (parameter != nullptr) {
 		char const *const value = parameter->value().c_str();
-		Serial.print("command time = ");
+		Serial.print("INFO: command time = ");
 		Serial.println(value);
 		DateTime const datetime(value);
 		if (datetime.isValid())
@@ -1466,7 +1466,7 @@ static esp_err_t web_command_handle(PsychicRequest *const request) {
 	parameter = request->getParam("name");
 	if (parameter != nullptr) {
 		char const *const value = parameter->value().c_str();
-		Serial.print("command name = ");
+		Serial.print("INFO: command name = ");
 		Serial.println(value);
 		device_name = value;
 		need_save = true;
@@ -1474,7 +1474,7 @@ static esp_err_t web_command_handle(PsychicRequest *const request) {
 	parameter = request->getParam("interval");
 	if (parameter != nullptr) {
 		char const *const value = parameter->value().c_str();
-		Serial.print("command interval = ");
+		Serial.print("INFO: command interval = ");
 		Serial.println(value);
 		char *end;
 		unsigned long int const x = strtoul(value, &end, 10);
@@ -1490,7 +1490,7 @@ static esp_err_t web_command_handle(PsychicRequest *const request) {
 	parameter = request->getParam("WiFi");
 	if (parameter != nullptr) {
 		char const *const value = parameter->value().c_str();
-		Serial.print("command WiFi = ");
+		Serial.print("INFO: command WiFi = ");
 		Serial.println(value);
 		if (value == "AP") {
 			use_AP_mode = true;
@@ -1508,7 +1508,7 @@ static esp_err_t web_command_handle(PsychicRequest *const request) {
 	parameter = request->getParam("APSSID");
 	if (parameter != nullptr) {
 		char const *const value = parameter->value().c_str();
-		Serial.print("command APSSID = ");
+		Serial.print("INFO: command APSSID = ");
 		Serial.println(value);
 		AP_SSID = value;
 		need_save = true;
@@ -1516,7 +1516,7 @@ static esp_err_t web_command_handle(PsychicRequest *const request) {
 	parameter = request->getParam("APPASS");
 	if (parameter != nullptr) {
 		char const *const value = parameter->value().c_str();
-		Serial.print("command APPASS = ");
+		Serial.print("INFO: command APPASS = ");
 		Serial.println(value);
 		AP_PASS = value;
 		need_save = true;
@@ -1524,7 +1524,7 @@ static esp_err_t web_command_handle(PsychicRequest *const request) {
 	parameter = request->getParam("STASSID");
 	if (parameter != nullptr) {
 		char const *const value = parameter->value().c_str();
-		Serial.print("command STASSID = ");
+		Serial.print("INFO: command STASSID = ");
 		Serial.println(value);
 		STA_SSID = value;
 		need_save = true;
@@ -1532,7 +1532,7 @@ static esp_err_t web_command_handle(PsychicRequest *const request) {
 	parameter = request->getParam("STAPASS");
 	if (parameter != nullptr) {
 		char const *const value = parameter->value().c_str();
-		Serial.print("command STAPASS = ");
+		Serial.print("INFO: command STAPASS = ");
 		Serial.println(value);
 		STA_PASS = value;
 		need_save = true;
@@ -1540,20 +1540,22 @@ static esp_err_t web_command_handle(PsychicRequest *const request) {
 	parameter = request->getParam("report");
 	if (parameter != nullptr) {
 		char const *const value = parameter->value().c_str();
-		Serial.print("command report = ");
+		Serial.print("INFO: command report = ");
 		Serial.println(value);
 		report_URL = value;
 		need_save = true;
 	}
 	if (request->hasParam("measure")) {
-		Serial.println("command measure");
+		Serial.println("INFO: command measure");
 		wait_measure_condition.notify_all();
 	}
 	if (request->hasParam("delete")) {
-		Serial.println("command delete");
+		Serial.println("INFO: command delete");
 		data_records.clear();
+		gps_records.clear();
 		SDCARD_LOCK(sdcard_lock)
-		//	SD.remove(data_filename);
+		SD.remove(data_filename);
+		SD.remove(gps_filename);
 		File file = SD.open(data_filename, "w", true);
 		try {
 			file.println(data_header);
@@ -1564,7 +1566,7 @@ static esp_err_t web_command_handle(PsychicRequest *const request) {
 		file.close();
 	}
 	if (request->hasParam("reboot")) {
-		Serial.println("command reboot");
+		Serial.println("INFO: command reboot");
 		Serial.flush();
 		need_reboot = true;
 		need_save = false;
