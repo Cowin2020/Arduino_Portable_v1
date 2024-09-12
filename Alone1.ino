@@ -8,7 +8,7 @@
 
 #include <esp_pthread.h>
 #include <WiFi.h>
-// #include <DNSServer.h>
+//	#include <DNSServer.h>
 #include <PsychicHttp.h>
 #include <PsychicHttpServer.h>
 #include <PsychicHttpsServer.h>
@@ -67,7 +67,7 @@ struct Data {
 	float humidity;
 };
 
-static struct Field const data_fields[] = {
+static Field const data_fields[] = {
 	{"time", nullptr},
 	{"temperature", "\u2103"},
 #if SENSOR == SENSOR_BME280
@@ -76,7 +76,7 @@ static struct Field const data_fields[] = {
 	{"humidity", "%"}
 };
 
-static String CSV_Data(struct Data const *const data) {
+static String CSV_Data(Data const *const data) {
 	return show_time(&data->time)
 		+ ',' + data->temperature
 #if SENSOR == SENSOR_BME280
@@ -85,7 +85,7 @@ static String CSV_Data(struct Data const *const data) {
 		+ ',' + data->humidity;
 }
 
-static String pretty_Data(struct Data const *const data) {
+static String pretty_Data(Data const *const data) {
 	char date[11], time[9];
 	String fulltime = show_time(&data->time);
 	if (fulltime.length() ==19) {
@@ -115,7 +115,7 @@ struct GPS {
 	double altitude;
 };
 
-static struct Field const gps_fields[] = {
+static Field const gps_fields[] = {
 	{"time", nullptr},
 	{"latitude", "\u00B0"},
 	{"longitude", "\u00B0"},
@@ -138,7 +138,7 @@ static char const gps_filename[] = "/gps.csv";
 static String data_header;
 static String gps_header;
 
-// static SPIClass SPI_1(HSPI);
+//	static SPIClass SPI_1(HSPI);
 static bool SD_card_exist;
 
 static void save_settings(void) {
@@ -250,31 +250,34 @@ static String show_time(DateTime const *const datetime) {
 #endif
 
 static size_t const records_max_size = 60;
-static std::deque<struct Data> data_records;
-static std::deque<struct GPS> gps_records;
+static std::deque<Data> data_records;
+static std::deque<GPS> gps_records;
 
 static void measure(void) {
-	struct Data data;
+	Data data;
 	if (clock_available())
 		data.time = get_time();
 	else
 		data.time = DateTime(0, 0, 0) + TimeSpan(millis() / 1000);
-	DEVICE_LOCK(device_lock);
-	#if SENSOR == SENSOR_BME280
-		data.temperature = BME280.readTemperature();
-		data.pressure = BME280.readPressure();
-		data.humidity = BME280.readHumidity();
-	#elif SENSOR == SENSOR_SHT40
-		sensors_event_t temperature_event, humidity_event;
-		SHT4x.getEvent(&humidity_event, &temperature_event);
-		data.temperature = temperature_event.temperature;
-		data.humidity = humidity_event.relative_humidity;
-	#endif
+	{
+		DEVICE_LOCK(device_lock);
+		#if SENSOR == SENSOR_BME280
+			data.temperature = BME280.readTemperature();
+			data.pressure = BME280.readPressure();
+			data.humidity = BME280.readHumidity();
+		#elif SENSOR == SENSOR_SHT40
+			sensors_event_t temperature_event, humidity_event;
+			SHT4x.getEvent(&humidity_event, &temperature_event);
+			data.temperature = temperature_event.temperature;
+			data.humidity = humidity_event.relative_humidity;
+		#endif
+	}
 	String const data_string = CSV_Data(&data);
 	Serial.print("Measure ");
 	Serial.println(data_string);
 
-	if (data_records.size() >= records_max_size) data_records.pop_front();
+	if (data_records.size() >= records_max_size)
+		data_records.pop_front();
 	data_records.push_back(data);
 
 	if (SD_card_exist) {
@@ -297,8 +300,6 @@ static void measure_thread(void) {
 		try {
 			measure();
 			std::unique_lock<std::mutex> wait_lock(wait_measure_mutex);
-			// delay(measure_interval);
-			//	std::this_thread::sleep_for(std::chrono::duration<unsigned long int, std::milli>(measure_interval));
 			wait_measure_condition.wait_for(wait_lock, std::chrono::duration<unsigned long int, std::milli>(measure_interval));
 		}
 		catch (...) {
@@ -310,7 +311,7 @@ static void measure_thread(void) {
 /* WiFi */
 
 namespace WIFI {
-	// static DNSServer DNSd;
+	//	static DNSServer DNSd;
 
 	static void handle_event(WiFiEvent_t const event) {
 		switch (event) {
@@ -437,7 +438,6 @@ namespace WIFI {
 				Serial.print("WiFi SSID: ");
 				Serial.println(WiFi.SSID());
 				Serial.print("IP address: ");
-				//	Serial.println(WiFi.localIP().toString());
 				WiFi.localIP().printTo(Serial);
 				Serial.println();
 			}
@@ -465,8 +465,8 @@ namespace WIFI {
 		if (use_AP_mode) {
 			/* WiFi access-point */
 			WiFi.mode(WIFI_AP);
-			// IPAddress my_IP_address = IPAddress(8, 8, 8, 8);
-			// WiFi.softAPConfig(my_IP_address, my_IP_address, IPAddress(255, 255, 255, 0));
+			//	IPAddress my_IP_address = IPAddress(8, 8, 8, 8);
+			//	WiFi.softAPConfig(my_IP_address, my_IP_address, IPAddress(255, 255, 255, 0));
 			while (!WiFi.softAP(AP_SSID.c_str(), AP_PASS, 1, 0, 4)) {
 				Serial.println("ERROR: failed to create soft AP");
 				Monitor.println("ERROR: WiFi AP");
@@ -476,18 +476,17 @@ namespace WIFI {
 			Serial.print("WiFi SSID: ");
 			Serial.println(WiFi.softAPSSID());
 			Serial.print("IP address: ");
-			//	Serial.println(WiFi.softAPIP().toString());
 			WiFi.softAPIP().printTo(Serial);
 			Serial.println();
 
 			/* DNS server */
-			// static uint16_t const DNS_port = 53;
-			// static String const DNS_domain("*");
-			// while (!DNSd.start(DNS_port, DNS_domain, my_IP_address)) {
-			// 	Serial.println("ERROR: failed to create DNS server");
-			// 	Monitor.println("ERROR: DNS server");
-			// 	delay(reinitialize_interval);
-			// }
+			//	static uint16_t const DNS_port = 53;
+			//	static String const DNS_domain("*");
+			//	while (!DNSd.start(DNS_port, DNS_domain, my_IP_address)) {
+			//		Serial.println("ERROR: failed to create DNS server");
+			//		Monitor.println("ERROR: DNS server");
+			//		delay(reinitialize_interval);
+			//	}
 		}
 		else {
 			/* WiFi stationary */
@@ -499,8 +498,6 @@ namespace WIFI {
 				Monitor.display();
 				delay(reinitialize_interval);
 			}
-			while (millis() < WiFi_wait_time && WiFi.status() != WL_CONNECTED)
-				delay(1);
 			std::thread(thread).detach();
 		}
 	}
@@ -1046,7 +1043,7 @@ fPQsAPOfXW3x3SDYwVp+V8rcl/xegEyo1BQaKbTloCEKFmNfEAI=
 		response.print(javascript_escape(report_URL));
 		response.print("',\r\n\t\t\tdata_fields: [");
 		bool first = true;
-		for (struct Field const field: data_fields) {
+		for (Field const field: data_fields) {
 			if (first)
 				first = false;
 			else
@@ -1059,7 +1056,7 @@ fPQsAPOfXW3x3SDYwVp+V8rcl/xegEyo1BQaKbTloCEKFmNfEAI=
 		}
 		response.print("],\r\n\t\t\tgps_fields: [");
 		first = true;
-		for (struct Field const field: gps_fields) {
+		for (Field const field: gps_fields) {
 			if (first)
 				first = false;
 			else
@@ -1121,7 +1118,7 @@ fPQsAPOfXW3x3SDYwVp+V8rcl/xegEyo1BQaKbTloCEKFmNfEAI=
 		response.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
 		response.beginSend();
 		response.println(data_header);
-		for (struct Data const &record: data_records)
+		for (Data const &record: data_records)
 			response.println(CSV_Data(&record));
 		return response.endSend();
 	}
@@ -1141,7 +1138,7 @@ fPQsAPOfXW3x3SDYwVp+V8rcl/xegEyo1BQaKbTloCEKFmNfEAI=
 		response.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
 		response.beginSend();
 		response.println(gps_header);
-		for (struct GPS const &record: gps_records)
+		for (GPS const &record: gps_records)
 			response.println(CSV_GPS(&record));
 		return response.endSend();
 	}
@@ -1157,7 +1154,7 @@ fPQsAPOfXW3x3SDYwVp+V8rcl/xegEyo1BQaKbTloCEKFmNfEAI=
 	}
 
 	static esp_err_t gps_upload_handle(PsychicRequest *const request) {
-		struct GPS gps = {.time = (uint32_t)0, .latitude = NAN, .longitude = NAN, .altitude = NAN};
+		GPS gps = {.time = (uint32_t)0, .latitude = NAN, .longitude = NAN, .altitude = NAN};
 		PsychicWebParameter *parameter;
 		parameter = request->getParam("time");
 		if (parameter != nullptr) {
@@ -1644,7 +1641,6 @@ static void redraw_display(void) {
 		Monitor.println("WiFi SSID:");
 		Monitor.println(WiFi.softAPSSID());
 		Monitor.println("IP address:");
-		//	Monitor.println(WiFi.softAPIP().toString());
 		WiFi.softAPIP().printTo(Monitor);
 		Monitor.println();
 	}
@@ -1655,7 +1651,6 @@ static void redraw_display(void) {
 			Monitor.println("WiFi SSID:");
 			Monitor.println(WiFi.SSID());
 			Monitor.println("IP address:");
-			//	Monitor.println(WiFi.localIP().toString());
 			WiFi.localIP().printTo(Monitor);
 			Monitor.println();
 		}
