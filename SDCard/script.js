@@ -1,7 +1,5 @@
 import "./plotly.min.js";
 
-var start_delay = 3000; /* milliseconds */
-
 /* Utilities */
 
 function $T(string) {
@@ -37,6 +35,8 @@ function string_from_Date(date, seperator = " ") {
 			+ date.getSeconds().toString().padStart(2, "0")
 	);
 }
+
+var MILLISECONDS_FROM_1970_TO_2000 = 946684800000; /* = Date.UTC(2000, 0, 1, 0, 0, 0, 0) */
 
 function Timer() {
 	this.interval = null;
@@ -451,7 +451,7 @@ RefreshTimer.prototype = {
 
 var refresh_timer = new RefreshTimer();
 $auto_refresh.addEventListener("change", refresh_timer.update.bind(refresh_timer));
-setTimeout(load_all, start_delay);
+load_all();
 
 if (Alone.operator) {
 	if (!("geolocation" in navigator))
@@ -498,9 +498,10 @@ if (Alone.operator) {
 				{timeout: 15000, enableHighAccuracy: true}
 			)
 		}
-		setTimeout(GPS_request, start_delay);
-		setInterval(GPS_request, Alone.measure_interval);
-		// navigator.geolocation.watchPosition(GPS_record);
+		function GPS_start() {
+			setInterval(GPS_request, Alone.measure_interval);
+		}
+		setTimeout(GPS_start, (Date.now() - MILLISECONDS_FROM_1970_TO_2000) % Alone.measure_interval);
 	}
 	void function () {
 		$upload.addEventListener(
