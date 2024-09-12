@@ -107,6 +107,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 		database.commit()
 		self.send_response_only(http.HTTPStatus.OK, "OK")
 		self.send_header("CONTENT-TYPE", "text/plain")
+		self.send_header("ACCESS-CONTROL-ALLOW-ORIGIN", "*")
 		self.end_headers()
 	def do_GET(self):
 		self.log_request()
