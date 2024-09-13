@@ -3,6 +3,8 @@
 
 #define SENSOR SENSOR_SHT40
 
+static String organisation_name = "OrganisationName";
+static String camp_name = "CampName";
 static String device_name = "DeviceName";
 static bool use_AP_mode = true;
 static unsigned int measure_interval = 60000;
@@ -10,9 +12,7 @@ static String AP_SSID = "My SSID";
 static String AP_PASS = "My password";
 static String STA_SSID = "Use this SSID";
 static String STA_PASS = "and password";
-static String report_URL = "http://api.example.com:80/report";
-static String upload_data_URL = "http://api.example.com:80/upload/data";
-static String upload_position_URL = "http://api.example.com:80/upload/position";
+static String monitor_URL = "http://api.example.com:80";
 
 static uint16_t const HTTP_port = 80;
 static uint16_t const HTTPS_port = 443;

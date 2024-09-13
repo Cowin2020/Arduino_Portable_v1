@@ -10,11 +10,13 @@ try:
 	print("Create data table")
 	cursor.execute('''
 CREATE TABLE data (
+	organisation TEXT NOT NULL,
+	camp TEXT NOT NULL,
 	device TEXT NOT NULL,
 	time DATETIME NOT NULL,
 	temperature REAL,
 	humidity REAL,
-	PRIMARY KEY (device, time)
+	PRIMARY KEY (organisation, camp, device, time)
 )''')
 except Exception as e:
 	print(e)
@@ -24,12 +26,14 @@ try:
 	print("Create position table")
 	cursor.execute('''
 CREATE TABLE position (
+	organisation TEXT NOT NULL,
+	camp TEXT NOT NULL,
 	device TEXT NOT NULL,
 	time DATETIME NOT NULL,
 	latitude REAL,
 	longitude REAL,
 	altitude REAL,
-	PRIMARY KEY (device, time)
+	PRIMARY KEY (organisation, camp, device, time)
 )''')
 except Exception as e:
 	print(e)

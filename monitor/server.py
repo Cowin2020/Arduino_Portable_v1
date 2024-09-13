@@ -8,7 +8,6 @@ import http.server
 import sqlite3
 
 current_fields = ["time", "latitude", "longitude", "altitude"]
-id_field = "identity"
 
 current = dict()
 
@@ -90,10 +89,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
 	def post_data(self, table_name, fields):
 		body = self.content()
 		lines = body.decode("UTF-8").split("\r\n")
-		if len(lines) < 2:
-			return self.send_error(400, "malformat", "invalid number of rows")
-		device = lines[0]
-		parsed = list(csv.reader(lines[1:]))
+		if len(lines) < 4:
+			return self.send_error(400, "malformat", "invalid number of rows: " + len(lines))
+		organisation = lines[0]
+		camp = lines[1]
+		device = lines[2]
+		parsed = list(csv.reader(lines[3:]))
 		rows = parsed[1:]
 		cursor = database.cursor()
 		for row in rows:
@@ -162,12 +163,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
 		if self.path == "/report":
 			body = self.content()
 			queries = {k: v[0] for k, v in urllib.parse.parse_qs(body.decode("UTF-8")).items()}
-			identity = queries.get(id_field)
-			if identity is None:
-				self.send_error(400, "INCORRECT CONTENT", "identity is missed")
+			organisation = queries.get("organisation")
+			if organisation is None:
+				self.send_error(400, "INCORRECT CONTENT", "organisation is missed")
 				return
-			current[identity] = [queries.get(field) for field in current_fields]
+			camp = queries.get("camp")
+			if camp is None:
+				self.send_error(400, "INCORRECT CONTENT", "camp is missed")
+				return
+			device = queries.get("device")
+			if device is None:
+				self.send_error(400, "INCORRECT CONTENT", "device is missed")
+				return
+			current[device] = [queries.get(field) for field in current_fields]
 			self.send_response_only(http.HTTPStatus.NO_CONTENT)
+			self.send_header("ACCESS-CONTROL-ALLOW-ORIGIN", "*")
 			self.end_headers()
 		elif self.path == "/upload/data":
 			self.post_data("data", ["temperature", "humidity"])

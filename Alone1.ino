@@ -36,10 +36,12 @@
 
 static void redraw_display(void);
 
-static std::mutex mutex_1;
-#define DISPLAY_LOCK(lock) std::lock_guard<std::mutex> lock(mutex_1)
-#define DEVICE_LOCK(lock) std::lock_guard<std::mutex> lock(mutex_1)
+static std::mutex mutex_hardware;
+#define DISPLAY_LOCK(lock) std::lock_guard<std::mutex> lock(mutex_hardware)
+#define DEVICE_LOCK(lock) std::lock_guard<std::mutex> lock(mutex_hardware)
 #define SDCARD_LOCK(lock)
+static std::mutex mutex_data;
+#define DATA_LOCK(lock) std::lock_guard<std::mutex> lock(mutex_data)
 
 static std::mutex wait_measure_mutex;
 static std::condition_variable wait_measure_condition;
@@ -49,6 +51,19 @@ static bool need_reboot = false;
 
 static Adafruit_SSD1306 Monitor(128, 64);
 
+/* *************************************************************************** / ************************************ */
+
+inline static String report_URL() {
+	return monitor_URL + "/report";
+}
+
+inline static String upload_data_URL() {
+	return monitor_URL + "/upload/data";
+}
+
+inline static String upload_position_URL() {
+	return monitor_URL + "/upload/position";
+}
 
 /* *************************************************************************** / ************************************ */
 /* Data */
@@ -149,6 +164,8 @@ static void save_settings(void) {
 		Serial.println("ERROR: failed to open setting file");
 		return;
 	}
+	file.println(organisation_name);
+	file.println(camp_name);
 	file.println(device_name);
 	file.println(measure_interval / 1000);
 	file.println(int(use_AP_mode));
@@ -156,7 +173,7 @@ static void save_settings(void) {
 	file.println(AP_PASS);
 	file.println(STA_SSID);
 	file.println(STA_PASS);
-	file.println(report_URL);
+	file.println(monitor_URL);
 	file.close();
 }
 
@@ -176,6 +193,10 @@ static bool load_settings(void) {
 		return false;
 	}
 
+	organisation_name = file.readStringUntil('\n');
+	organisation_name.trim();
+	camp_name = file.readStringUntil('\n');
+	camp_name.trim();
 	device_name = file.readStringUntil('\n');
 	device_name.trim();
 	s = file.readStringUntil('\n');
@@ -194,8 +215,8 @@ static bool load_settings(void) {
 	STA_SSID.trim();
 	STA_PASS = file.readStringUntil('\n');
 	STA_PASS.trim();
-	report_URL = file.readStringUntil('\n');
-	report_URL.trim();
+	monitor_URL = file.readStringUntil('\n');
+	monitor_URL.trim();
 
 	file.close();
 	return true;
@@ -550,6 +571,8 @@ fPQsAPOfXW3x3SDYwVp+V8rcl/xegEyo1BQaKbTloCEKFmNfEAI=
 -----END CERTIFICATE-----
 )";
 
+	static String const XHTML_content_type = "application/xhtml+xml; charset=UTF-8";
+
 	static String javascript_escape(String const &string) {
 		String result;
 		for (char const c: string)
@@ -625,6 +648,17 @@ R"HTML(
 		}
 		var MILLISECONDS_FROM_1970_TO_2000 = 946684800000; /* = Date.UTC(2000, 0, 1, 0, 0, 0, 0) */
 		document.body.textContent = "";
+		void function () {
+			var $p;
+			$p = $E("p");
+			c_($p, $T("Organisation: "));
+			c_($p, $T(Alone.organisation));
+			c_($p, $T(" | Camp: "));
+			c_($p, $T(Alone.camp));
+			c_($p, $T(" | Device: "));
+			c_($p, $T(Alone.device));
+			c_(document.body, $p);
+		}
 		void function () {
 			var $p, $a;
 			function style_$a() {
@@ -905,11 +939,13 @@ R"HTML(
 				if ("geolocation" in window.navigator) if (window.isSecureContext) {
 					function make_body(timestamp, coords) {
 						var body = new URLSearchParams;
-						body.append("identity",  Alone.identity);
-						body.append("time",      timestamp);
-						body.append("latitude",  coords.latitude);
-						body.append("longitude", coords.longitude);
-						body.append("altitude",  coords.altitude);
+						body.append("organisation", Alone.organisation);
+						body.append("camp",         Alone.camp);
+						body.append("device",       Alone.device);
+						body.append("time",         timestamp);
+						body.append("latitude",     coords.latitude);
+						body.append("longitude",    coords.longitude);
+						body.append("altitude",     coords.altitude);
 						return body;
 					}
 					function upload_GPS(timestamp, coords) {
@@ -921,7 +957,7 @@ R"HTML(
 					function report_GPS(timestamp, coords) {
 						var body = make_body(timestamp, coords);
 						var xhr = new XMLHttpRequest();
-						xhr.open("POST", Alone.report, true);
+						xhr.open("POST", Alone.report_URL, true);
 						xhr.send(body);
 					}
 					function record_GPS(spacetime) {
@@ -953,6 +989,7 @@ R"HTML(
 						"click",
 						function (event) {
 							event.preventDefault();
+							var identities = Alone.organisation + "\r\n" + Alone.camp + "\r\n" + Alone.device + "\r\n";
 							new Promise(
 								function (resolve, reject) {
 									var xhr = new XMLHttpRequest();
@@ -976,7 +1013,7 @@ R"HTML(
 												return resolve();
 											};
 											xhr.open("POST", Alone.upload_data_URL, true);
-											xhr.send(Alone.identity + "\r\n" + text);
+											xhr.send(identities + text);
 										}
 									);
 								}
@@ -1007,7 +1044,7 @@ R"HTML(
 												return resolve();
 											};
 											xhr.open("POST", Alone.upload_position_URL, true);
-											xhr.send(Alone.identity + "\r\n" + text);
+											xhr.send(identity_lines + text);
 										}
 									);
 								}
@@ -1035,11 +1072,15 @@ R"HTML(
 )HTML";
 
 	static esp_err_t home_handle(PsychicRequest *const request) {
-		PsychicStreamResponse response(request, "application/xhtml+xml; charset=UTF-8");
+		PsychicStreamResponse response(request, XHTML_content_type);
 		response.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
 		response.beginSend();
 		response.write(reinterpret_cast<uint8_t const *>(home_html_1), sizeof home_html_1 - 1);
-		response.print("\t\t\tidentity: '");
+		response.print("\t\t\torganisation: '");
+		response.print(javascript_escape(organisation_name));
+		response.print("',\r\n\t\t\tcamp: '");
+		response.print(javascript_escape(camp_name));
+		response.print("',\r\n\t\t\tdevice: '");
 		response.print(javascript_escape(device_name));
 		response.print("',\r\n\t\t\tmeasure_interval: '");
 		response.print(measure_interval);
@@ -1047,12 +1088,14 @@ R"HTML(
 		response.print(javascript_escape(data_filename));
 		response.print("',\r\n\t\t\tgps_file: '");
 		response.print(javascript_escape(gps_filename));
-		response.print("',\r\n\t\t\treport: '");
-		response.print(javascript_escape(report_URL));
+		response.print("',\r\n\t\t\tmonitor_URL: '");
+		response.print(javascript_escape(monitor_URL));
+		response.print("',\r\n\t\t\treport_URL: '");
+		response.print(javascript_escape(report_URL()));
 		response.print("',\r\n\t\t\tupload_data_URL: '");
-		response.print(javascript_escape(upload_data_URL));
-		response.print("',\r\n\t\t\tupload_gps_URL: '");
-		response.print(javascript_escape(upload_position_URL));
+		response.print(javascript_escape(upload_data_URL()));
+		response.print("',\r\n\t\t\tupload_position_URL: '");
+		response.print(javascript_escape(upload_position_URL()));
 		response.print("',\r\n\t\t\tdata_fields: [");
 		bool first = true;
 		for (Field const field: data_fields) {
@@ -1259,6 +1302,7 @@ R"HTML(
 
 	static PROGMEM char const setting_form_2[] =
 R"HTML('
+	class='setting-form'
 	action='setting.exe'
 	method='POST'
 	style='margin: 1ex; border: solid thin; padding: 1ex'
@@ -1297,7 +1341,7 @@ R"HTML('
 	}
 
 	static esp_err_t setting_handle(PsychicRequest *const request) {
-		PsychicStreamResponse response(request, "application/xhtml+xml; charset=UTF-8");
+		PsychicStreamResponse response(request, XHTML_content_type);
 		response.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
 		response.beginSend();
 
@@ -1313,11 +1357,39 @@ R"HTML('
 			"</form>\r\n"
 		);
 
-		setting_form(&response, "set_name");
+		setting_form(&response, "set_organisation");
+		response.print(
+			"\t<label>\r\n"
+			"\t\tOrganisation\r\n"
+			"\t\t<input type='text' name='organisation' required='' value='"
+		);
+		response.print(XML_escape(organisation_name));
+		response.print(
+			"' />\r\n"
+			"\t</label>\r\n"
+			"\t<button type='submit'>Set</button>\r\n"
+			"</form>\r\n"
+		);
+
+		setting_form(&response, "set_camp");
+		response.print(
+			"\t<label>\r\n"
+			"\t\tCamp\r\n"
+			"\t\t<input type='text' name='camp' required='' value='"
+		);
+		response.print(XML_escape(camp_name));
+		response.print(
+			"' />\r\n"
+			"\t</label>\r\n"
+			"\t<button type='submit'>Set</button>\r\n"
+			"</form>\r\n"
+		);
+
+		setting_form(&response, "set_device");
 		response.print(
 			"\t<label>\r\n"
 			"\t\tDevice ID\r\n"
-			"\t\t<input type='text' name='name' required='' value='"
+			"\t\t<input type='text' name='device' required='' value='"
 		);
 		response.print(XML_escape(device_name));
 		response.print(
@@ -1398,13 +1470,13 @@ R"HTML('
 			"</form>\r\n"
 		);
 
-		setting_form(&response, "set_report");
+		setting_form(&response, "set_monitor");
 		response.print(
 			"\t<label>\r\n"
-			"\t\tReport URL\r\n"
-			"\t\t<input type='text' name='report' required='' value='"
+			"\t\tMonitor server URL\r\n"
+			"\t\t<input type='text' name='monitor' required='' value='"
 		);
-		response.print(XML_escape(report_URL));
+		response.print(XML_escape(monitor_URL));
 		response.print(
 			"' />\r\n"
 			"\t</label>\r\n"
@@ -1464,23 +1536,35 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 		PsychicWebParameter *parameter;
 		parameter = request->getParam("time");
 		if (parameter != nullptr) {
-			char const *const value = parameter->value().c_str();
 			Serial.print("INFO: command time = ");
-			Serial.println(value);
-			DateTime const datetime(value);
+			Serial.println(parameter->value());
+			DateTime const datetime(parameter->value().c_str());
 			if (datetime.isValid())
 				set_time(datetime);
 			else {
 				Serial.print("WARN: incorrect command time = ");
-				Serial.println(value);
+				Serial.println(parameter->value());
 			}
 		}
-		parameter = request->getParam("name");
+		parameter = request->getParam("organisation");
 		if (parameter != nullptr) {
-			char const *const value = parameter->value().c_str();
-			Serial.print("INFO: command name = ");
-			Serial.println(value);
-			device_name = value;
+			Serial.print("INFO: command organisation = ");
+			Serial.println(parameter->value());
+			organisation_name = parameter->value();
+			need_save = true;
+		}
+		parameter = request->getParam("camp");
+		if (parameter != nullptr) {
+			Serial.print("INFO: command camp = ");
+			Serial.println(parameter->value());
+			camp_name = parameter->value();
+			need_save = true;
+		}
+		parameter = request->getParam("device");
+		if (parameter != nullptr) {
+			Serial.print("INFO: command device = ");
+			Serial.println(parameter->value());
+			device_name = parameter->value();
 			need_save = true;
 		}
 		parameter = request->getParam("interval");
@@ -1521,42 +1605,37 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 		}
 		parameter = request->getParam("APSSID");
 		if (parameter != nullptr) {
-			char const *const value = parameter->value().c_str();
 			Serial.print("INFO: command APSSID = ");
-			Serial.println(value);
-			AP_SSID = value;
+			Serial.println(parameter->value());
+			AP_SSID = parameter->value();
 			need_save = true;
 		}
 		parameter = request->getParam("APPASS");
 		if (parameter != nullptr) {
-			char const *const value = parameter->value().c_str();
 			Serial.print("INFO: command APPASS = ");
-			Serial.println(value);
-			AP_PASS = value;
+			Serial.println(parameter->value());
+			AP_PASS = parameter->value();
 			need_save = true;
 		}
 		parameter = request->getParam("STASSID");
 		if (parameter != nullptr) {
-			char const *const value = parameter->value().c_str();
 			Serial.print("INFO: command STASSID = ");
-			Serial.println(value);
-			STA_SSID = value;
+			Serial.println(parameter->value());
+			STA_SSID = parameter->value();
 			need_save = true;
 		}
 		parameter = request->getParam("STAPASS");
 		if (parameter != nullptr) {
-			char const *const value = parameter->value().c_str();
 			Serial.print("INFO: command STAPASS = ");
-			Serial.println(value);
-			STA_PASS = value;
+			Serial.println(parameter->value());
+			STA_PASS = parameter->value();
 			need_save = true;
 		}
-		parameter = request->getParam("report");
+		parameter = request->getParam("monitor");
 		if (parameter != nullptr) {
-			char const *const value = parameter->value().c_str();
-			Serial.print("INFO: command report = ");
-			Serial.println(value);
-			report_URL = value;
+			Serial.print("INFO: command monitor = ");
+			Serial.println(parameter->value());
+			monitor_URL = parameter->value();
 			need_save = true;
 		}
 		if (request->hasParam("measure")) {

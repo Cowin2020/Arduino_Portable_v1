@@ -62,6 +62,14 @@ Timer.prototype = {
 
 document.body.style["margin"] = "1ex";
 
+document.body.appendChild(
+	$E("p", null, [
+		$T("Organisation: "), $T(Alone.organisation),
+		$T(" | Camp: "), $T(Alone.camp),
+		$T(" | Device: "), $T(Alone.device)
+	])
+);
+
 var $dashboard = new Object;
 $dashboard.items = new Array(Alone.data_fields.length - 1);
 $dashboard.root = $E("div", {"id": "dashboard"}, [
@@ -459,11 +467,13 @@ if (Alone.operator) {
 	else {
 		function make_body(timestamp, coords) {
 			var body = new URLSearchParams;
-			body.append("identity",  Alone.identity);
-			body.append("time",      timestamp);
-			body.append("latitude",  coords.latitude);
-			body.append("longitude", coords.longitude);
-			body.append("altitude",  coords.altitude);
+			body.append("organisation", Alone.organisation);
+			body.append("camp",         Alone.camp);
+			body.append("device",       Alone.device);
+			body.append("time",         timestamp);
+			body.append("latitude",     coords.latitude);
+			body.append("longitude",    coords.longitude);
+			body.append("altitude",     coords.altitude);
 			return body;
 		}
 		function GPS_upload(timestamp, coords) {
@@ -473,7 +483,7 @@ if (Alone.operator) {
 		}
 		function GPS_report(timestamp, coords) {
 			var body = make_body(timestamp, coords);
-			fetch(Alone.report, {method: "POST", body: body})
+			fetch(Alone.report_URL, {method: "POST", body: body})
 				.catch(function () {});
 		}
 
@@ -508,6 +518,7 @@ if (Alone.operator) {
 			"click",
 			function (event) {
 				event.preventDefault();
+				var identity = Alone.organisation + "\r\n" + Alone.camp + "\r\n" + Alone.device + "\r\n";
 				new Promise(
 					function (resolve, reject) {
 						var xhr = new XMLHttpRequest();
@@ -531,7 +542,7 @@ if (Alone.operator) {
 									return resolve();
 								};
 								xhr.open("POST", Alone.upload_data_URL, true);
-								xhr.send(Alone.identity + "\r\n" + text);
+								xhr.send(identity + text);
 							}
 						);
 					}
@@ -562,7 +573,7 @@ if (Alone.operator) {
 									return resolve();
 								};
 								xhr.open("POST", Alone.upload_position_URL, true);
-								xhr.send(Alone.identity + "\r\n" + text);
+								xhr.send(identity + text);
 							}
 						);
 					}
