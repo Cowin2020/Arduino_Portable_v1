@@ -53,17 +53,9 @@ static Adafruit_SSD1306 Monitor(128, 64);
 
 /* *************************************************************************** / ************************************ */
 
-inline static String report_URL() {
-	return monitor_URL + "/report";
-}
-
-inline static String upload_data_URL() {
-	return monitor_URL + "/upload/data";
-}
-
-inline static String upload_position_URL() {
-	return monitor_URL + "/upload/position";
-}
+static char const report_path[] = "/report";
+static char const upload_data_path[] = "/upload/data";
+static char const upload_position_path[] = "/upload/position";
 
 /* *************************************************************************** / ************************************ */
 /* Data */
@@ -91,7 +83,7 @@ static Field const data_fields[] = {
 	{"humidity", "%"}
 };
 
-static String CSV_Data(Data const *const data) {
+static String CSV_Data(struct Data const *const data) {
 	return show_time(&data->time)
 		+ ',' + data->temperature
 #if SENSOR == SENSOR_BME280
@@ -100,7 +92,7 @@ static String CSV_Data(Data const *const data) {
 		+ ',' + data->humidity;
 }
 
-static String pretty_Data(Data const *const data) {
+static String pretty_Data(struct Data const *const data) {
 	char date[11], time[9];
 	String fulltime = show_time(&data->time);
 	if (fulltime.length() ==19) {
@@ -1091,11 +1083,11 @@ R"HTML(
 		response.print("',\r\n\t\t\tmonitor_URL: '");
 		response.print(javascript_escape(monitor_URL));
 		response.print("',\r\n\t\t\treport_URL: '");
-		response.print(javascript_escape(report_URL()));
+		response.print(javascript_escape(monitor_URL + report_path));
 		response.print("',\r\n\t\t\tupload_data_URL: '");
-		response.print(javascript_escape(upload_data_URL()));
+		response.print(javascript_escape(monitor_URL + upload_data_path));
 		response.print("',\r\n\t\t\tupload_position_URL: '");
-		response.print(javascript_escape(upload_position_URL()));
+		response.print(javascript_escape(monitor_URL + upload_position_path));
 		response.print("',\r\n\t\t\tdata_fields: [");
 		bool first = true;
 		for (Field const field: data_fields) {
