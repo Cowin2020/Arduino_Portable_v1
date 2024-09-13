@@ -278,19 +278,23 @@ function data_plots(rows) {
 }
 
 function data_load() {
-	return new Promise(
-		function (resolve, reject) {
-			hide_plots();
-			$list.textContent = null;
-			$data_loading.hidden = false;
-			var xhr = new XMLHttpRequest();
-			xhr.onloadend = function () {
+	hide_plots();
+	$list.textContent = null;
+	$data_loading.hidden = false;
+	return (
+		fetch("data/recent.csv")
+		.then(
+			function (response) {
 				$data_loading.hidden = true;
-				var text = xhr.responseText;
-				if (text == null || xhr.status !== 200) {
+				if (response.status !== 200) {
 					alert("Failed to load data");
-					return reject(xhr);
+					return Promise.reject(response.status);
 				}
+				return response.text();
+			}
+		)
+		.then(
+			function (text) {
 				var rows = text.split("\n").map(
 					function (line) {
 						return line.trim().split(",");
@@ -302,7 +306,7 @@ function data_load() {
 				if (!(rows.length > 0)) {
 					show_dashboard(null);
 					data_plots(null);
-					return resolve();
+					return Promise.resolve();
 				}
 				show_dashboard(rows[rows.length - 1]);
 				data_plots(rows);
@@ -318,11 +322,9 @@ function data_load() {
 						)
 					);
 				}
-				return resolve();
-			};
-			xhr.open("GET", "data/recent.csv", true);
-			xhr.send(null);
-		}
+				return Promise.resolve();
+			}
+		)
 	);
 }
 
@@ -395,15 +397,20 @@ function GPS_show() {
 }
 
 function GPS_load() {
-	return new Promise(
-		function (resolve, reject) {
-			var xhr = new XMLHttpRequest();
-			xhr.onloadend = function (event) {
-				var text = xhr.responseText;
-				if (text == null || xhr.status !== 200) {
+	return (
+		fetch("gps/recent.csv")
+		.then(
+			function (response) {
+				$data_loading.hidden = true;
+				if (response.status !== 200) {
 					alert("Failed to load GPS records");
-					return reject(xhr);
+					return Promise.reject(response.status);
 				}
+				return response.text();
+			}
+		)
+		.then(
+			function (text) {
 				var lines = text.split("\r\n");
 				if (!lines || !(lines.length > 0)) return;
 				var records = new Array;
@@ -421,20 +428,18 @@ function GPS_load() {
 				}
 				GPS = records;
 				GPS_show();
-				return resolve();
-			};
-			xhr.open("GET", "gps/recent.csv", true);
-			xhr.send(null);
-		}
+				return Promise.resolve();
+			}
+		)
 	);
 }
 
 function load_all() {
 	return (
 		data_load()
-			.catch(function () {})
-			.then(function () {return GPS_load();})
-			.catch(function () {})
+		.catch(function () {})
+		.then(function () {return GPS_load();})
+		.catch(function () {})
 	);
 }
 
@@ -519,67 +524,63 @@ if (Alone.operator) {
 			function (event) {
 				event.preventDefault();
 				var identity = Alone.organisation + "\r\n" + Alone.camp + "\r\n" + Alone.device + "\r\n";
-				new Promise(
-					function (resolve, reject) {
-						var xhr = new XMLHttpRequest();
-						xhr.onloadend = function () {
-							var text = xhr.responseText;
-							if (xhr.status !== 200 || text == null)
-								return reject();
-							return resolve(text);
-						};
-						xhr.open("GET", "data/recent.csv", true);
-						xhr.send(null);
+				fetch("data/recent.csv")
+				.then(
+					function (response) {
+						if (response.status !== 200)
+							return Promise.reject(response.status)
+						return response.text();
 					}
-				).then(
+				)
+				.then(
 					function (text) {
-						return new Promise(
-							function (resolve, reject) {
-								var xhr = new XMLHttpRequest();
-								xhr.onloadend = function () {
-									if (xhr.status !== 200)
-										return reject();
-									return resolve();
-								};
-								xhr.open("POST", Alone.upload_data_URL, true);
-								xhr.send(identity + text);
+						return fetch(
+							Alone.upload_data_URL,
+							{
+								method: "POST",
+								body: identity + text
 							}
 						);
 					}
-				).then(
-					function (text) {
-						return new Promise(
-							function (resolve, reject) {
-								var xhr = new XMLHttpRequest();
-								xhr.onloadend = function () {
-									var text = xhr.responseText;
-									if (xhr.status !== 200 || text == null)
-										return reject();
-									return resolve(text);
-								};
-								xhr.open("GET", "gps/recent.csv", true);
-								xhr.send(null);
-							}
-						);
+				)
+				.then(
+					function (response) {
+						if (response.status !== 200)
+							return Promise.reject(response.status)
 					}
-				).then(
-					function (text) {
-						return new Promise(
-							function (resolve, reject) {
-								var xhr = new XMLHttpRequest();
-								xhr.onloadend = function () {
-									if (xhr.status !== 200)
-										return reject();
-									return resolve();
-								};
-								xhr.open("POST", Alone.upload_position_URL, true);
-								xhr.send(identity + text);
-							}
-						);
-					}
-				).catch(
+				)
+				.then(
 					function () {
-						alert("Failed to upload data");
+						return fetch("gps/recent.csv");
+					}
+				)
+				.then(
+					function (response) {
+						if (response.status !== 200)
+							return Promise.reject(response.status)
+						return response.text();
+					}
+				)
+				.then(
+					function (text) {
+						return fetch(
+							Alone.upload_position_URL,
+							{
+								method: "POST",
+								body: identity + text
+							}
+						);
+					}
+				)
+				.then(
+					function (response) {
+						if (response.status !== 200)
+							return Promise.reject(response.status)
+					}
+				)
+				.catch(
+					function (error) {
+						alert("Failed to upload data: " + String(error));
 					}
 				);
 			}
@@ -587,11 +588,15 @@ if (Alone.operator) {
 	}();
 	void function () {
 		/* set device time */
-		var xhr = new XMLHttpRequest();
 		var body = new URLSearchParams();
 		body.append("time", string_from_Date(new Date(), "T"));
-		xhr.open("POST", "setting.exe", true);
-		xhr.send(body);
+		fetch(
+			"setting.exe",
+			{
+				method: "POST",
+				body: body
+			}
+		);
 	}();
 }
 
