@@ -11,5 +11,5 @@ except:
 	PORT = 8080
 
 database = "database.sqlite3"
-SSL_key = None
+SSL_key  = None
 SSL_cert = None

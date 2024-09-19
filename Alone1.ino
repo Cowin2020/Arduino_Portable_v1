@@ -143,6 +143,7 @@ static void save_settings(void) {
 	file.println(STA_SSID);
 	file.println(STA_PASS);
 	file.println(monitor_URL);
+	file.println(upload_password);
 	file.close();
 }
 
@@ -186,6 +187,8 @@ static bool load_settings(void) {
 	STA_PASS.trim();
 	monitor_URL = file.readStringUntil('\n');
 	monitor_URL.trim();
+	upload_password = file.readStringUntil('\n');
+	upload_password.trim();
 
 	file.close();
 	return true;
@@ -1188,8 +1191,8 @@ R"HTML(
 		PsychicWebParameter *parameter;
 		parameter = request->getParam("time");
 		if (parameter != nullptr) {
-			char const *const value = parameter->value().c_str();
-			DateTime const datetime(value);
+			String const &value = parameter->value();
+			DateTime const datetime(value.c_str());
 			if (datetime.isValid())
 				gps.time = datetime;
 			else {
@@ -1199,38 +1202,44 @@ R"HTML(
 		}
 		parameter = request->getParam("latitude");
 		if (parameter != nullptr) {
-			char const *const value = parameter->value().c_str();
-			char *end;
-			double const x = strtod(value, &end);
-			if (!*end)
-				gps.latitude = x;
-			else {
-				Serial.print("WARN: incorrect GPS latitude = ");
-				Serial.println(value);
+			String const &value = parameter->value();
+			if (value != "null") {
+				char *end;
+				double const x = strtod(value.c_str(), &end);
+				if (!*end)
+					gps.latitude = x;
+				else {
+					Serial.print("WARN: incorrect GPS latitude = ");
+					Serial.println(value);
+				}
 			}
 		}
 		parameter = request->getParam("longitude");
 		if (parameter != nullptr) {
-			char const *const value = parameter->value().c_str();
-			char *end;
-			double const x = strtod(value, &end);
-			if (!*end)
-				gps.longitude = x;
-			else {
-				Serial.print("WARN: incorrect GPS longitude = ");
-				Serial.println(value);
+			String const &value = parameter->value();
+			if (value != "null") {
+				char *end;
+				double const x = strtod(value.c_str(), &end);
+				if (!*end)
+					gps.longitude = x;
+				else {
+					Serial.print("WARN: incorrect GPS longitude = ");
+					Serial.println(value);
+				}
 			}
 		}
 		parameter = request->getParam("altitude");
 		if (parameter != nullptr) {
-			char const *const value = parameter->value().c_str();
-			char *end;
-			double const x = strtod(value, &end);
-			if (!*end)
-				gps.altitude = x;
-			else {
-				Serial.print("WARN: incorrect GPS altitude = ");
-				Serial.println(value);
+			String const &value = parameter->value();
+			if (value != "null") {
+				char *end;
+				double const x = strtod(value.c_str(), &end);
+				if (!*end)
+					gps.altitude = x;
+				else {
+					Serial.print("WARN: incorrect GPS altitude = ");
+					Serial.println(value);
+				}
 			}
 		}
 
@@ -1459,6 +1468,20 @@ R"HTML('
 			"</form>\r\n"
 		);
 
+		setting_form(&response, "set_password");
+		response.print(
+			"\t<label>\r\n"
+			"\t\tUpload password\r\n"
+			"\t\t<input type='text' name='password' required='' value='"
+		);
+		response.print(XML_escape(upload_password));
+		response.print(
+			"' />\r\n"
+			"\t</label>\r\n"
+			"\t<button type='submit'>Set</button>\r\n"
+			"</form>\r\n"
+		);
+
 		setting_form(&response, "do_measure");
 		response.print(
 			"\t<label style='display: block'>\r\n"
@@ -1611,6 +1634,13 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 			Serial.print("INFO: command monitor = ");
 			Serial.println(parameter->value());
 			monitor_URL = parameter->value();
+			need_save = true;
+		}
+		parameter = request->getParam("password");
+		if (parameter != nullptr) {
+			Serial.print("INFO: command password = ");
+			Serial.println(parameter->value());
+			upload_password = parameter->value();
 			need_save = true;
 		}
 		if (request->hasParam("measure")) {
