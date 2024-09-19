@@ -53,9 +53,9 @@ static Adafruit_SSD1306 Monitor(128, 64);
 
 /* *************************************************************************** / ************************************ */
 
-static char const report_path[] = "/report";
-static char const upload_data_path[] = "/upload/data";
-static char const upload_position_path[] = "/upload/position";
+static char const report_path[] = "report";
+static char const upload_data_path[] = "upload/data";
+static char const upload_position_path[] = "upload/position";
 
 /* *************************************************************************** / ************************************ */
 /* Data */
@@ -958,7 +958,11 @@ R"HTML(
 						"click",
 						function (event) {
 							event.preventDefault();
-							var identities = Alone.organisation + "\r\n" + Alone.camp + "\r\n" + Alone.device + "\r\n";
+							var identity =
+								Alone.organisation + "\r\n" +
+								Alone.camp + "\r\n" +
+								Alone.device + "\r\n" +
+								Alone.password + "\r\n";
 							new Promise(
 								function (resolve, reject) {
 									var xhr = new XMLHttpRequest();
@@ -1065,6 +1069,8 @@ R"HTML(
 		response.print(javascript_escape(monitor_URL + upload_data_path));
 		response.print("',\r\n\t\t\tupload_position_URL: '");
 		response.print(javascript_escape(monitor_URL + upload_position_path));
+		response.print("',\r\n\t\t\tpassword: '");
+		response.print(javascript_escape(upload_password));
 		response.print("',\r\n\t\t\tdata_fields: [");
 		bool first = true;
 		for (Field const field: data_fields) {

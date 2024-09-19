@@ -90,22 +90,27 @@ class Handler(http.server.BaseHTTPRequestHandler):
 	def post_data(self, table_name, fields):
 		body = self.content()
 		lines = body.decode("UTF-8").split("\r\n")
-		if len(lines) < 4:
+		if len(lines) < 5:
 			return self.send_error(400, "malformat", "invalid number of rows: " + len(lines))
 		organisation = lines[0]
 		camp = lines[1]
 		device = lines[2]
-		parsed = list(csv.reader(lines[3:]))
+		password = lines[3]
+		parsed = list(csv.reader(lines[4:]))
 		rows = parsed[1:]
+		cursor = database.cursor()
+		cursor.execute("SELECT password FROM password WHERE organisation = ?", (organisation,))
+		if all(map(lambda row: row[0] != password, cursor)):
+			self.send_error(403)
 		cursor = database.cursor()
 		for row in rows:
 			if len(row) != len(fields) + 1:
 				continue
 			cursor.execute(
-				"INSERT INTO " + table_name + " (device, time, " + ", ".join(fields) + ") "
-					"VALUES (?, ?, " + ", ".join(map(lambda x: "?", fields)) + ") "
+				"INSERT INTO " + table_name + " (organisation, camp, device, time, " + ", ".join(fields) + ") "
+					"VALUES (?, ?, ?, ?, " + ", ".join(map(lambda x: "?", fields)) + ") "
 					"ON CONFLICT DO NOTHING",
-				[device] + row)
+				[organisation, camp, device] + row)
 		database.commit()
 		self.send_response_only(http.HTTPStatus.OK, "OK")
 		self.send_header("CONTENT-TYPE", "text/plain")

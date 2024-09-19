@@ -523,7 +523,11 @@ if (Alone.operator) {
 			"click",
 			function (event) {
 				event.preventDefault();
-				var identity = Alone.organisation + "\r\n" + Alone.camp + "\r\n" + Alone.device + "\r\n";
+				var identity =
+					Alone.organisation + "\r\n" +
+					Alone.camp + "\r\n" +
+					Alone.device + "\r\n" +
+					Alone.password + "\r\n";
 				fetch("data/recent.csv")
 				.then(
 					function (response) {

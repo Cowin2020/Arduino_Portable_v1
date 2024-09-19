@@ -39,4 +39,16 @@ except Exception as e:
 	print(e)
 database.commit()
 
+try:
+	print("Create password table")
+	cursor.execute('''
+CREATE TABLE password (
+	organisation TEXT NOT NULL,
+	password TEXT NOT NULL,
+	PRIMARY KEY (organisation)
+)''')
+except Exception as e:
+	print(e)
+database.commit()
+
 database.close()

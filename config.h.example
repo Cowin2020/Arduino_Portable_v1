@@ -12,7 +12,8 @@ static String AP_SSID = "My SSID";
 static String AP_PASS = "My password";
 static String STA_SSID = "Use this SSID";
 static String STA_PASS = "and password";
-static String monitor_URL = "http://api.example.com:80";
+static String monitor_URL = "http://api.example.com:80/";
+static String upload_password = "PASSWORD";
 
 static uint16_t const HTTP_port = 80;
 static uint16_t const HTTPS_port = 443;
