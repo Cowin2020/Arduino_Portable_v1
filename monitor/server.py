@@ -5,6 +5,7 @@ import json
 import urllib.parse
 import http
 import http.server
+import ssl
 import sqlite3
 
 current_fields = ["time", "latitude", "longitude", "altitude"]
@@ -188,6 +189,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 print("HTTPd listen on \"{}\" port {}".format(config.HOST, config.PORT))
 httpd = http.server.HTTPServer((config.HOST, config.PORT), Handler)
+
+if config.SSL_key and config.SSL_cert:
+	httpd.socket = ssl.wrap_socket(
+		httpd.socket,
+		server_side=True,
+		certfile=config.SSL_cert,
+		keyfile=config.SSL_key,
+		ssl_version=ssl.PROTOCOL_TLS)
 
 try:
 	httpd.serve_forever()
