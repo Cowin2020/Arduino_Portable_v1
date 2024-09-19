@@ -87,6 +87,44 @@ class Handler(http.server.BaseHTTPRequestHandler):
 		self.wfile.write(bytes(",".join(fields) + "\n", "UTF-8"))
 		for row in cursor:
 			self.wfile.write(bytes(",".join(map(str, row)) + "\n", "UTF-8"))
+	def get_camps(self, url):
+		query = urllib.parse.parse_qs(url.query)
+		self.send_response_only(http.HTTPStatus.OK, "OK")
+		self.send_header("CONTENT-TYPE", "text/plain")
+		self.end_headers()
+		organisation = query.get("organisation")
+		if organisation:
+			cursor = database.cursor()
+			cursor.execute(
+				"SELECT DISTINCT camp "
+					"FROM data "
+					"WHERE organisation = ? "
+					"ORDER BY camp ASC",
+				(organisation,))
+			for device in cursor:
+				self.wfile.write(bytes(device[0], "UTF-8"))
+				self.wfile.write(bytes("\n", "UTF-8"))
+	def get_devices(self, url):
+		query = urllib.parse.parse_qs(url.query)
+		self.send_response_only(http.HTTPStatus.OK, "OK")
+		self.send_header("CONTENT-TYPE", "text/plain")
+		self.end_headers()
+		organisation = query.get("organisation")
+		camp = query.get("camp")
+		if organisation and camp:
+			self.send_response_only(http.HTTPStatus.OK, "OK")
+			self.send_header("CONTENT-TYPE", "text/plain")
+			self.end_headers()
+			cursor = database.cursor()
+			cursor.execute(
+				"SELECT DISTINCT device "
+					"FROM data "
+					"WHERE organisation = ? AND camp = ?"
+					"ORDER BY device ASC",
+				(organisation, camp))
+			for device in cursor:
+				self.wfile.write(bytes(device[0], "UTF-8"))
+				self.wfile.write(bytes("\n", "UTF-8"))
 	def post_data(self, table_name, fields):
 		body = self.content()
 		lines = body.decode("UTF-8").split("\r\n")
@@ -138,12 +176,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
 			self.send_header("CONTENT-TYPE", "image/png")
 			self.end_headers()
 			self.wfile.write(favicon)
-		elif self.path == "/devices.txt":
+		elif self.path == "/organisation.txt":
 			self.send_response_only(http.HTTPStatus.OK, "OK")
 			self.send_header("CONTENT-TYPE", "text/plain")
 			self.end_headers()
 			cursor = database.cursor()
-			cursor.execute("SELECT DISTINCT device FROM data ORDER BY device ASC")
+			cursor.execute("SELECT DISTINCT organisation FROM data ORDER BY organisation ASC")
 			for device in cursor:
 				self.wfile.write(bytes(device[0], "UTF-8"))
 				self.wfile.write(bytes("\n", "UTF-8"))
@@ -162,6 +200,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
 				self.get_data_CSV("data", ["temperature", "humidity"], url)
 			elif url.path == "/position.csv":
 				self.get_data_CSV("position", ["latitude", "longitude", "altitude"], url)
+			elif self.path == "/camps.txt":
+				self.get_camps(url)
+			elif self.path == "/devices.txt":
+				self.get_devices(url)
 			else:
 				self.send_error(404)
 	def do_POST(self):
