@@ -86,7 +86,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 		self.wfile.write(b"device,time,")
 		self.wfile.write(bytes(",".join(fields) + "\n", "UTF-8"))
 		for row in cursor:
-			self.wfile.write(bytes(",".join(row) + "\n", "UTF-8"))
+			self.wfile.write(bytes(",".join(map(str, row)) + "\n", "UTF-8"))
 	def post_data(self, table_name, fields):
 		body = self.content()
 		lines = body.decode("UTF-8").split("\r\n")
