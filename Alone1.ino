@@ -92,29 +92,6 @@ static String CSV_Data(struct Data const *const data) {
 		+ ',' + data->humidity;
 }
 
-static String pretty_Data(struct Data const *const data) {
-	char date[11], time[9];
-	String fulltime = show_time(&data->time);
-	if (fulltime.length() ==19) {
-		memcpy(date, fulltime.c_str(), 10);
-		date[10] = 0;
-		memcpy(time, fulltime.c_str() + 11, 8);
-		time[8] = 0;
-	}
-	else {
-		date[0] = '?';
-		date[1] = 0;
-		time[0] = '?';
-		time[1] = 0;
-	}
-	return String("Time:\r\n") + date + "\r\n" + time + "\r\n"
-		+ "Temperature:\r\n" + String(data->temperature) + "\r\n"
-#if SENSOR == SENSOR_BME280
-		+ "Pressure:\r\n" + String(data->pressure) + "\r\n"
-#endif
-		+ "Humidity:\r\n" + String(data->humidity) + "\r\n";
-}
-
 struct GPS {
 	DateTime time;
 	double latitude;
@@ -1740,8 +1717,34 @@ static void redraw_display(void) {
 			Monitor.println();
 		}
 	}
-	if (data_records.size())
-		Monitor.println(pretty_Data(&data_records.back()));
+	if (data_records.size()) {
+		Data const *const data = &data_records.back();
+		char date[11], time[9];
+		String fulltime = show_time(&data->time);
+		if (fulltime.length() ==19) {
+			memcpy(date, fulltime.c_str(), 10);
+			date[10] = 0;
+			memcpy(time, fulltime.c_str() + 11, 8);
+			time[8] = 0;
+		}
+		else {
+			date[0] = '?';
+			date[1] = 0;
+			time[0] = '?';
+			time[1] = 0;
+		}
+		Monitor.println("Time:");
+		Monitor.println(date);
+		Monitor.println(time);
+		Monitor.println("Temperature:");
+		Monitor.println(data->temperature);
+		#if SENSOR == SENSOR_BME280
+			Monitor.println("Pressure:");
+			Monitor.println(data->pressure);
+		#endif
+		Monitor.println("Humidity:");
+		Monitor.println(data->humidity);
+	}
 	Monitor.display();
 }
 
