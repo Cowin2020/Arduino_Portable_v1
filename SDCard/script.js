@@ -494,7 +494,7 @@ if (Alone.operator) {
 
 		function GPS_record(spacetime) {
 			if (spacetime === null || typeof spacetime === "undefined") return;
-			var time = new Date(spacetime.timestamp);
+			var time = new Date();
 			var timestamp = string_from_Date(time, "T");
 			var coords = spacetime.coords;
 			GPS.push([time, coords.latitude, coords.longitude, coords.altitude]);

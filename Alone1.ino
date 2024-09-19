@@ -931,7 +931,7 @@ R"HTML(
 					}
 					function record_GPS(spacetime) {
 						if (spacetime === null || typeof spacetime === "undefined") return;
-						var timestamp = string_from_Date(spacetime.timestamp, "T");
+						var timestamp = string_from_Date(Date.now(), "T");
 						var coords = spacetime.coords;
 						if (Alone.operator) {
 							upload_GPS(timestamp, coords);
