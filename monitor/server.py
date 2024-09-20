@@ -52,6 +52,22 @@ except:
 
 database = sqlite3.connect(config.database)
 
+def select_data(table_name, fields, url):
+	query = urllib.parse.parse_qs(url.query)
+	sql = "SELECT organisation, campaign, device, time, " + ", ".join(fields) +  " FROM " + table_name
+	bindings = []
+	organisation = query.get("organisation")
+	campaign = query.get("campaign")
+	device = query.get("device")
+	if device:
+		sql = sql + " WHERE device = ?"
+		bindings.append(device)
+	begin = query.get("begin")
+	sql = sql + " ORDER BY time ASC"
+	cursor = database.cursor()
+	cursor.execute(sql, bindings)
+	return cursor
+
 class Handler(http.server.BaseHTTPRequestHandler):
 	def content(self):
 		try:
@@ -59,31 +75,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
 		except:
 			length = -1
 		return self.rfile.read(length)
-	def get_data_DB(self, table_name, fields, url):
-		query = urllib.parse.parse_qs(url.query)
-		sql = "SELECT device, time, " + ", ".join(fields) +  " FROM " + table_name
-		bindings = []
-		device = query.get("device")
-		if device:
-			sql = sql + " WHERE device = ?"
-			bindings.append(device)
-		begin = query.get("begin")
-		sql = sql + " ORDER BY time ASC"
-		cursor = database.cursor()
-		cursor.execute(sql, bindings)
-		return cursor
 	def get_data_JSON(self, table_name, fields, url):
-		cursor = self.get_data_DB(table_name, fields, url)
+		cursor = select_data(table_name, fields, url)
 		self.send_response_only(http.HTTPStatus.OK, "OK")
 		self.send_header("CONTENT-TYPE", "application/json")
 		self.end_headers()
 		self.wfile.write(bytes(json.dumps(list(cursor)), "UTF-8"))
 	def get_data_CSV(self, table_name, fields, url):
-		cursor = self.get_data_DB(table_name, fields, url)
+		cursor = select_data(table_name, fields, url)
 		self.send_response_only(http.HTTPStatus.OK, "OK")
 		self.send_header("CONTENT-TYPE", "text/csv; charset=UTF-8")
 		self.end_headers()
-		self.wfile.write(b"device,time,")
+		self.wfile.write(b"organisation,campaign,device,time,")
 		self.wfile.write(bytes(",".join(fields) + "\n", "UTF-8"))
 		for row in cursor:
 			self.wfile.write(bytes(",".join(map(str, row)) + "\n", "UTF-8"))
@@ -176,6 +179,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
 			self.send_header("CONTENT-TYPE", "image/png")
 			self.end_headers()
 			self.wfile.write(favicon)
+		elif self.path == "/current.json":
+			self.send_response_only(http.HTTPStatus.OK, "OK")
+			self.send_header("CONTENT-TYPE", "application/json")
+			self.end_headers()
+			self.wfile.write(bytes(json.dumps(current), "UTF-8"))
 		elif self.path == "/organisation.txt":
 			self.send_response_only(http.HTTPStatus.OK, "OK")
 			self.send_header("CONTENT-TYPE", "text/plain")
@@ -185,11 +193,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
 			for device in cursor:
 				self.wfile.write(bytes(device[0], "UTF-8"))
 				self.wfile.write(bytes("\n", "UTF-8"))
-		elif self.path == "/current.json":
-			self.send_response_only(http.HTTPStatus.OK, "OK")
-			self.send_header("CONTENT-TYPE", "application/json")
-			self.end_headers()
-			self.wfile.write(bytes(json.dumps(current), "UTF-8"))
 		else:
 			url = urllib.parse.urlparse(self.path)
 			if url.path == "/data.json":
