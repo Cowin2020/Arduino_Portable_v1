@@ -96,10 +96,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
 		if organisation:
 			cursor = database.cursor()
 			cursor.execute(
-				"SELECT DISTINCT camp "
+				"SELECT DISTINCT campaign "
 					"FROM data "
 					"WHERE organisation = ? "
-					"ORDER BY camp ASC",
+					"ORDER BY campaign ASC",
 				(organisation,))
 			for device in cursor:
 				self.wfile.write(bytes(device[0], "UTF-8"))
@@ -110,8 +110,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
 		self.send_header("CONTENT-TYPE", "text/plain")
 		self.end_headers()
 		organisation = query.get("organisation")
-		camp = query.get("camp")
-		if organisation and camp:
+		campaign = query.get("campaign")
+		if organisation and campaign:
 			self.send_response_only(http.HTTPStatus.OK, "OK")
 			self.send_header("CONTENT-TYPE", "text/plain")
 			self.end_headers()
@@ -119,9 +119,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
 			cursor.execute(
 				"SELECT DISTINCT device "
 					"FROM data "
-					"WHERE organisation = ? AND camp = ?"
+					"WHERE organisation = ? AND campaign = ?"
 					"ORDER BY device ASC",
-				(organisation, camp))
+				(organisation, campaign))
 			for device in cursor:
 				self.wfile.write(bytes(device[0], "UTF-8"))
 				self.wfile.write(bytes("\n", "UTF-8"))
@@ -131,7 +131,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 		if len(lines) < 5:
 			return self.send_error(400, "malformat", "invalid number of rows: " + len(lines))
 		organisation = lines[0]
-		camp = lines[1]
+		campaign = lines[1]
 		device = lines[2]
 		password = lines[3]
 		parsed = list(csv.reader(lines[4:]))
@@ -145,10 +145,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
 			if len(row) != len(fields) + 1:
 				continue
 			cursor.execute(
-				"INSERT INTO " + table_name + " (organisation, camp, device, time, " + ", ".join(fields) + ") "
+				"INSERT INTO " + table_name + " (organisation, campaign, device, time, " + ", ".join(fields) + ") "
 					"VALUES (?, ?, ?, ?, " + ", ".join(map(lambda x: "?", fields)) + ") "
 					"ON CONFLICT DO NOTHING",
-				[organisation, camp, device] + row)
+				[organisation, campaign, device] + row)
 		database.commit()
 		self.send_response_only(http.HTTPStatus.OK, "OK")
 		self.send_header("CONTENT-TYPE", "text/plain")
@@ -215,9 +215,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
 			if organisation is None:
 				self.send_error(400, "INCORRECT CONTENT", "organisation is missed")
 				return
-			camp = queries.get("camp")
-			if camp is None:
-				self.send_error(400, "INCORRECT CONTENT", "camp is missed")
+			campaign = queries.get("campaign")
+			if campaign is None:
+				self.send_error(400, "INCORRECT CONTENT", "campaign is missed")
 				return
 			device = queries.get("device")
 			if device is None:

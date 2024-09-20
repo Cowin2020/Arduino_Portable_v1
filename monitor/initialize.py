@@ -11,12 +11,12 @@ try:
 	cursor.execute('''
 CREATE TABLE data (
 	organisation TEXT NOT NULL,
-	camp TEXT NOT NULL,
+	campaign TEXT NOT NULL,
 	device TEXT NOT NULL,
 	time DATETIME NOT NULL,
 	temperature REAL,
 	humidity REAL,
-	PRIMARY KEY (organisation, camp, device, time)
+	PRIMARY KEY (organisation, campaign, device, time)
 )''')
 except Exception as e:
 	print(e)
@@ -27,13 +27,13 @@ try:
 	cursor.execute('''
 CREATE TABLE position (
 	organisation TEXT NOT NULL,
-	camp TEXT NOT NULL,
+	campaign TEXT NOT NULL,
 	device TEXT NOT NULL,
 	time DATETIME NOT NULL,
 	latitude REAL,
 	longitude REAL,
 	altitude REAL,
-	PRIMARY KEY (organisation, camp, device, time)
+	PRIMARY KEY (organisation, campaign, device, time)
 )''')
 except Exception as e:
 	print(e)

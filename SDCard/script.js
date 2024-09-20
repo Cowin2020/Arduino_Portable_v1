@@ -65,7 +65,7 @@ document.body.style["margin"] = "1ex";
 document.body.appendChild(
 	$E("p", null, [
 		$T("Organisation: "), $T(Alone.organisation),
-		$T(" | Camp: "), $T(Alone.camp),
+		$T(" | Camp: "), $T(Alone.campaign),
 		$T(" | Device: "), $T(Alone.device)
 	])
 );
@@ -473,7 +473,7 @@ if (Alone.operator) {
 		function make_body(timestamp, coords) {
 			var body = new URLSearchParams;
 			body.append("organisation", Alone.organisation);
-			body.append("camp",         Alone.camp);
+			body.append("campaign",         Alone.campaign);
 			body.append("device",       Alone.device);
 			body.append("time",         timestamp);
 			body.append("latitude",     coords.latitude);
@@ -525,7 +525,7 @@ if (Alone.operator) {
 				event.preventDefault();
 				var identity =
 					Alone.organisation + "\r\n" +
-					Alone.camp + "\r\n" +
+					Alone.campaign + "\r\n" +
 					Alone.device + "\r\n" +
 					Alone.password + "\r\n";
 				fetch("data/recent.csv")
