@@ -34,7 +34,10 @@
 
 #define FONT_OFFSET 12
 
+static String show_time(DateTime const *);
 static void redraw_display(void);
+
+/* *************************************************************************** / ************************************ */
 
 static std::mutex mutex_hardware;
 #define DISPLAY_LOCK(lock) std::lock_guard<std::mutex> lock(mutex_hardware)
@@ -45,13 +48,13 @@ static std::mutex mutex_data;
 
 static std::mutex wait_measure_mutex;
 static std::condition_variable wait_measure_condition;
+static bool use_assigned_device_time = false;
+static DateTime assigned_device_time;
 
 static bool need_save = false;
 static bool need_reboot = false;
 
 static Adafruit_SSD1306 Monitor(128, 64);
-
-/* *************************************************************************** / ************************************ */
 
 static char const report_path[] = "report";
 static char const upload_data_path[] = "upload/data";
@@ -67,6 +70,7 @@ struct Field {
 
 struct Data {
 	DateTime time;
+	DateTime device_time;
 	float temperature;
 #if SENSOR == SENSOR_BME280
 	float pressure;
@@ -76,6 +80,7 @@ struct Data {
 
 static Field const data_fields[] = {
 	{"time", nullptr},
+	{"device_time", nullptr},
 	{"temperature", "\u2103"},
 #if SENSOR == SENSOR_BME280
 	{"pressure", "Pa"},
@@ -85,6 +90,7 @@ static Field const data_fields[] = {
 
 static String CSV_Data(struct Data const *const data) {
 	return show_time(&data->time)
+		+ ',' + show_time(&data->device_time)
 		+ ',' + data->temperature
 #if SENSOR == SENSOR_BME280
 		+ ',' + data->pressure
@@ -94,6 +100,8 @@ static String CSV_Data(struct Data const *const data) {
 
 struct GPS {
 	DateTime time;
+	DateTime browser_time;
+	DateTime position_time;
 	double latitude;
 	double longitude;
 	double altitude;
@@ -101,16 +109,20 @@ struct GPS {
 
 static Field const gps_fields[] = {
 	{"time", nullptr},
+	{"browser_time", nullptr},
+	{"position_time", nullptr},
 	{"latitude", "\u00B0"},
 	{"longitude", "\u00B0"},
 	{"altitude", "m"}
 };
 
 static String CSV_GPS(struct GPS const *const data) {
-	return show_time(&data->time) + ','
-		+ String(data->latitude,  7) + ','
-		+ String(data->longitude, 7) + ','
-		+ String(data->altitude,  7);
+	return show_time(&data->time)
+		+ ',' + show_time(&data->browser_time)
+		+ ',' + show_time(&data->position_time)
+		+ ',' + String(data->latitude,  7)
+		+ ',' + String(data->longitude, 7)
+		+ ',' + String(data->altitude,  7);
 }
 
 /* *************************************************************************** / ************************************ */
@@ -206,13 +218,13 @@ static bool clock_available(void) {
 	return external_clock_available || internal_clock_available;
 }
 
-static void set_time(DateTime const datetime) {
+static void set_time(DateTime const *const datetime) {
 	if (external_clock_available) {
 		DEVICE_LOCK(device_lock);
-		external_clock.adjust(datetime);
+		external_clock.adjust(*datetime);
 	}
 	else {
-		internal_clock.adjust(datetime);
+		internal_clock.adjust(*datetime);
 		internal_clock_available = true;
 	}
 }
@@ -233,6 +245,11 @@ static String show_time(DateTime const *const datetime) {
 		return String("?");
 }
 
+static DateTime round_up_time(DateTime const *const datetime, unsigned long int const interval = measure_interval) {
+	uint64_t shifted = (uint64_t)datetime->unixtime() * 1000 + (interval >> 1);
+	return DateTime((shifted - shifted % interval) / 1000);
+}
+
 /* *************************************************************************** / ************************************ */
 /* Measurement */
 
@@ -249,9 +266,15 @@ static std::deque<GPS> gps_records;
 static DateTime measure(void) {
 	Data data;
 	if (clock_available())
-		data.time = get_time();
+		data.device_time = get_time();
 	else
-		data.time = DateTime(0, 0, 0) + TimeSpan(millis() / 1000);
+		data.device_time = DateTime(0, 0, 0) + TimeSpan(millis() / 1000);
+	if (use_assigned_device_time) {
+		data.time = assigned_device_time;
+		use_assigned_device_time = false;
+	}
+	else
+		data.time = round_up_time(&data.device_time);
 	{
 		DEVICE_LOCK(device_lock);
 		#if SENSOR == SENSOR_BME280
@@ -293,7 +316,7 @@ static void measure_thread(void) {
 	for (;;)
 		try {
 			DateTime const datetime = measure();
-			unsigned int const t1 = measure_interval - (unsigned long int)datetime.secondstime() * 1000 % measure_interval;
+			unsigned int const t1 = measure_interval - (uint64_t)datetime.unixtime() * 1000 % measure_interval;
 			unsigned int const t2 = t1 < measure_interval >> 1 ? t1 + measure_interval : t1;
 			std::unique_lock<std::mutex> wait_lock(wait_measure_mutex);
 			wait_measure_condition.wait_for(wait_lock, std::chrono::duration<unsigned int, std::milli>(t2));
@@ -618,7 +641,6 @@ R"HTML(
 					+ date.getSeconds().toString().padStart(2, "0")
 			);
 		}
-		var MILLISECONDS_FROM_1970_TO_2000 = 946684800000; /* = Date.UTC(2000, 0, 1, 0, 0, 0, 0) */
 		document.body.textContent = "";
 		void function () {
 			var $p;
@@ -896,7 +918,7 @@ R"HTML(
 			function (event) {
 				if ($refresh_auto.checked) {
 					if (refresh_timer !== null) return;
-					refresh_timer = setInterval(data_load, Alone.measure_interval);
+					refresh_timer = setInterval(load_all, Alone.measure_interval);
 				}
 				else {
 					if (refresh_timer === null) return;
@@ -909,52 +931,63 @@ R"HTML(
 		if (Alone.operator)
 			void function () {
 				if ("geolocation" in window.navigator) if (window.isSecureContext) {
-					function make_body(timestamp, coords) {
+					function upload_GPS(planned_time, browser_time, position_time, coords) {
 						var body = new URLSearchParams;
-						body.append("organisation", Alone.organisation);
-						body.append("campaign",         Alone.campaign);
-						body.append("device",       Alone.device);
-						body.append("time",         timestamp);
-						body.append("latitude",     coords.latitude);
-						body.append("longitude",    coords.longitude);
-						body.append("altitude",     coords.altitude);
-						return body;
-					}
-					function upload_GPS(timestamp, coords) {
-						var body = make_body(timestamp, coords);
+						body.append("organisation",  Alone.organisation);
+						body.append("campaign",      Alone.campaign);
+						body.append("device",        Alone.device);
+						body.append("time",          planned_time);
+						body.append("browser_time",  browser_time);
+						body.append("position_time", position_time);
+						body.append("latitude",      coords.latitude);
+						body.append("longitude",     coords.longitude);
+						body.append("altitude",      coords.altitude);
 						var xhr = new XMLHttpRequest();
 						xhr.open("POST", "/gps/upload.exe", true);
 						xhr.send(body);
 					}
 					function report_GPS(timestamp, coords) {
-						var body = make_body(timestamp, coords);
+						var body = new URLSearchParams;
+						body.append("organisation", Alone.organisation);
+						body.append("campaign",     Alone.campaign);
+						body.append("device",       Alone.device);
+						body.append("time",         timestamp);
+						body.append("latitude",     coords.latitude);
+						body.append("longitude",    coords.longitude);
+						body.append("altitude",     coords.altitude);
 						var xhr = new XMLHttpRequest();
 						xhr.open("POST", Alone.report_URL, true);
 						xhr.send(body);
 					}
-					function record_GPS(spacetime) {
+					function record_GPS(planned_time, spacetime) {
 						if (spacetime === null || typeof spacetime === "undefined") return;
-						var timestamp = string_from_Date(Date.now(), "T");
+						var browser_time = string_from_Date(Date.now(), "T");
+						var position_time = string_from_Date(spacetime.timestamp, "T");
 						var coords = spacetime.coords;
 						if (Alone.operator) {
-							upload_GPS(timestamp, coords);
+							upload_GPS(planned_time, browser_time, position_time, coords);
 							if ($report_auto.checked)
-								report_GPS(timestamp, coords);
+								report_GPS(position_time, coords);
 						}
 					}
 					function get_GPS() {
+						var now_plus_half = Date.now() + Alone.measure_interval / 2;
+						var planned_time = string_from_Date(now_plus_half - now_plus_half % Alone.measure_interval, "T");
 						navigator.geolocation.getCurrentPosition(
-							record_GPS,
+							record_GPS.bind(this, planned_time),
 							function (error) {
 								console.error("GeoLocationError: ", error.message);
 							},
-							{timeout: 15000, enableHighAccuracy: true}
+							{
+								timeout: Alone.measure_interval / 4,
+								enableHighAccuracy: true
+							}
 						)
 					}
 					function start_GPS() {
 						setInterval(get_GPS, Alone.measure_interval);
 					}
-					setTimeout(start_GPS, (Date.now() - MILLISECONDS_FROM_1970_TO_2000) % Alone.measure_interval);
+					setTimeout(start_GPS, Date.now() % Alone.measure_interval);
 				}
 				void function () {
 					$upload.addEventListener(
@@ -989,7 +1022,7 @@ R"HTML(
 												return resolve();
 											};
 											xhr.open("POST", Alone.upload_data_URL, true);
-											xhr.send(identities + text);
+											xhr.send(identity + text);
 										}
 									);
 								}
@@ -1020,12 +1053,13 @@ R"HTML(
 												return resolve();
 											};
 											xhr.open("POST", Alone.upload_position_URL, true);
-											xhr.send(identity_lines + text);
+											xhr.send(identity + text);
 										}
 									);
 								}
 							).catch(
-								function () {
+								function (e) {
+									console.error(e);
 									alert("Failed to upload data");
 								}
 							);
@@ -1180,7 +1214,7 @@ R"HTML(
 		PsychicStreamResponse response(request, "text/csv");
 		response.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
 		response.beginSend();
-		response.println(data_header);
+		response.println(gps_header);
 		if (!data_records.empty())
 			response.println(CSV_Data(&data_records.back()));
 		return response.endSend();
@@ -1196,7 +1230,29 @@ R"HTML(
 			if (datetime.isValid())
 				gps.time = datetime;
 			else {
-				Serial.print("WARN: incorrect command time = ");
+				Serial.print("WARN: incorrect GPS time = ");
+				Serial.println(value);
+			}
+		}
+		parameter = request->getParam("browser_time");
+		if (parameter != nullptr) {
+			String const &value = parameter->value();
+			DateTime const datetime(value.c_str());
+			if (datetime.isValid())
+				gps.browser_time = datetime;
+			else {
+				Serial.print("WARN: incorrect GPS browser_time = ");
+				Serial.println(value);
+			}
+		}
+		parameter = request->getParam("position_time");
+		if (parameter != nullptr) {
+			String const &value = parameter->value();
+			DateTime const datetime(value.c_str());
+			if (datetime.isValid())
+				gps.position_time = datetime;
+			else {
+				Serial.print("WARN: incorrect GPS position_time = ");
 				Serial.println(value);
 			}
 		}
@@ -1538,7 +1594,7 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 			Serial.println(parameter->value());
 			DateTime const datetime(parameter->value().c_str());
 			if (datetime.isValid())
-				set_time(datetime);
+				set_time(&datetime);
 			else {
 				Serial.print("WARN: incorrect command time = ");
 				Serial.println(parameter->value());
@@ -1643,8 +1699,14 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 			upload_password = parameter->value();
 			need_save = true;
 		}
-		if (request->hasParam("measure")) {
-			Serial.println("INFO: command measure");
+		parameter = request->getParam("measure");
+		if (parameter != nullptr) {
+			Serial.print("INFO: command measure = ");
+			Serial.println(parameter->value());
+			if (parameter->value().length()) {
+				use_assigned_device_time = true;
+				assigned_device_time = DateTime(parameter->value().c_str());
+			}
 			wait_measure_condition.notify_all();
 		}
 		if (request->hasParam("delete")) {

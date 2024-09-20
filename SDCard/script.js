@@ -338,10 +338,10 @@ function GPS_show() {
 	}
 
 	var last = GPS[GPS.length - 1];
-	$GPS.time.textContent = string_from_Date(last[0]);
-	$GPS.latitude.textContent = last[1];
-	$GPS.longitude.textContent = last[2];
-	$GPS.altitude.textContent = last[3];
+	$GPS.time.textContent = string_from_Date(last[2]);
+	$GPS.latitude.textContent = last[3];
+	$GPS.longitude.textContent = last[4];
+	$GPS.altitude.textContent = last[5];
 	$GPS.table.hidden = false;
 
 	$GPS.plot.hidden = false;
@@ -353,8 +353,8 @@ function GPS_show() {
 					type: "scatter",
 					mode: "lines+markers",
 					marker: {color: "red"},
-					x: GPS.map(function (record) {return record[2];}),
-					y: GPS.map(function (record) {return record[1];})
+					x: GPS.map(function (record) {return record[4];}),
+					y: GPS.map(function (record) {return record[3];})
 				}
 			],
 			layout: {
@@ -470,47 +470,57 @@ if (Alone.operator) {
 	if (!("geolocation" in navigator))
 		document.body.appendChild($E("p", null, [$T("Geo-location is not support in this browser")]));
 	else {
-		function make_body(timestamp, coords) {
+		function GPS_upload(planned_time, browser_time, position_time, coords) {
 			var body = new URLSearchParams;
 			body.append("organisation", Alone.organisation);
-			body.append("campaign",         Alone.campaign);
+			body.append("campaign",     Alone.campaign);
+			body.append("device",       Alone.device);
+			body.append("time",          planned_time);
+			body.append("browser_time",  browser_time);
+			body.append("position_time", position_time);
+			body.append("latitude",     coords.latitude);
+			body.append("longitude",    coords.longitude);
+			body.append("altitude",     coords.altitude);
+			fetch("/gps/upload.exe", {method: "POST", body: body})
+				.catch(function () {});
+		}
+		function GPS_report(timestamp, coords) {
+			var body = new URLSearchParams;
+			body.append("organisation", Alone.organisation);
+			body.append("campaign",     Alone.campaign);
 			body.append("device",       Alone.device);
 			body.append("time",         timestamp);
 			body.append("latitude",     coords.latitude);
 			body.append("longitude",    coords.longitude);
 			body.append("altitude",     coords.altitude);
-			return body;
-		}
-		function GPS_upload(timestamp, coords) {
-			var body = make_body(timestamp, coords);
-			fetch("/gps/upload.exe", {method: "POST", body: body})
-				.catch(function () {});
-		}
-		function GPS_report(timestamp, coords) {
-			var body = make_body(timestamp, coords);
 			fetch(Alone.report_URL, {method: "POST", body: body})
 				.catch(function () {});
 		}
 
-		function GPS_record(spacetime) {
+		function GPS_record(planned_time, spacetime) {
 			if (spacetime === null || typeof spacetime === "undefined") return;
-			var time = new Date();
-			var timestamp = string_from_Date(time, "T");
+			var browser_time = string_from_Date(new Date(), "T");
+			var position_time = string_from_Date(new Date(spacetime.timestamp), "T");
 			var coords = spacetime.coords;
-			GPS.push([time, coords.latitude, coords.longitude, coords.altitude]);
+			GPS.push([planned_time, browser_time, position_time, coords.latitude, coords.longitude, coords.altitude]);
 			GPS_show();
-			GPS_upload(timestamp, coords);
+			GPS_upload(planned_time, browser_time, position_time, coords);
 			if ($auto_report.checked)
-				GPS_report(timestamp, coords);
+				GPS_report(position_time, coords);
 		}
 
 		function GPS_request() {
+			var now_plus_half = Date.now() - MILLISECONDS_FROM_1970_TO_2000 + Alone.measure_interval / 2;
+			var planned_time = string_from_Date(new Date(now_plus_half - now_plus_half % Alone.measure_interval), "T");
 			navigator.geolocation.getCurrentPosition(
-				GPS_record,
+				record_GPS.bind(this, planned_time),
 				function (error) {
 					console.error("GeoLocationError: ", error.message);
 				},
-				{timeout: 15000, enableHighAccuracy: true}
+				{
+					timeout: Alone.measure_interval / 4,
+					enableHighAccuracy: true
+				}
 			)
 		}
 		function GPS_start() {

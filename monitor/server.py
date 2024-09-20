@@ -9,6 +9,8 @@ import ssl
 import sqlite3
 
 current_fields = ["time", "latitude", "longitude", "altitude"]
+data_fields = ["device_time", "temperature", "humidity"]
+position_fields = ["browser_time", "position_time", "latitude", "longitude", "altitude"]
 
 current = dict()
 
@@ -132,7 +134,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 		body = self.content()
 		lines = body.decode("UTF-8").split("\r\n")
 		if len(lines) < 5:
-			return self.send_error(400, "malformat", "invalid number of rows: " + len(lines))
+			return self.send_error(400, "too few rows: " + len(lines))
 		organisation = lines[0]
 		campaign = lines[1]
 		device = lines[2]
@@ -196,13 +198,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
 		else:
 			url = urllib.parse.urlparse(self.path)
 			if url.path == "/data.json":
-				self.get_data_JSON("data", ["temperature", "humidity"], url)
+				self.get_data_JSON("data", data_fields, url)
 			elif url.path == "/position.json":
-				self.get_data_JSON("position", ["latitude", "longitude", "altitude"], url)
+				self.get_data_JSON("position", position_fields, url)
 			elif url.path == "/data.csv":
-				self.get_data_CSV("data", ["temperature", "humidity"], url)
+				self.get_data_CSV("data", data_fields, url)
 			elif url.path == "/position.csv":
-				self.get_data_CSV("position", ["latitude", "longitude", "altitude"], url)
+				self.get_data_CSV("position", position_fields, url)
 			elif self.path == "/camps.txt":
 				self.get_camps(url)
 			elif self.path == "/devices.txt":
@@ -216,24 +218,24 @@ class Handler(http.server.BaseHTTPRequestHandler):
 			queries = {k: v[0] for k, v in urllib.parse.parse_qs(body.decode("UTF-8")).items()}
 			organisation = queries.get("organisation")
 			if organisation is None:
-				self.send_error(400, "INCORRECT CONTENT", "organisation is missed")
+				self.send_error(400, "organisation is missed")
 				return
 			campaign = queries.get("campaign")
 			if campaign is None:
-				self.send_error(400, "INCORRECT CONTENT", "campaign is missed")
+				self.send_error(400, "campaign is missed")
 				return
 			device = queries.get("device")
 			if device is None:
-				self.send_error(400, "INCORRECT CONTENT", "device is missed")
+				self.send_error(400, "device is missed")
 				return
 			current[device] = [queries.get(field) for field in current_fields]
 			self.send_response_only(http.HTTPStatus.NO_CONTENT)
 			self.send_header("ACCESS-CONTROL-ALLOW-ORIGIN", "*")
 			self.end_headers()
 		elif self.path == "/upload/data":
-			self.post_data("data", ["temperature", "humidity"])
+			self.post_data("data", data_fields)
 		elif self.path == "/upload/position":
-			self.post_data("position", ["latitude", "longitude", "altitude"])
+			self.post_data("position", position_fields)
 		else:
 			self.send_error(404)
 

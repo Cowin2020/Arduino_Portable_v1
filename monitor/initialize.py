@@ -14,6 +14,7 @@ CREATE TABLE data (
 	campaign TEXT NOT NULL,
 	device TEXT NOT NULL,
 	time DATETIME NOT NULL,
+	device_time DATETIME,
 	temperature REAL,
 	humidity REAL,
 	PRIMARY KEY (organisation, campaign, device, time)
@@ -30,6 +31,8 @@ CREATE TABLE position (
 	campaign TEXT NOT NULL,
 	device TEXT NOT NULL,
 	time DATETIME NOT NULL,
+	browser_time DATETIME,
+	position_time DATETIME,
 	latitude REAL,
 	longitude REAL,
 	altitude REAL,
