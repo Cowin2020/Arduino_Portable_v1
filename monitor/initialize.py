@@ -16,6 +16,7 @@ CREATE TABLE data (
 	time DATETIME NOT NULL,
 	device_time DATETIME,
 	temperature REAL,
+	pressure REAL,
 	humidity REAL,
 	PRIMARY KEY (organisation, campaign, device, time)
 )''')

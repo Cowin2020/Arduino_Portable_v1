@@ -20,9 +20,10 @@ function $E(name, attributes, children) {
 	return element;
 }
 
-function string_from_Date(date, seperator = " ") {
+function string_from_Date(value, seperator = " ") {
+	var date = new Date(value);
 	return (
-		date.getFullYear().toString()
+		new Date(date).getFullYear().toString()
 			+ "-"
 			+ (date.getMonth() + 1).toString().padStart(2, "0")
 			+ "-"
@@ -71,7 +72,7 @@ document.body.appendChild(
 );
 
 var $dashboard = new Object;
-$dashboard.items = new Array(Alone.data_fields.length - 1);
+$dashboard.items = new Array(Alone.data_fields.length - Alone.data_meta);
 $dashboard.root = $E("div", {"id": "dashboard"}, [
 	$dashboard.nodata = $E("div", {"id": "nodata"}, [
 		$T("No data")
@@ -81,13 +82,13 @@ $dashboard.root = $E("div", {"id": "dashboard"}, [
 		$dashboard.time = $E("span")
 	]),
 	$E("div", {"id": "items"},
-		Alone.data_fields.slice(1).map(
+		Alone.data_fields.slice(2).map(
 			function (field, index) {
 				return $E("div", {"class": "item"}, [
 					$E("span", {"class": "name"}, [$T(field.name)]),
 					$E("span", {"class": "value"}, [
 						$dashboard.items[index] = $E("span", {"class": "value"}),
-						$E("span", {"class": "unit"}, [$T(field.unit)])
+						$E("span", {"class": "unit"}, [$T(field.unit ? field.unit : "")])
 					])
 				]);
 			}
@@ -112,9 +113,8 @@ function show_dashboard(row) {
 		var date_time = row[0].split("T");
 		$dashboard.date.textContent = date_time[0];
 		$dashboard.time.textContent = date_time[1];
-		for (var i = 1; i < Alone.data_fields.length; ++i) {
-			$dashboard.items[i - 1].textContent = row[i];
-		}
+		for (var i = Alone.data_meta; i < Alone.data_fields.length; ++i)
+			$dashboard.items[i - Alone.data_meta].textContent = row[i];
 	}
 }
 
@@ -197,7 +197,7 @@ document.body.appendChild(
 	])
 );
 
-var $plots = Alone.data_fields.slice(1).map(
+var $plots = Alone.data_fields.slice(Alone.data_meta).map(
 	function () {
 		var $plot = $E("div", {"class": "plot"});
 		$plot.hidden = true;
@@ -249,10 +249,7 @@ function data_plots(rows) {
 	if (!Array.isArray(rows))
 		hide_plots();
 	else {
-		function column(n) {
-			return rows.map(function (row) {return row[n]});
-		}
-		var time = column(0);
+		var time = rows.map(function (row) {return new Date(row[0]);});
 		var layout = {
 			uirevision: true,
 			dragmode: false,
@@ -261,14 +258,18 @@ function data_plots(rows) {
 		var config = {
 			responsive: true
 		};
-		Alone.data_fields.slice(1).forEach(
+		Alone.data_fields.slice(Alone.data_meta).forEach(
 			function (field, index) {
 				$plots[index].hidden = false;
+				if (field.unit == null)
+					var title = field.name;
+				else
+					var title = field.name + " (" + field.unit + ")";
 				Plotly.react(
 					$plots[index],
 					{
-						data: [{x: time, y: column(index + 1)}],
-						layout: {title: field.name + " (" + field.unit + ")", ...layout},
+						data: [{x: time, y: rows.map(function (row) {return row[index + Alone.data_meta];})}],
+						layout: {title: title},
 						config: config
 					}
 				);
@@ -330,6 +331,10 @@ function data_load() {
 
 var GPS = new Array;
 
+var GPS_index_latitude = Alone.gps_fields.findIndex(function (field) {return field.name === "latitude";});
+var GPS_index_longitude = Alone.gps_fields.findIndex(function (field) {return field.name === "longitude";});
+var GPS_index_altitude = Alone.gps_fields.findIndex(function (field) {return field.name === "altitude";});
+
 function GPS_show() {
 	if (!GPS.length) {
 		$GPS.table.hidden = true;
@@ -339,9 +344,9 @@ function GPS_show() {
 
 	var last = GPS[GPS.length - 1];
 	$GPS.time.textContent = string_from_Date(last[2]);
-	$GPS.latitude.textContent = last[3];
-	$GPS.longitude.textContent = last[4];
-	$GPS.altitude.textContent = last[5];
+	$GPS.latitude.textContent = last[GPS_index_latitude];
+	$GPS.longitude.textContent = last[GPS_index_longitude];
+	$GPS.altitude.textContent = last[GPS_index_altitude];
 	$GPS.table.hidden = false;
 
 	$GPS.plot.hidden = false;
@@ -353,8 +358,8 @@ function GPS_show() {
 					type: "scatter",
 					mode: "lines+markers",
 					marker: {color: "red"},
-					x: GPS.map(function (record) {return record[4];}),
-					y: GPS.map(function (record) {return record[3];})
+					x: GPS.map(function (record) {return record[GPS_index_longitude];}),
+					y: GPS.map(function (record) {return record[GPS_index_latitude];})
 				}
 			],
 			layout: {
@@ -419,11 +424,11 @@ function GPS_load() {
 					if (!line || typeof line !== "string") continue;
 					var fields = line.split(",");
 					var record = new Array;
-					if (fields.length > 0) {
-						record.push(new Date(fields[0]));
-						for (var j = 1; j < fields.length; ++j)
+					for (var j = 0; j < fields.length; ++j)
+						if (Alone.gps_fields[j].unit)
 							record.push(Number.parseFloat(fields[j]));
-					}
+						else
+							record.push(fields[j]);
 					records.push(record);
 				}
 				GPS = records;
@@ -499,8 +504,8 @@ if (Alone.operator) {
 
 		function GPS_record(planned_time, spacetime) {
 			if (spacetime === null || typeof spacetime === "undefined") return;
-			var browser_time = string_from_Date(new Date(), "T");
-			var position_time = string_from_Date(new Date(spacetime.timestamp), "T");
+			var browser_time = string_from_Date(Date.now(), "T");
+			var position_time = string_from_Date(spacetime.timestamp, "T");
 			var coords = spacetime.coords;
 			GPS.push([planned_time, browser_time, position_time, coords.latitude, coords.longitude, coords.altitude]);
 			GPS_show();
@@ -511,9 +516,9 @@ if (Alone.operator) {
 
 		function GPS_request() {
 			var now_plus_half = Date.now() - MILLISECONDS_FROM_1970_TO_2000 + Alone.measure_interval / 2;
-			var planned_time = string_from_Date(new Date(now_plus_half - now_plus_half % Alone.measure_interval), "T");
+			var planned_time = string_from_Date(now_plus_half - now_plus_half % Alone.measure_interval, "T");
 			navigator.geolocation.getCurrentPosition(
-				record_GPS.bind(this, planned_time),
+				GPS_record.bind(this, planned_time),
 				function (error) {
 					console.error("GeoLocationError: ", error.message);
 				},
@@ -603,7 +608,7 @@ if (Alone.operator) {
 	void function () {
 		/* set device time */
 		var body = new URLSearchParams();
-		body.append("time", string_from_Date(new Date(), "T"));
+		body.append("time", string_from_Date(Date.now(), "T"));
 		fetch(
 			"setting.exe",
 			{

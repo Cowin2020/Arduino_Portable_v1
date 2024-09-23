@@ -80,13 +80,15 @@ struct Data {
 
 static Field const data_fields[] = {
 	{"time", nullptr},
-	{"device_time", nullptr},
+	{"device time", nullptr},
 	{"temperature", "\u2103"},
 #if SENSOR == SENSOR_BME280
 	{"pressure", "Pa"},
 #endif
 	{"humidity", "%"}
 };
+
+static size_t const data_meta = 2;
 
 static String CSV_Data(struct Data const *const data) {
 	return show_time(&data->time)
@@ -109,12 +111,14 @@ struct GPS {
 
 static Field const gps_fields[] = {
 	{"time", nullptr},
-	{"browser_time", nullptr},
-	{"position_time", nullptr},
+	{"browser time", nullptr},
+	{"position time", nullptr},
 	{"latitude", "\u00B0"},
 	{"longitude", "\u00B0"},
 	{"altitude", "m"}
 };
+
+static size_t gps_meta = 3;
 
 static String CSV_GPS(struct GPS const *const data) {
 	return show_time(&data->time)
@@ -1086,55 +1090,71 @@ R"HTML(
 		response.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
 		response.beginSend();
 		response.write(reinterpret_cast<uint8_t const *>(home_html_1), sizeof home_html_1 - 1);
-		response.print("\t\t\torganisation: '");
+		response.print("\t\t\torganisation: \"");
 		response.print(javascript_escape(organisation_name));
-		response.print("',\r\n\t\t\tcampaign: '");
+		response.print("\",\r\n\t\t\tcampaign: \"");
 		response.print(javascript_escape(campaign_name));
-		response.print("',\r\n\t\t\tdevice: '");
+		response.print("\",\r\n\t\t\tdevice: \"");
 		response.print(javascript_escape(device_name));
-		response.print("',\r\n\t\t\tmeasure_interval: '");
+		response.print("\",\r\n\t\t\tmeasure_interval: \"");
 		response.print(measure_interval);
-		response.print("',\r\n\t\t\tdata_file: '");
+		response.print("\",\r\n\t\t\tdata_file: \"");
 		response.print(javascript_escape(data_filename));
-		response.print("',\r\n\t\t\tgps_file: '");
+		response.print("\",\r\n\t\t\tgps_file: \"");
 		response.print(javascript_escape(gps_filename));
-		response.print("',\r\n\t\t\tmonitor_URL: '");
+		response.print("\",\r\n\t\t\tmonitor_URL: \"");
 		response.print(javascript_escape(monitor_URL));
-		response.print("',\r\n\t\t\treport_URL: '");
+		response.print("\",\r\n\t\t\treport_URL: \"");
 		response.print(javascript_escape(monitor_URL + report_path));
-		response.print("',\r\n\t\t\tupload_data_URL: '");
+		response.print("\",\r\n\t\t\tupload_data_URL: \"");
 		response.print(javascript_escape(monitor_URL + upload_data_path));
-		response.print("',\r\n\t\t\tupload_position_URL: '");
+		response.print("\",\r\n\t\t\tupload_position_URL: \"");
 		response.print(javascript_escape(monitor_URL + upload_position_path));
-		response.print("',\r\n\t\t\tpassword: '");
+		response.print("\",\r\n\t\t\tpassword: \"");
 		response.print(javascript_escape(upload_password));
-		response.print("',\r\n\t\t\tdata_fields: [");
+		response.print("\",\r\n\t\t\tdata_fields: [");
 		bool first = true;
 		for (Field const field: data_fields) {
 			if (first)
 				first = false;
 			else
 				response.print(", ");
-			response.print("{name:\'");
+			response.print("{name:\"");
 			response.print(javascript_escape(field.name));
-			response.print("\',unit:\'");
-			response.print(javascript_escape(field.unit));
-			response.print("\'}");
+			response.print("\",unit:");
+			if (field.unit == nullptr)
+				response.print("null");
+			else {
+				response.print('"');
+				response.print(javascript_escape(field.unit));
+				response.print('"');
+			}
+			response.print("}");
 		}
-		response.print("],\r\n\t\t\tgps_fields: [");
+		response.print("],\r\n\t\t\tdata_meta: ");
+		response.print(data_meta);
+		response.print(",\r\n\t\t\tgps_fields: [");
 		first = true;
 		for (Field const field: gps_fields) {
 			if (first)
 				first = false;
 			else
 				response.print(", ");
-			response.print("{name:\'");
+			response.print("{name:\"");
 			response.print(javascript_escape(field.name));
-			response.print("\',unit:\'");
-			response.print(javascript_escape(field.unit));
-			response.print("\'}");
+			response.print("\",unit:");
+			if (field.unit == nullptr)
+				response.print("null");
+			else {
+				response.print('"');
+				response.print(javascript_escape(field.unit));
+				response.print('"');
+			}
+			response.print("}");
 		}
-		response.print("]\r\n");
+		response.print("],\r\n\t\t\tgps_meta: ");
+		response.print(gps_meta);
+		response.print("\r\n");
 		response.write(reinterpret_cast<uint8_t const *>(home_html_2), sizeof home_html_2 - 1);
 		return response.endSend();
 	}
