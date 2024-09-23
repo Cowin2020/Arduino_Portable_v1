@@ -6,6 +6,7 @@ Board
 	Board Revision: TTGo LoRa32-OLED (1.6.1)
 Libraries:
 	RTClib (2.1.4)
+	Adafruit BusIO (1.16.1)
 	Adafruit SSD1306 (2.5.11)
 		Adafruit GFX Library (1.11.10)
 	Adafruit BME280 (2.2.4) optional
@@ -13,6 +14,7 @@ Libraries:
 		Adafruit SH11x Library (2.1.11)
 		Adafruit Unified Sensor (1.1.14)
 	PsychicHttp (1.2.1)
+		UrlEncode (1.0.1)
 		ArduinoJson (7.2.0)
 
 Setup:
