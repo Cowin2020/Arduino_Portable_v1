@@ -313,17 +313,21 @@ static DateTime measure(void) {
 	}
 
 	redraw_display();
-	return data.time;
+	return data.device_time;
+}
+
+static void wait_to_measure(DateTime const now) {
+	unsigned int const t1 = measure_interval - (uint64_t)now.unixtime() * 1000 % measure_interval;
+	unsigned int const t2 = t1 < measure_interval >> 1 ? t1 + measure_interval : t1;
+	std::unique_lock<std::mutex> wait_lock(wait_measure_mutex);
+	wait_measure_condition.wait_for(wait_lock, std::chrono::duration<unsigned int, std::milli>(t2));
 }
 
 static void measure_thread(void) {
+	wait_to_measure(get_time());
 	for (;;)
 		try {
-			DateTime const datetime = measure();
-			unsigned int const t1 = measure_interval - (uint64_t)datetime.unixtime() * 1000 % measure_interval;
-			unsigned int const t2 = t1 < measure_interval >> 1 ? t1 + measure_interval : t1;
-			std::unique_lock<std::mutex> wait_lock(wait_measure_mutex);
-			wait_measure_condition.wait_for(wait_lock, std::chrono::duration<unsigned int, std::milli>(t2));
+			wait_to_measure(measure());
 		}
 		catch (...) {
 			Serial.println("ERROR: exception in measurement");
