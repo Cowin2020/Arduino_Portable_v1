@@ -1,30 +1,19 @@
-Required libraries:
-	RTClib
-	Adafruit SSD1306
-	Adafruit BME280
-	Adafruit SHT4x Library
-	ESP32_HTTPS_Server
-		in file
-			src/HTTPConnection.hpp
-		replace
-			#include <hwcrypto/sha.h>
-		to
-			#include <sha/sha_parallel_engine.h>
-	PsychicHttp
-		for 1.1.0
-		in file
-			src/PsychicHttpsServer.cpp
-		replace at line 28
-			this->ssl_config.cacert_pem = (uint8_t *)cert;
-			this->ssl_config.cacert_len = strlen(cert)+1;
-		to
-		#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 2)
-			this->ssl_config.servercert = (uint8_t *)cert;
-			this->ssl_config.servercert_len = strlen(cert)+1;
-		#else
-			this->ssl_config.cacert_pem = (uint8_t *)cert;
-			this->ssl_config.cacert_len = strlen(cert)+1;
-		#endif
+Board
+	Additional Boards Manager URLs:
+		https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_dev_index.json
+	Boards Manager: esp32 (3.0.5)
+	Board: TTGo LoRa32-OLED
+	Board Revision: TTGo LoRa32-OLED (1.6.1)
+Libraries:
+	RTClib (2.1.4)
+	Adafruit SSD1306 (2.5.11)
+		Adafruit GFX Library (1.11.10)
+	Adafruit BME280 (2.2.4) optional
+	Adafruit SHT4x Library (1.0.5) optional
+		Adafruit SH11x Library (2.1.11)
+		Adafruit Unified Sensor (1.1.14)
+	PsychicHttp (1.2.1)
+		ArduinoJson (7.2.0)
 
 Setup:
 	Copy files in "SDCard" to SD card if SD card is used
@@ -34,8 +23,8 @@ Setup:
 	SENSOR:
 		either "SENSOR_BME280" or "SENSOR_SHT40"
 
-	device_name:
-		Identity of the device
+organisation_name, campaign_name, device_name:
+		Identities of the organisation, campaign and device
 
 	use_AP_mode:
 		"true" to provide WiFi access point, or
@@ -46,6 +35,12 @@ Setup:
 
 	STA_SSID, STA_PASS:
 		The SSID and password for the existing WiFi to connect
+
+	monitor_URL:
+		URL of monitor server
+
+	upload_password:
+		Password for uploading data to monitor server
 
 	start_wait_time:
 		Milliseconds delay after device boot-up
@@ -64,6 +59,9 @@ Setup:
 
 	reinitialize_interval:
 		Milliseconds delay to re-try after error on start up
+
+	reset_pin:
+		Pin to control the loading of settings
 
 To modify elements:
 	Edit "Alone1.ino":
