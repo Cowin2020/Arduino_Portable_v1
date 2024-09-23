@@ -515,8 +515,17 @@ if (Alone.operator) {
 		}
 
 		function GPS_request() {
-			var now_plus_half = Date.now() - MILLISECONDS_FROM_1970_TO_2000 + Alone.measure_interval / 2;
-			var planned_time = string_from_Date(now_plus_half - now_plus_half % Alone.measure_interval, "T");
+			var now_plus_half =
+				Date.now()
+					- MILLISECONDS_FROM_1970_TO_2000
+					+ Alone.measure_interval / 2;
+			var planned_time =
+				string_from_Date(
+					now_plus_half
+						- now_plus_half % Alone.measure_interval
+						+ MILLISECONDS_FROM_1970_TO_2000,
+					"T"
+				);
 			navigator.geolocation.getCurrentPosition(
 				GPS_record.bind(this, planned_time),
 				function (error) {
@@ -613,7 +622,8 @@ if (Alone.operator) {
 			"setting.exe",
 			{
 				method: "POST",
-				body: body
+				body: body,
+				redirect: "manual"
 			}
 		);
 	}();

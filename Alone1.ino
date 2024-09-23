@@ -293,7 +293,7 @@ static DateTime measure(void) {
 		#endif
 	}
 	String const data_string = CSV_Data(&data);
-	Serial.print("Measure ");
+	Serial.print("INFO: Measure ");
 	Serial.println(data_string);
 
 	if (data_records.size() >= records_max_size)
@@ -649,6 +649,7 @@ R"HTML(
 					+ date.getSeconds().toString().padStart(2, "0")
 			);
 		}
+		var MILLISECONDS_FROM_1970_TO_2000 = 946684800000; /* = Date.UTC(2000, 0, 1, 0, 0, 0, 0) */
 		document.body.textContent = "";
 		void function () {
 			var $p;
@@ -979,8 +980,17 @@ R"HTML(
 						}
 					}
 					function get_GPS() {
-						var now_plus_half = Date.now() + Alone.measure_interval / 2;
-						var planned_time = string_from_Date(now_plus_half - now_plus_half % Alone.measure_interval, "T");
+						var now_plus_half =
+							Date.now()
+								- MILLISECONDS_FROM_1970_TO_2000
+								+ Alone.measure_interval / 2;
+						var planned_time =
+							string_from_Date(
+								now_plus_half
+									- now_plus_half % Alone.measure_interval
+									+ MILLISECONDS_FROM_1970_TO_2000,
+								"T"
+							);
 						navigator.geolocation.getCurrentPosition(
 							record_GPS.bind(this, planned_time),
 							function (error) {
@@ -995,7 +1005,7 @@ R"HTML(
 					function start_GPS() {
 						setInterval(get_GPS, Alone.measure_interval);
 					}
-					setTimeout(start_GPS, Date.now() % Alone.measure_interval);
+					setTimeout(start_GPS, (Date.now() - MILLISECONDS_FROM_1970_TO_2000) % Alone.measure_interval);
 				}
 				void function () {
 					$upload.addEventListener(
@@ -1322,6 +1332,9 @@ R"HTML(
 				}
 			}
 		}
+		String const GPS_string = CSV_GPS(&gps);
+		Serial.print("INFO: GPS ");
+		Serial.println(GPS_string);
 
 		if (gps_records.size() >= records_max_size)
 			gps_records.pop_front();
