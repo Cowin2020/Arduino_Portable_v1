@@ -945,7 +945,7 @@ R"HTML(
 		if (Alone.operator)
 			void function () {
 				if ("geolocation" in window.navigator) if (window.isSecureContext) {
-					function upload_GPS(planned_time, browser_time, position_time, coords) {
+					function GPS_upload(planned_time, browser_time, position_time, coords) {
 						var body = new URLSearchParams;
 						body.append("organisation",  Alone.organisation);
 						body.append("campaign",      Alone.campaign);
@@ -979,7 +979,7 @@ R"HTML(
 						var position_time = string_from_Date(spacetime.timestamp, "T");
 						var coords = spacetime.coords;
 						if (Alone.operator) {
-							upload_GPS(planned_time, browser_time, position_time, coords);
+							GPS_upload(planned_time, browser_time, position_time, coords);
 							if ($report_auto.checked)
 								GPS_report(position_time, coords);
 						}
@@ -1033,7 +1033,7 @@ R"HTML(
 											return reject();
 										return resolve(text);
 									};
-									xhr.open("GET", "data/recent.csv", true);
+									xhr.open("GET", Alone.data_file, true);
 									xhr.send(null);
 								}
 							).then(
@@ -1062,7 +1062,7 @@ R"HTML(
 													return reject();
 												return resolve(text);
 											};
-											xhr.open("GET", "gps/recent.csv", true);
+											xhr.open("GET", Alone.gps_file, true);
 											xhr.send(null);
 										}
 									);
@@ -1826,7 +1826,13 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 		if (SD_card_exist) {
 			HTTPd .serveStatic("/", SD, "/", "max-age=604800");
 			HTTPSd.serveStatic("/", SD, "/", "max-age=604800");
-		};
+		}
+		else {
+			HTTPd .on(data_filename, HTTP_GET, data_recent_handle);
+			HTTPSd.on(data_filename, HTTP_GET, data_recent_handle);
+			HTTPd .on(gps_filename,  HTTP_GET, gps_recent_handle);
+			HTTPSd.on(gps_filename,  HTTP_GET, gps_recent_handle);
+		}
 	}
 }
 
