@@ -622,6 +622,7 @@ R"HTML(
 	(function(SD_load_error){
 		"use strict";
 		console.log("Failed to load script from SD card:", SD_load_error);
+		var GPS_watch = false;
 		function $T(string) {
 			return document.createTextNode(string);
 		}
@@ -959,7 +960,7 @@ R"HTML(
 						xhr.open("POST", "/gps/upload.exe", true);
 						xhr.send(body);
 					}
-					function report_GPS(timestamp, coords) {
+					function GPS_report(timestamp, coords) {
 						var body = new URLSearchParams;
 						body.append("organisation", Alone.organisation);
 						body.append("campaign",     Alone.campaign);
@@ -972,7 +973,7 @@ R"HTML(
 						xhr.open("POST", Alone.report_URL, true);
 						xhr.send(body);
 					}
-					function record_GPS(planned_time, spacetime) {
+					function GPS_record(planned_time, spacetime) {
 						if (spacetime === null || typeof spacetime === "undefined") return;
 						var browser_time = string_from_Date(Date.now(), "T");
 						var position_time = string_from_Date(spacetime.timestamp, "T");
@@ -980,10 +981,17 @@ R"HTML(
 						if (Alone.operator) {
 							upload_GPS(planned_time, browser_time, position_time, coords);
 							if ($report_auto.checked)
-								report_GPS(position_time, coords);
+								GPS_report(position_time, coords);
 						}
 					}
-					function get_GPS() {
+					function GPS_error(error) {
+						console.error("GeoLocationError: ", error.message);
+					}
+					var GPS_options = {
+						timeout: Alone.measure_interval / 4,
+						enableHighAccuracy: true
+					};
+					function GPS_request() {
 						var now_plus_half =
 							Date.now()
 								- MILLISECONDS_FROM_1970_TO_2000
@@ -995,21 +1003,16 @@ R"HTML(
 									+ MILLISECONDS_FROM_1970_TO_2000,
 								"T"
 							);
-						navigator.geolocation.getCurrentPosition(
-							record_GPS.bind(this, planned_time),
-							function (error) {
-								console.error("GeoLocationError: ", error.message);
-							},
-							{
-								timeout: Alone.measure_interval / 4,
-								enableHighAccuracy: true
-							}
-						)
+						navigator.geolocation.getCurrentPosition(GPS_record.bind(this, planned_time), GPS_error, GPS_options)
 					}
-					function start_GPS() {
-						setInterval(get_GPS, Alone.measure_interval);
+					function GPS_start() {
+						setInterval(GPS_request, Alone.measure_interval);
 					}
-					setTimeout(start_GPS, (Date.now() - MILLISECONDS_FROM_1970_TO_2000) % Alone.measure_interval);
+					setTimeout(GPS_start, (Date.now() - MILLISECONDS_FROM_1970_TO_2000) % Alone.measure_interval);
+					function GPS_callback(spacetime) {
+						GPS_record(string_from_Date(spacetime.timestamp), spacetime);
+					}
+					if (GPS_watch) navigator.geolocation.watchPosition(GPS_callback, GPS_error, GPS_options);
 				}
 				void function () {
 					$upload.addEventListener(
