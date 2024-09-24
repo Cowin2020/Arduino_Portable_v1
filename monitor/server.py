@@ -1,5 +1,6 @@
 import config
 
+import re
 import csv
 import json
 import urllib.parse
@@ -9,7 +10,7 @@ import ssl
 import sqlite3
 
 current_fields = ["time", "latitude", "longitude", "altitude"]
-data_fields = ["device_time", "temperature", "humidity"]
+data_fields = ["device_time", "clock_synchronized", "temperature", "humidity"]
 position_fields = ["browser_time", "position_time", "latitude", "longitude", "altitude"]
 
 current = dict()
@@ -52,19 +53,18 @@ except:
 			0x00, 0x02, 0x00, 0x01,
 			0x73, 0x75, 0x01, 0x18])
 
+def to_CSV_value(x):
+	if x is None:
+		return ""
+	else:
+		return str(x)
+
 database = sqlite3.connect(config.database)
 
-def select_data(table_name, fields, url):
-	query = urllib.parse.parse_qs(url.query)
-	sql = "SELECT organisation, campaign, device, time, " + ", ".join(fields) +  " FROM " + table_name
-	bindings = []
-	organisation = query.get("organisation")
-	campaign = query.get("campaign")
-	device = query.get("device")
-	if device:
-		sql = sql + " WHERE device = ?"
-		bindings.append(device)
-	begin = query.get("begin")
+def select_data(table_name, fields, organisation, campaign, device):
+	sql = "SELECT organisation, campaign, device, time, " + ", ".join(fields) + " FROM " + table_name
+	sql = sql + " WHERE organisation = ? AND campaign = ? AND device = ?"
+	bindings = [organisation, campaign, device]
 	sql = sql + " ORDER BY time ASC"
 	cursor = database.cursor()
 	cursor.execute(sql, bindings)
@@ -77,59 +77,60 @@ class Handler(http.server.BaseHTTPRequestHandler):
 		except:
 			length = -1
 		return self.rfile.read(length)
-	def get_data_JSON(self, table_name, fields, url):
-		cursor = select_data(table_name, fields, url)
+
+	def get_data_JSON(self, table_name, fields, match):
+		organisation = match[1]
+		campaign = match[2]
+		device = match[3]
+		cursor = select_data(table_name, fields, organisation, campaign, device)
 		self.send_response_only(http.HTTPStatus.OK, "OK")
 		self.send_header("CONTENT-TYPE", "application/json")
 		self.end_headers()
 		self.wfile.write(bytes(json.dumps(list(cursor)), "UTF-8"))
-	def get_data_CSV(self, table_name, fields, url):
-		cursor = select_data(table_name, fields, url)
+
+	def get_data_CSV(self, table_name, fields, match):
+		organisation = match[1]
+		campaign = match[2]
+		device = match[3]
+		cursor = select_data(table_name, fields, organisation, campaign, device)
 		self.send_response_only(http.HTTPStatus.OK, "OK")
 		self.send_header("CONTENT-TYPE", "text/csv; charset=UTF-8")
 		self.end_headers()
 		self.wfile.write(b"organisation,campaign,device,time,")
 		self.wfile.write(bytes(",".join(fields) + "\n", "UTF-8"))
 		for row in cursor:
-			self.wfile.write(bytes(",".join(map(str, row)) + "\n", "UTF-8"))
-	def get_campaigns(self, url):
-		query = urllib.parse.parse_qs(url.query)
+			self.wfile.write(bytes(",".join(map(to_CSV_value, row)), "UTF-8"))
+			self.wfile.write(b"\n")
+
+	def get_combined_CSV(self, match, query):
+		sql = (
+			"SELECT data.organisation, data.campaign, data.device, data.time, " +
+			", ".join(data_fields + position_fields) +
+			" FROM "
+				" data"
+					" LEFT OUTER JOIN position ON "
+						" position.organisation = data.organisation AND"
+						" position.campaign = data.campaign AND"
+						" position.device = data.device AND"
+						" position.time = data.time"
+				" WHERE data.organisation = ? AND data.campaign = ? AND data.device = ?"
+		)
+		bindings = [match.group(1), match.group(2), match.group(3)]
+		begin = query.get("begin")
+		sql = sql + " ORDER BY data.time ASC"
+		cursor = database.cursor()
+		cursor.execute(sql, bindings)
 		self.send_response_only(http.HTTPStatus.OK, "OK")
-		self.send_header("CONTENT-TYPE", "text/plain")
+		self.send_header("CONTENT-TYPE", "text/csv; charset=UTF-8")
 		self.end_headers()
-		organisation = query.get("organisation")
-		if organisation:
-			cursor = database.cursor()
-			cursor.execute(
-				"SELECT DISTINCT campaign "
-					"FROM data "
-					"WHERE organisation = ? "
-					"ORDER BY campaign ASC",
-				(organisation,))
-			for device in cursor:
-				self.wfile.write(bytes(device[0], "UTF-8"))
-				self.wfile.write(bytes("\n", "UTF-8"))
-	def get_devices(self, url):
-		query = urllib.parse.parse_qs(url.query)
-		self.send_response_only(http.HTTPStatus.OK, "OK")
-		self.send_header("CONTENT-TYPE", "text/plain")
-		self.end_headers()
-		organisation = query.get("organisation")
-		campaign = query.get("campaign")
-		if organisation and campaign:
-			self.send_response_only(http.HTTPStatus.OK, "OK")
-			self.send_header("CONTENT-TYPE", "text/plain")
-			self.end_headers()
-			cursor = database.cursor()
-			cursor.execute(
-				"SELECT DISTINCT device "
-					"FROM data "
-					"WHERE organisation = ? AND campaign = ?"
-					"ORDER BY device ASC",
-				(organisation, campaign))
-			for device in cursor:
-				self.wfile.write(bytes(device[0], "UTF-8"))
-				self.wfile.write(bytes("\n", "UTF-8"))
+		self.wfile.write(b"organisation,campaign,device,time,")
+		self.wfile.write(bytes(",".join(data_fields), "UTF-8"))
+		self.wfile.write(bytes(",".join(position_fields), "UTF-8"))
+		self.wfile.write(b"\n")
+		for row in cursor:
+			self.wfile.write(bytes(",".join(map(to_CSV_value, row)), "UTF-8"))
+			self.wfile.write(b"\n")
+
 	def post_data(self, table_name, fields):
 		body = self.content()
 		lines = body.decode("UTF-8").split("\r\n")
@@ -159,6 +160,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
 		self.send_header("CONTENT-TYPE", "text/plain")
 		self.send_header("ACCESS-CONTROL-ALLOW-ORIGIN", "*")
 		self.end_headers()
+
+	pattern_list_campaigns = re.compile(r"/list/([^/]+)/campaigns.txt")
+	pattern_list_devices = re.compile(r"/list/([^/]+)/([^/]+)/devices.txt")
+	pattern_data_JSON = re.compile(r"/data/([^/]+)/([^/]+)/(.+)\.json")
+	pattern_position_JSON = re.compile(r"/position/([^/]+)/([^/]+)/(.+)\.json")
+	pattern_data_CSV = re.compile(r"/data/([^/]+)/([^/]+)/(.+)\.csv")
+	pattern_position_CSV = re.compile(r"/position/([^/]+)/([^/]+)/(.+)\.csv")
+	pattern_combined_CSV = re.compile(r"/combined/([^/]+)/([^/]+)/(.+)\.csv(?:[?#].*)?")
 	def do_GET(self):
 		self.log_request()
 		if homepage and self.path == "/":
@@ -166,51 +175,97 @@ class Handler(http.server.BaseHTTPRequestHandler):
 			self.send_header("CONTENT-TYPE", "application/xhtml+xml")
 			self.end_headers()
 			self.wfile.write(homepage)
-		elif style and self.path == "/style.css":
+			return
+		if style and self.path == "/style.css":
 			self.send_response_only(http.HTTPStatus.OK, "OK")
 			self.send_header("CONTENT-TYPE", "text/css")
 			self.end_headers()
 			self.wfile.write(style)
-		elif script and self.path == "/script.js":
+			return
+		if script and self.path == "/script.js":
 			self.send_response_only(http.HTTPStatus.OK, "OK")
 			self.send_header("CONTENT-TYPE", "text/javascript")
 			self.end_headers()
 			self.wfile.write(script)
-		elif favicon and self.path == "/favicon.ico":
+			return
+		if favicon and self.path == "/favicon.ico":
 			self.send_response_only(http.HTTPStatus.OK, "OK")
 			self.send_header("CONTENT-TYPE", "image/png")
 			self.end_headers()
 			self.wfile.write(favicon)
-		elif self.path == "/current.json":
+			return
+		if self.path == "/current.json":
 			self.send_response_only(http.HTTPStatus.OK, "OK")
 			self.send_header("CONTENT-TYPE", "application/json")
 			self.end_headers()
 			self.wfile.write(bytes(json.dumps(current), "UTF-8"))
-		elif self.path == "/organisation.txt":
+			return
+		if self.path == "/list/organisations.txt":
 			self.send_response_only(http.HTTPStatus.OK, "OK")
 			self.send_header("CONTENT-TYPE", "text/plain")
 			self.end_headers()
 			cursor = database.cursor()
 			cursor.execute("SELECT DISTINCT organisation FROM data ORDER BY organisation ASC")
-			for device in cursor:
-				self.wfile.write(bytes(device[0], "UTF-8"))
-				self.wfile.write(bytes("\n", "UTF-8"))
-		else:
-			url = urllib.parse.urlparse(self.path)
-			if url.path == "/data.json":
-				self.get_data_JSON("data", data_fields, url)
-			elif url.path == "/position.json":
-				self.get_data_JSON("position", position_fields, url)
-			elif url.path == "/data.csv":
-				self.get_data_CSV("data", data_fields, url)
-			elif url.path == "/position.csv":
-				self.get_data_CSV("position", position_fields, url)
-			elif self.path == "/campaigns.txt":
-				self.get_campaigns(url)
-			elif self.path == "/devices.txt":
-				self.get_devices(url)
-			else:
-				self.send_error(404)
+			for record in cursor:
+				self.wfile.write(bytes(record[0], "UTF-8"))
+				self.wfile.write(b"\n")
+			return
+		match = self.pattern_list_campaigns.fullmatch(self.path)
+		if match:
+			self.send_response_only(http.HTTPStatus.OK, "OK")
+			self.send_header("CONTENT-TYPE", "text/plain")
+			self.end_headers()
+			cursor = database.cursor()
+			cursor.execute(
+				"SELECT DISTINCT campaign "
+					"FROM data "
+					"WHERE organisation = ? "
+					"ORDER BY campaign ASC",
+				(match.group(1),))
+			for record in cursor:
+				self.wfile.write(bytes(record[0], "UTF-8"))
+				self.wfile.write(b"\n")
+			return
+		match = self.pattern_list_devices.fullmatch(self.path)
+		if match:
+			self.send_response_only(http.HTTPStatus.OK, "OK")
+			self.send_header("CONTENT-TYPE", "text/plain")
+			self.end_headers()
+			cursor = database.cursor()
+			cursor.execute(
+				"SELECT DISTINCT device "
+					"FROM data "
+					"WHERE organisation = ? AND campaign = ?"
+					"ORDER BY device ASC",
+				(match.group(1), match.group(2)))
+			for record in cursor:
+				self.wfile.write(bytes(record[0], "UTF-8"))
+				self.wfile.write(b"\n")
+			return
+		url = urllib.parse.urlparse(self.path)
+		query = urllib.parse.parse_qs(url.query)
+		match = self.pattern_data_JSON.fullmatch(self.path)
+		if match:
+			self.get_data_JSON("data", data_fields, match)
+			return
+		match = self.pattern_position_JSON.fullmatch(self.path)
+		if match:
+			self.get_data_JSON("position", position_fields, match)
+			return
+		match = self.pattern_data_CSV.fullmatch(self.path)
+		if match:
+			self.get_data_CSV("data", data_fields, match)
+			return
+		match = self.pattern_position_CSV.fullmatch(self.path)
+		if match:
+			self.get_data_CSV("position", position_fields, match)
+			return
+		match = self.pattern_combined_CSV.fullmatch(self.path)
+		if match:
+			self.get_combined_CSV(match, query)
+			return
+		self.send_error(404)
+
 	def do_POST(self):
 		self.log_request()
 		if self.path == "/report":
@@ -253,4 +308,4 @@ if config.SSL_key and config.SSL_cert:
 try:
 	httpd.serve_forever()
 except KeyboardInterrupt:
-	print("Keyboard Interrupt")
+	pass
