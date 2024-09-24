@@ -1,5 +1,7 @@
 import "./plotly.min.js";
 
+var GPS_watch = false;
+
 /* Utilities */
 
 function $T(string) {
@@ -186,11 +188,12 @@ document.body.appendChild(
 	$E("table", null, [
 		$E("thead", null, [
 			$E("tr", null,
-				Alone.data_fields.map(
-					function (field) {
-						return $E("th", null, [$T(field.name)]);
-					}
-				)
+				["time"]
+					+ Alone.data_fields(Alone.data_meta).map(
+						function (field) {
+							return $E("th", null, [$T(field.name)]);
+						}
+					)
 			)
 		]),
 		$list = $E("tbody")
@@ -315,11 +318,12 @@ function data_load() {
 					var fields = rows[rows.length - i - 1];
 					$list.appendChild(
 						$E("tr", null,
-							fields.map(
-								function (field) {
-									return $E("td", null, [$T(field)]);
-								}
-							)
+							fields[0]
+								+ fields.slice(Alone.data_meta).map(
+									function (field) {
+										return $E("td", null, [$T(field)]);
+									}
+								)
 						)
 					);
 				}
@@ -513,7 +517,13 @@ if (Alone.operator) {
 			if ($auto_report.checked)
 				GPS_report(position_time, coords);
 		}
-
+		function GPS_error(error) {
+			console.error("GeoLocationError: ", error.message);
+		}
+		var GPS_options = {
+			timeout: Alone.measure_interval / 4,
+			enableHighAccuracy: true
+		};
 		function GPS_request() {
 			var now_plus_half =
 				Date.now()
@@ -526,21 +536,16 @@ if (Alone.operator) {
 						+ MILLISECONDS_FROM_1970_TO_2000,
 					"T"
 				);
-			navigator.geolocation.getCurrentPosition(
-				GPS_record.bind(this, planned_time),
-				function (error) {
-					console.error("GeoLocationError: ", error.message);
-				},
-				{
-					timeout: Alone.measure_interval / 4,
-					enableHighAccuracy: true
-				}
-			)
+			navigator.geolocation.getCurrentPosition(GPS_record.bind(this, planned_time), GPS_error, GPS_options);
 		}
 		function GPS_start() {
 			setInterval(GPS_request, Alone.measure_interval);
 		}
 		setTimeout(GPS_start, (Date.now() - MILLISECONDS_FROM_1970_TO_2000) % Alone.measure_interval);
+		function GPS_callback(spacetime) {
+			GPS_record(string_from_Date(spacetime.timestamp), spacetime);
+		}
+		if (GPS_watch) navigator.geolocation.watchPosition(GPS_callback, GPS_error, GPS_options);
 	}
 	void function () {
 		$upload.addEventListener(
