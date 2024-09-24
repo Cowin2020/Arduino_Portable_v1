@@ -3,7 +3,7 @@ import os
 try:
 	HOST = os.environ["HOST"]
 except:
-	HOST = ""
+	HOST = "127.0.0.1"
 
 try:
 	PORT = int(os.environ["PORT"])

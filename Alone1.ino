@@ -51,6 +51,7 @@ static std::condition_variable wait_measure_condition;
 static bool use_assigned_device_time = false;
 static DateTime assigned_device_time;
 
+static bool clock_synchronized = false;
 static bool need_save = false;
 static bool need_reboot = false;
 
@@ -81,6 +82,7 @@ struct Data {
 static Field const data_fields[] = {
 	{"time", nullptr},
 	{"device time", nullptr},
+	{"clock synchronized", nullptr},
 	{"temperature", "\u2103"},
 #if SENSOR == SENSOR_BME280
 	{"pressure", "Pa"},
@@ -88,11 +90,12 @@ static Field const data_fields[] = {
 	{"humidity", "%"}
 };
 
-static size_t const data_meta = 2;
+static size_t const data_meta = 3;
 
 static String CSV_Data(struct Data const *const data) {
 	return show_time(&data->time)
 		+ ',' + show_time(&data->device_time)
+		+ ',' + clock_synchronized
 		+ ',' + data->temperature
 #if SENSOR == SENSOR_BME280
 		+ ',' + data->pressure
@@ -231,6 +234,7 @@ static void set_time(DateTime const *const datetime) {
 		internal_clock.adjust(*datetime);
 		internal_clock_available = true;
 	}
+	clock_synchronized = true;
 }
 
 static DateTime get_time(void) {

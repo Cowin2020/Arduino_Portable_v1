@@ -15,6 +15,7 @@ CREATE TABLE data (
 	device TEXT NOT NULL,
 	time DATETIME NOT NULL,
 	device_time DATETIME,
+	clock_synchronized BOOLEAN,
 	temperature REAL,
 	pressure REAL,
 	humidity REAL,

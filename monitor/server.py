@@ -92,7 +92,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 		self.wfile.write(bytes(",".join(fields) + "\n", "UTF-8"))
 		for row in cursor:
 			self.wfile.write(bytes(",".join(map(str, row)) + "\n", "UTF-8"))
-	def get_camps(self, url):
+	def get_campaigns(self, url):
 		query = urllib.parse.parse_qs(url.query)
 		self.send_response_only(http.HTTPStatus.OK, "OK")
 		self.send_header("CONTENT-TYPE", "text/plain")
@@ -205,8 +205,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
 				self.get_data_CSV("data", data_fields, url)
 			elif url.path == "/position.csv":
 				self.get_data_CSV("position", position_fields, url)
-			elif self.path == "/camps.txt":
-				self.get_camps(url)
+			elif self.path == "/campaigns.txt":
+				self.get_campaigns(url)
 			elif self.path == "/devices.txt":
 				self.get_devices(url)
 			else:
@@ -239,7 +239,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 		else:
 			self.send_error(404)
 
-print("HTTPd listen on \"{}\" port {}".format(config.HOST, config.PORT))
+print("Web server listen on {}:{}".format(config.HOST, config.PORT))
 httpd = http.server.HTTPServer((config.HOST, config.PORT), Handler)
 
 if config.SSL_key and config.SSL_cert:
@@ -253,4 +253,4 @@ if config.SSL_key and config.SSL_cert:
 try:
 	httpd.serve_forever()
 except KeyboardInterrupt:
-	pass
+	print("Keyboard Interrupt")

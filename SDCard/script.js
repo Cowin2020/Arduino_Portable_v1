@@ -82,7 +82,7 @@ $dashboard.root = $E("div", {"id": "dashboard"}, [
 		$dashboard.time = $E("span")
 	]),
 	$E("div", {"id": "items"},
-		Alone.data_fields.slice(2).map(
+		Alone.data_fields.slice(Alone.data_meta).map(
 			function (field, index) {
 				return $E("div", {"class": "item"}, [
 					$E("span", {"class": "name"}, [$T(field.name)]),
