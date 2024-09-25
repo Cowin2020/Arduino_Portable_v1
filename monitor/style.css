@@ -1,19 +1,24 @@
-div#map {
+section#map {
 	height:90vh;
 }
 
-table {
+#query fieldset {
+	display: flex;
+	column-gap: 2ex;
+}
+
+#query table {
 	width:100%;
 	border-collapse:collapse;
 }
 
-th {
+#query th {
 	border: thick white solid;
 	background: lightgray;
 	color: black;
 }
 
-td {
+#query td {
 	border:solid thin;
 	text-align:center;
 }

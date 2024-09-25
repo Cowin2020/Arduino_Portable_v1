@@ -1,3 +1,4 @@
+<?xml version='1.0' encoding='UTF-8' standalone='yes'?>
 <html xmlns='http://www.w3.org/1999/xhtml'>
 	<head><meta encoding='UTF-8'/><title>Monitor</title>
 		<link rel='stylesheet' href='style.css' />
@@ -8,26 +9,48 @@
 			crossorigin='' />
 	</head>
 	<body>
-		<div id='map'></div>
-		<p><a href='data.csv'>Download weather data</a></p>
-		<p><a href='position.csv'>Download GPS data</a></p>
-		<table>
-			<thead>
-				<tr>
-					<th>Device</th>
-					<th>Time</th>
-					<th>Temperature (&#x2103;)</th>
-					<th>Relative Humidity (%)</th>
-				</tr>
-			</thead>
-			<tbody id='table'>
-			</tbody>
-		</table>
+		<section id='map'></section>
+		<section id='query'>
+			<div id='selections'></div>
+			<form id='query-select'>
+				<button type='submit'>
+					Add device
+				</button>
+			</form>
+			<form id='query-filter' hidden=''>
+				<fieldset>
+					<legend>Time period</legend>
+					<label>
+						Begin:<input type='datetime-local' name='begin'/>
+					</label>
+					<label>
+						End:<input type='datetime-local' name='end'/>
+					</label>
+					<button type='submit'>Plot</button>
+				</fieldset>
+			</form>
+			<table hidden=''>
+				<thead>
+					<tr>
+						<th>Organisation</th>
+						<th>Campaign</th>
+						<th>Device</th>
+						<th>Time</th>
+						<th>Temperature (&#x2103;)</th>
+						<th>Relative Humidity (%)</th>
+						<th>Latitude (&#x2103;N)</th>
+						<th>Longitude (&#x2103;E)</th>
+						<th>Altitude (m)</th>
+					</tr>
+				</thead>
+				<tbody></tbody>
+			</table>
+		</section>
 		<script
 			type='text/javascript'
 			src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
 			integrity='sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo='
 			crossorigin=''></script>
 		<script type='text/javascript' src='script.js'></script>
-</body>
+	</body>
 </html>
