@@ -61,10 +61,21 @@ def to_CSV_value(x):
 
 database = sqlite3.connect(config.database)
 
-def select_data(table_name, fields, organisation, campaign, device):
+def select_data(table_name, fields, match, query):
+	organisation = match[1]
+	campaign = match[2]
+	device = match[3]
 	sql = "SELECT organisation, campaign, device, time, " + ", ".join(fields) + " FROM " + table_name
 	sql = sql + " WHERE organisation = ? AND campaign = ? AND device = ?"
 	bindings = [organisation, campaign, device]
+	parameter = query.get("begin", [None])[0]
+	if parameter:
+		sql = sql + " AND time >= ?"
+		bindings.append(parameter)
+	parameter = query.get("end", [None])[0]
+	if parameter:
+		sql = sql + " AND time <= ?"
+		bindings.append(parameter)
 	sql = sql + " ORDER BY time ASC"
 	cursor = database.cursor()
 	cursor.execute(sql, bindings)
@@ -78,21 +89,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
 			length = -1
 		return self.rfile.read(length)
 
-	def get_data_JSON(self, table_name, fields, match):
-		organisation = match[1]
-		campaign = match[2]
-		device = match[3]
-		cursor = select_data(table_name, fields, organisation, campaign, device)
+	def get_data_JSON(self, table_name, fields, match, query):
+		cursor = select_data(table_name, fields, match, query)
 		self.send_response_only(http.HTTPStatus.OK, "OK")
 		self.send_header("CONTENT-TYPE", "application/json")
 		self.end_headers()
 		self.wfile.write(bytes(json.dumps(list(cursor)), "UTF-8"))
 
-	def get_data_CSV(self, table_name, fields, match):
-		organisation = match[1]
-		campaign = match[2]
-		device = match[3]
-		cursor = select_data(table_name, fields, organisation, campaign, device)
+	def get_data_CSV(self, table_name, fields, match, query):
+		cursor = select_data(table_name, fields, match, query)
 		self.send_response_only(http.HTTPStatus.OK, "OK")
 		self.send_header("CONTENT-TYPE", "text/csv; charset=UTF-8")
 		self.end_headers()
@@ -116,7 +121,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
 				" WHERE data.organisation = ? AND data.campaign = ? AND data.device = ?"
 		)
 		bindings = [match.group(1), match.group(2), match.group(3)]
-		begin = query.get("begin")
+		parameter = query.get("begin", [None])[0]
+		if parameter:
+			sql = sql + " AND data.time >= ?"
+			bindings.append(parameter)
+		parameter = query.get("end", [None])[0]
+		if parameter:
+			sql = sql + " AND data.time <= ?"
+			bindings.append(parameter)
 		sql = sql + " ORDER BY data.time ASC"
 		cursor = database.cursor()
 		cursor.execute(sql, bindings)
@@ -125,6 +137,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 		self.end_headers()
 		self.wfile.write(b"organisation,campaign,device,time,")
 		self.wfile.write(bytes(",".join(data_fields), "UTF-8"))
+		self.wfile.write(b",")
 		self.wfile.write(bytes(",".join(position_fields), "UTF-8"))
 		self.wfile.write(b"\n")
 		for row in cursor:
@@ -168,39 +181,41 @@ class Handler(http.server.BaseHTTPRequestHandler):
 	pattern_data_CSV = re.compile(r"/data/([^/]+)/([^/]+)/(.+)\.csv")
 	pattern_position_CSV = re.compile(r"/position/([^/]+)/([^/]+)/(.+)\.csv")
 	pattern_combined_CSV = re.compile(r"/combined/([^/]+)/([^/]+)/(.+)\.csv(?:[?#].*)?")
+
 	def do_GET(self):
 		self.log_request()
-		if homepage and self.path == "/":
+		url = urllib.parse.urlparse(self.path)
+		if homepage and url.path == "/":
 			self.send_response_only(http.HTTPStatus.OK, "OK")
 			self.send_header("CONTENT-TYPE", "application/xhtml+xml")
 			self.end_headers()
 			self.wfile.write(homepage)
 			return
-		if style and self.path == "/style.css":
+		if style and url.path == "/style.css":
 			self.send_response_only(http.HTTPStatus.OK, "OK")
 			self.send_header("CONTENT-TYPE", "text/css")
 			self.end_headers()
 			self.wfile.write(style)
 			return
-		if script and self.path == "/script.js":
+		if script and url.path == "/script.js":
 			self.send_response_only(http.HTTPStatus.OK, "OK")
 			self.send_header("CONTENT-TYPE", "text/javascript")
 			self.end_headers()
 			self.wfile.write(script)
 			return
-		if favicon and self.path == "/favicon.ico":
+		if favicon and url.path == "/favicon.ico":
 			self.send_response_only(http.HTTPStatus.OK, "OK")
 			self.send_header("CONTENT-TYPE", "image/png")
 			self.end_headers()
 			self.wfile.write(favicon)
 			return
-		if self.path == "/current.json":
+		if url.path == "/current.json":
 			self.send_response_only(http.HTTPStatus.OK, "OK")
 			self.send_header("CONTENT-TYPE", "application/json")
 			self.end_headers()
 			self.wfile.write(bytes(json.dumps(current), "UTF-8"))
 			return
-		if self.path == "/list/organisations.txt":
+		if url.path == "/list/organisations.txt":
 			self.send_response_only(http.HTTPStatus.OK, "OK")
 			self.send_header("CONTENT-TYPE", "text/plain")
 			self.end_headers()
@@ -210,7 +225,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 				self.wfile.write(bytes(record[0], "UTF-8"))
 				self.wfile.write(b"\n")
 			return
-		match = self.pattern_list_campaigns.fullmatch(self.path)
+		match = self.pattern_list_campaigns.fullmatch(url.path)
 		if match:
 			self.send_response_only(http.HTTPStatus.OK, "OK")
 			self.send_header("CONTENT-TYPE", "text/plain")
@@ -226,7 +241,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 				self.wfile.write(bytes(record[0], "UTF-8"))
 				self.wfile.write(b"\n")
 			return
-		match = self.pattern_list_devices.fullmatch(self.path)
+		match = self.pattern_list_devices.fullmatch(url.path)
 		if match:
 			self.send_response_only(http.HTTPStatus.OK, "OK")
 			self.send_header("CONTENT-TYPE", "text/plain")
@@ -242,25 +257,24 @@ class Handler(http.server.BaseHTTPRequestHandler):
 				self.wfile.write(bytes(record[0], "UTF-8"))
 				self.wfile.write(b"\n")
 			return
-		url = urllib.parse.urlparse(self.path)
 		query = urllib.parse.parse_qs(url.query)
-		match = self.pattern_data_JSON.fullmatch(self.path)
+		match = self.pattern_data_JSON.fullmatch(url.path)
 		if match:
-			self.get_data_JSON("data", data_fields, match)
+			self.get_data_JSON("data", data_fields, match, query)
 			return
-		match = self.pattern_position_JSON.fullmatch(self.path)
+		match = self.pattern_position_JSON.fullmatch(url.path)
 		if match:
-			self.get_data_JSON("position", position_fields, match)
+			self.get_data_JSON("position", position_fields, match, query)
 			return
-		match = self.pattern_data_CSV.fullmatch(self.path)
+		match = self.pattern_data_CSV.fullmatch(url.path)
 		if match:
-			self.get_data_CSV("data", data_fields, match)
+			self.get_data_CSV("data", data_fields, match, query)
 			return
-		match = self.pattern_position_CSV.fullmatch(self.path)
+		match = self.pattern_position_CSV.fullmatch(url.path)
 		if match:
-			self.get_data_CSV("position", position_fields, match)
+			self.get_data_CSV("position", position_fields, match, query)
 			return
-		match = self.pattern_combined_CSV.fullmatch(self.path)
+		match = self.pattern_combined_CSV.fullmatch(url.path)
 		if match:
 			self.get_combined_CSV(match, query)
 			return
