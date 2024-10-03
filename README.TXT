@@ -25,7 +25,7 @@ Setup:
 	SENSOR:
 		either "SENSOR_BME280" or "SENSOR_SHT40"
 
-organisation_name, campaign_name, device_name:
+	organisation_name, campaign_name, device_name:
 		Identities of the organisation, campaign and device respectively
 
 	use_AP_mode:
