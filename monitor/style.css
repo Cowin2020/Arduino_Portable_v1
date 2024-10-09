@@ -1,24 +1,62 @@
 section#map {
 	height:90vh;
+	height: calc(100vh - 30ex);
 }
 
-#query fieldset {
+section#query fieldset {
 	display: flex;
 	column-gap: 2ex;
 }
 
-#query table {
+section#query .grow {
+	flex-grow: 1;
+}
+
+section#query form#query-select {
+	display: inline-block;
+}
+
+section#query form#query-load {
+	display: inline-block;
+}
+
+section#query > div#query-empty {
+	margin: 1ex;
+	background-color: lightyellow;
+	border-style: dashed;
+	border-width: thick;
+	border-color: black;
+	text-align: center;
+	font-size: 6ex;
+	color: darkblue;
+}
+
+section#query > div#query-plot {
+	margin-top: 3ex;
+	margin-bottom: 2ex;
+}
+
+section#query > div#query-plot > div {
+	height: 90vh;
+	height: calc(100vh - 10ex);
+	margin: 1ex;
+	border-style: solid;
+	border-width: thin;
+	padding: 1ex;
+}
+
+section#query > table {
 	width:100%;
 	border-collapse:collapse;
 }
 
-#query th {
+section#query th {
 	border: thick white solid;
 	background: lightgray;
 	color: black;
 }
 
-#query td {
+section#query td {
 	border:solid thin;
 	text-align:center;
 }

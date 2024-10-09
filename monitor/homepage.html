@@ -11,24 +11,34 @@
 	<body>
 		<section id='map'></section>
 		<section id='query'>
-			<div id='selections'></div>
-			<form id='query-select'>
-				<button type='submit'>
-					Add device
-				</button>
-			</form>
-			<form id='query-filter' hidden=''>
+			<form id='query-filter'>
 				<fieldset>
 					<legend>Time period</legend>
-					<label>
-						Begin:<input type='datetime-local' name='begin'/>
-					</label>
-					<label>
-						End:<input type='datetime-local' name='end'/>
-					</label>
-					<button type='submit'>Plot</button>
+					<label>Begin:<input type='datetime-local' name='begin' step='1'/></label>
+					<label>End:<input type='datetime-local' name='end' step='1'/></label>
 				</fieldset>
 			</form>
+			<div id='selections'></div>
+			<div style='display: flex'>
+				<form id='query-load'>
+					<button type='submit'>Load</button>
+				</form>
+				<span class='grow'></span>
+				<form id='query-select'>
+					<button type='submit'>Add device</button>
+				</form>
+			</div>
+			<div id='query-empty' hidden=''>
+				No data
+			</div>
+			<div id='query-plot' hidden=''>
+				<select>
+					<option value="6" selected="">Temperature (&#x2103;)</option>
+					<option value="7">Relative humidity (%)</option>
+					<!-- option value="8">Pressure (Pa)</option -->
+				</select>
+				<div></div>
+			</div>
 			<table hidden=''>
 				<thead>
 					<tr>
@@ -51,6 +61,9 @@
 			src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
 			integrity='sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo='
 			crossorigin=''></script>
+		<script
+			type='text/javascript'
+			src='https://cdn.plot.ly/plotly-2.35.2.min.js'></script>
 		<script type='text/javascript' src='script.js'></script>
 	</body>
 </html>

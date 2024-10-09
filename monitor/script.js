@@ -2,7 +2,7 @@
 
 /* ************************************************************************** / ************************************** / **** */
 
-function renormal_iso_date(date_string) {
+function iso_date(date_string, seperator="T") {
 	var date = new Date(date_string);
 	return (
 		date.getFullYear().toString().padStart(4, '0') + 
@@ -10,7 +10,7 @@ function renormal_iso_date(date_string) {
 		(date.getMonth() + 1).toString().padStart(2, '0') + 
 		"-" +
 		date.getDate().toString().padStart(2, '0') + 
-		"T" +
+		seperator +
 		date.getHours().toString().padStart(2, '0') + 
 		":" +
 		date.getMinutes().toString().padStart(2, '0') + 
@@ -142,12 +142,18 @@ current.run(60000, 1000);
 /*** Uploaded data ***/
 
 var $query = document.getElementById("query");
-var $query_select = document.getElementById("query-select");
 var $query_filter = document.getElementById("query-filter");
-var $table = $query.querySelector("table");
-var $tbody = $query.querySelector("tbody");
+var $query_select = document.getElementById("query-select");
+var $query_load = document.getElementById("query-load");
+var $query_empty = document.getElementById("query-empty")
+var $query_plot = document.getElementById("query-plot");
+var $query_element = $query_plot.querySelector("select");
+var $query_plotly = $query_plot.querySelector("div");
+var $query_table = $query.querySelector("table");
+var $query_tbody = $query.querySelector("tbody");
 
 var selections = new Set;
+var query_data = null;
 
 function Selection() {
 	this.$form = document.createElement("form");
@@ -184,22 +190,29 @@ function Selection() {
 			this.$loading = document.createElement("span");
 				this.$loading.appendChild(document.createTextNode("Loading..."));
 			$fieldset.appendChild(this.$loading);
+			this.$download = document.createElement("a");
+				this.$download.hidden = true;
+				this.$download.setAttribute("href", "#");
+				this.$download.appendChild(document.createTextNode("Download CSV"));
+			$fieldset.appendChild(this.$download);
 			var $span = document.createElement("span");
-				$span.style.setProperty("flex-grow", "1");
+				$span.className = "grow";
 			$fieldset.appendChild($span);
 			this.$remove = document.createElement("button");
-				this.$load.setAttribute("type", "submit");
+				this.$load.setAttribute("type", "button");
 				this.$remove.appendChild(document.createTextNode("Remove"));
+				if (!selections.size) this.$remove.disabled = true;
+				this.$remove.addEventListener(
+					"click",
+					(event) => {
+						event.preventDefault();
+						this.remove();
+					}
+				);
 			$fieldset.appendChild(this.$remove);
 		this.$form.appendChild($fieldset);
 	this.$parent.appendChild(this.$form);
-	this.$form.addEventListener(
-		"submit",
-		(event) => {
-			event.preventDefault();
-			this.remove();
-		}
-	);
+	this.$form.addEventListener("submit", (event) => event.preventDefault());
 	this.$load.addEventListener("click", this.load_organisations.bind(this));
 	this.$organisation.addEventListener("change", this.load_campaigns.bind(this));
 	this.$campaign.addEventListener("change", this.load_devices.bind(this));
@@ -209,21 +222,30 @@ function Selection() {
 }
 Selection.prototype = {
 	$parent: document.getElementById("selections"),
+	combined_URL() {
+		return (
+			"combined/"
+				+ encodeURIComponent(this.$organisation.value)
+				+ "/"
+				+ encodeURIComponent(this.$campaign.value)
+				+ "/"
+				+ encodeURIComponent(this.$device.value)
+				+ ".csv"
+		);
+	},
 	remove() {
 		this.$parent.removeChild(this.$form);
 		selections.delete(this);
 		if (!selections.size) {
-			$query_filter.hidden = true;
-			$table.hidden = true;
-			$tbody.textContent = null;
+			$query_table.hidden = true;
+			$query_tbody.textContent = null;
 		}
-	},
-	values() {
-		return {
-			organisation: this.$organisation.value,
-			campaign: this.$campaign.value,
-			device: this.$device.value
-		};
+		else if (selections.size === 1)
+			selections.forEach(
+				function (selection) {
+					selection.$remove.disabled = true;
+				}
+			);
 	},
 	load_organisations() {
 		this.$device.parentElement.hidden = true;
@@ -258,6 +280,7 @@ Selection.prototype = {
 						this
 					);
 					this.$organisation.parentElement.hidden = false;
+					this.$download.hidden = true;
 				}
 			)
 			.then(
@@ -303,6 +326,7 @@ Selection.prototype = {
 						this
 					);
 					this.$campaign.parentElement.hidden = false;
+					this.$download.hidden = true;
 				}
 			)
 			.then(
@@ -353,7 +377,12 @@ Selection.prototype = {
 						this
 					);
 					this.$device.parentElement.hidden = false;
-					$query_filter.hidden = false;
+					this.$download.href = this.combined_URL() + data_filter_search();
+					this.$download.hidden = false;
+				}
+			)
+			.then(
+				() => {
 				}
 			)
 			.catch(
@@ -366,15 +395,6 @@ Selection.prototype = {
 	}
 };
 
-new Selection;
-$query_select.addEventListener(
-	"submit",
-	(event) => {
-		event.preventDefault();
-		new Selection;
-	}
-);
-
 function selections_all_values() {
 	return Array.from(
 		selections.values(),
@@ -384,170 +404,182 @@ function selections_all_values() {
 	);
 }
 
+new Selection;
+
+$query_select.addEventListener(
+	"submit",
+	(event) => {
+		event.preventDefault();
+		if (selections.size === 1)
+			selections.forEach(
+				function (selection) {
+					selection.$remove.disabled = false;
+				}
+			);
+		new Selection;
+	}
+);
+
+$query_filter.elements.namedItem("begin").value = iso_date(Date.now() - 24*60*60*1000);
+
+function data_hide() {
+	$query_empty.hidden = true;
+	$query_plot.hidden = true;
+	$query_table.hidden = true;
+}
+
+function data_plot() {
+	if (query_data === null) {
+		$query_plot.hidden = true;
+		return;
+	}
+	$query_plot.hidden = false;
+	Plotly.react(
+		$query_plotly,
+		query_data.map(
+			function (records) {
+				var column = Number.parseInt($query_element.value);
+				var filtered =
+					records.filter(
+						function (record) {
+							return record[column] != null && record[column] !== "";
+						}
+					);
+				return {
+					x: filtered.map(function (record) {return record[3];}),
+					y: filtered.map(function (record) {return record[column];}),
+					name: records[0][0] + "," + records[0][1] + "," + records[0][2]
+				}
+			}
+		),
+		{
+			title: $query_element.selectedOptions.item(0).textContent
+		}
+	);
+}
+
+function data_list() {
+	if (query_data === null) {
+		$query_table.hidden = true;
+		return;
+	}
+	$query_tbody.textContent = null;
+	query_data.forEach(
+		function (records) {
+			records.forEach(
+				function (record) {
+					var $tr = document.createElement("tr");
+					[0, 1, 2, 3, 6, 7, 11, 12, 13].forEach(
+						function (i) {
+							var $td = document.createElement("td");
+							$td.appendChild(document.createTextNode(record[i]));
+							$tr.appendChild($td);
+						}
+					);
+					$query_tbody.appendChild($tr);
+				}
+			);
+		}
+	);
+	$query_table.hidden = false;
+}
+
+function data_show() {
+	data_plot();
+	data_list();
+}
+
+function data_filter_search() {
+	var begin_time = $query_filter.elements.namedItem("begin").value;
+	if (begin_time) begin_time = iso_date(begin_time);
+	var end_time = $query_filter.elements.namedItem("end").value;
+	if (end_time) end_time = iso_date(end_time);
+	if (!begin_time && !end_time)
+		return "";
+	if (begin_time && end_time && begin_time > end_time)
+		[begin_time, end_time] = [end_time, begin_time];
+	var param = new URLSearchParams();
+	if (begin_time) param.append("begin", begin_time);
+	if (end_time) param.append("end", end_time);
+	return "?" + param.toString();
+}
+
 function data_load() {
-	$table.hidden = true;
-	var search = (function () {
-		var begin_time = $query_filter["begin"].value;
-		if (begin_time) begin_time = renormal_iso_date(begin_time);
-		var end_time = $query_filter["end"].value;
-		if (end_time) end_time = renormal_iso_date(end_time);
-		if (!begin_time && !end_time)
-			return "";
-		if (begin_time && end_time && begin_time > end_time)
-			[begin_time, end_time] = [end_time, begin_time];
-		var param = new URLSearchParams();
-		if (begin_time) param.append("begin", begin_time);
-		if (end_time) param.append("end", end_time);
-		return "?" + param.toString();
-	})();
+	data_hide();
+	var search = data_filter_search();
 	return Promise.all(
 		selections.values().map(
 			function (selection) {
-				return Promise.resolve(
-					selection.values()
-				)
-				.then(
-					(values) =>
-						fetch(
-							"combined/"
-								+ encodeURIComponent(values.organisation)
-								+ "/"
-								+ encodeURIComponent(values.campaign)
-								+ "/"
-								+ encodeURIComponent(values.device)
-								+ ".csv"
-								+ search
-						)
-				)
-				.then(
-					(response) => {
-						if (!response.ok)
-							return Promise.reject(String(response.status) + " from server");
-						return response.text();
-					}
-				)
-				.then(
-					(text) => {
-						var lines = text.split("\n").filter(Boolean);
-						if (lines.length < 1)
-							return Promise.reject("Invalid file format");
-						return lines.slice(1).map(
-							function (line) {
-								return line.split(",");
-							}
-						);
-					}
-				)
+				return (
+					fetch(selection.combined_URL() + search)
+					.then(
+						(response) => {
+							if (!response.ok)
+								return Promise.reject(String(response.status) + " from server");
+							return response.text();
+						}
+					)
+					.then(
+						(text) => {
+							var lines = text.split("\n").filter(Boolean);
+							if (lines.length < 1)
+								return Promise.reject("Invalid file format");
+							return Promise.resolve(
+								lines.slice(1).map(
+									function (line) {
+										return line.split(",");
+									}
+								)
+							);
+						}
+					)
+				);
 			}
 		)
+	)
+	.then(
+		(array) => {
+			if (!array.some(function (a) {return Boolean(a.length);})) {
+				query_data = null;
+				$query_empty.hidden = false;
+				return;
+			}
+			query_data = array;
+			data_show();
+			return Promise.resolve();
+		}
 	)
 	.catch(
 		(error) => {
 			alert("Failed to load data: " + String(error));
 			console.error(error);
+			return null;
 		}
 	);
-}
-
-function table_load() {
-	return (
-		data_load()
-	)
-	.then(
-		(array) => {
-			if (array.some(function (a) {return Boolean(a.length);})) {
-				$tbody.textContent = null;
-				array.forEach(
-					function (records) {
-						records.forEach(
-							function (record) {
-								var $tr = document.createElement("tr");
-								[0, 1, 2, 3, 6, 7, 10, 11, 12].forEach(
-									(i) => {
-										var $td = document.createElement("td");
-										$td.appendChild(document.createTextNode(record[i]));
-										$tr.appendChild($td);
-									}
-								);
-								$tbody.appendChild($tr);
-							}
-						);
-					}
-				);
-				$table.hidden = false;
-			}
-		}
-	)
 }
 
 $query_filter.addEventListener(
 	"submit",
 	(event) => {
 		event.preventDefault();
-		table_load();
+		data_load();
 	}
 );
 
-/*
-function data_load() {
-	var xhr = new XMLHttpRequest();
-	xhr.onloadend = function () {
-		if (xhr.status !== 200 || xhr.responseText == null)
-			return alert("Failed to load weather data");
-		try {
-			var array = JSON.parse(xhr.responseText);
-		}
-		catch (e) {
-			var array = null;
-		}
-		if (!Array.isArray(array))
-			return alert("Invalid format of weather data file");
-		table_node.textContent = null;
-		array.forEach(
-			function (record) {
-				var tr = document.createElement("tr");
-				for (var i = 0; i < 4; ++i) {
-					var td = document.createElement("td");
-					td.appendChild(document.createTextNode(record[i]));
-					tr.appendChild(td);
-				}
-				table_node.appendChild(tr);
-			}
-		);
-	};
-	xhr.open("GET", "data.json");
-	xhr.send();
-}
-
-var data_interval = null;
-
-setTimeout(
-	function () {
+$query_load.addEventListener(
+	"submit",
+	(event) => {
+		event.preventDefault();
 		data_load();
-		if (data_interval) clearInterval(data_interval);
-		data_interval = setInterval(data_load, 60000);
-	},
-	2000
+	}
 );
 
-function position_load() {
-	var xhr = new XMLHttpRequest();
-	xhr.onloadend = function () {
-		if (xhr.status !== 200 || xhr.responseText == null)
-			return alert("Failed to load weather data");
-		try {
-			var array = JSON.parse(xhr.responseText);
-		}
-		catch (e) {
-			var array = null;
-		}
-		if (!Array.isArray(array))
-			return alert("Invalid format of weather data file");
-	};
-	xhr.open("GET", "position.json");
-	xhr.send();
-}
-*/
+$query_element.addEventListener(
+	"change",
+	(event) => {
+		data_plot();
+	}
+);
 
 /**************************************************************************** / ************************************** / ******/
 

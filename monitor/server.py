@@ -10,7 +10,7 @@ import ssl
 import sqlite3
 
 current_fields = ["time", "latitude", "longitude", "altitude"]
-data_fields = ["device_time", "clock_synchronized", "temperature", "humidity"]
+data_fields = ["device_time", "clock_synchronized", "temperature", "humidity", "pressure"]
 position_fields = ["browser_time", "position_time", "latitude", "longitude", "altitude"]
 
 current = dict()
@@ -65,21 +65,24 @@ def select_data(table_name, fields, match, query):
 	organisation = match[1]
 	campaign = match[2]
 	device = match[3]
-	sql = "SELECT organisation, campaign, device, time, " + ", ".join(fields) + " FROM " + table_name
-	sql = sql + " WHERE organisation = ? AND campaign = ? AND device = ?"
+	select = " FROM " + table_name
+	select = select + " WHERE organisation = ? AND campaign = ? AND device = ?"
 	bindings = [organisation, campaign, device]
 	parameter = query.get("begin", [None])[0]
 	if parameter:
-		sql = sql + " AND time >= ?"
+		select = select + " AND time >= ?"
 		bindings.append(parameter)
 	parameter = query.get("end", [None])[0]
 	if parameter:
-		sql = sql + " AND time <= ?"
+		select = select + " AND time <= ?"
 		bindings.append(parameter)
-	sql = sql + " ORDER BY time ASC"
+	select = select + " ORDER BY time ASC"
 	cursor = database.cursor()
-	cursor.execute(sql, bindings)
-	return cursor
+	cursor.execute("SELECT COUNT(*) " + select, bindings)
+	count = fetchone()[0]
+	cursor = database.cursor()
+	cursor.execute("SELECT " + "organisation, campaign, device, time, " + ", ".join(fields) + select, bindings)
+	return (cursor, count)
 
 class Handler(http.server.BaseHTTPRequestHandler):
 	def content(self):
@@ -90,16 +93,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
 		return self.rfile.read(length)
 
 	def get_data_JSON(self, table_name, fields, match, query):
-		cursor = select_data(table_name, fields, match, query)
+		(cursor, count) = select_data(table_name, fields, match, query)
 		self.send_response_only(http.HTTPStatus.OK, "OK")
 		self.send_header("CONTENT-TYPE", "application/json")
+		self.send_header("X-TOTAL-COUNT", str(count))
 		self.end_headers()
 		self.wfile.write(bytes(json.dumps(list(cursor)), "UTF-8"))
 
 	def get_data_CSV(self, table_name, fields, match, query):
-		cursor = select_data(table_name, fields, match, query)
+		(cursor, count) = select_data(table_name, fields, match, query)
 		self.send_response_only(http.HTTPStatus.OK, "OK")
 		self.send_header("CONTENT-TYPE", "text/csv; charset=UTF-8")
+		self.send_header("X-TOTAL-COUNT", str(count))
 		self.end_headers()
 		self.wfile.write(b"organisation,campaign,device,time,")
 		self.wfile.write(bytes(",".join(fields) + "\n", "UTF-8"))
@@ -187,7 +192,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
 		url = urllib.parse.urlparse(self.path)
 		if homepage and url.path == "/":
 			self.send_response_only(http.HTTPStatus.OK, "OK")
-			self.send_header("CONTENT-TYPE", "application/xhtml+xml")
+			#self.send_header("CONTENT-TYPE", "application/xhtml+xml")
+			self.send_header("CONTENT-TYPE", "text/html")
 			self.end_headers()
 			self.wfile.write(homepage)
 			return
