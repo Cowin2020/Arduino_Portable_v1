@@ -213,11 +213,13 @@ Selections.prototype = {
 	values() {
 		return this.set.values();
 	},
-	update_download() {
+	update_download_URL() {
 		var search = data_filter_search();
 		this.set.forEach(
 			function (selection) {
 				selection.$download.href = selection.combined_URL() + search;
+				selection.$raw_data.href = selection.data_URL() + search;
+				selection.$raw_position.href = selection.position_URL() + search;
 			}
 		);
 	}
@@ -266,6 +268,16 @@ function Selection() {
 				this.$download.setAttribute("href", "#");
 				this.$download.appendChild(document.createTextNode("Download CSV"));
 			$fieldset.appendChild(this.$download);
+			this.$raw_data = document.createElement("a");
+				this.$raw_data.hidden = true;
+				this.$raw_data.setAttribute("href", "#");
+				this.$raw_data.appendChild(document.createTextNode("Raw weather data"));
+			$fieldset.appendChild(this.$raw_data);
+			this.$raw_position = document.createElement("a");
+				this.$raw_position.hidden = true;
+				this.$raw_position.setAttribute("href", "#");
+				this.$raw_position.appendChild(document.createTextNode("Raw GPS data"));
+			$fieldset.appendChild(this.$raw_position);
 			var $span = document.createElement("span");
 				$span.className = "grow";
 			$fieldset.appendChild($span);
@@ -290,9 +302,9 @@ function Selection() {
 }
 Selection.prototype = {
 	parent: selections,
-	combined_URL() {
+	CSV_subpath() {
 		return (
-			"combined/"
+			"/"
 				+ encodeURIComponent(this.$campaign.value)
 				+ "/"
 				+ encodeURIComponent(this.$organisation.value)
@@ -300,6 +312,15 @@ Selection.prototype = {
 				+ encodeURIComponent(this.$device.value)
 				+ ".csv"
 		);
+	},
+	data_URL() {
+		return "data" + this.CSV_subpath();
+	},
+	position_URL() {
+		return "position" + this.CSV_subpath();
+	},
+	combined_URL() {
+		return "combined" + this.CSV_subpath();
 	},
 	load_campaigns() {
 		this.$device.parentElement.hidden = true;
@@ -433,6 +454,10 @@ Selection.prototype = {
 					this.$device.parentElement.hidden = false;
 					this.$download.href = this.combined_URL() + data_filter_search();
 					this.$download.hidden = false;
+					this.$raw_data.href = this.data_URL() + data_filter_search();
+					this.$raw_data.hidden = false;
+					this.$raw_position.href = this.position_URL() + data_filter_search();
+					this.$raw_position.hidden = false;
 				}
 			)
 			.then(
@@ -591,12 +616,12 @@ function data_load() {
 
 $query_filter.elements.namedItem("begin").addEventListener(
 	"change",
-	() => selections.update_download()
+	() => selections.update_download_URL()
 );
 
 $query_filter.elements.namedItem("end").addEventListener(
 	"change",
-	() => selections.update_download()
+	() => selections.update_download_URL()
 );
 
 $query_filter.addEventListener(
