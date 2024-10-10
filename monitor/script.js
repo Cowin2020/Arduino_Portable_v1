@@ -152,8 +152,74 @@ var $query_plotly = $query_plot.querySelector("div");
 var $query_table = $query.querySelector("table");
 var $query_tbody = $query.querySelector("tbody");
 
-var selections = new Set;
 var query_data = null;
+
+function Selections() {
+	this.set = new Set();
+	this.$add.addEventListener(
+		"submit",
+		(event) => {
+			event.preventDefault();
+			this.add(new Selection());
+		}
+	);
+	return this;
+}
+Selections.prototype = {
+	$container: document.getElementById("selections"),
+	$add: document.getElementById("query-select"),
+	size() {
+		return this.set.size;
+	},
+	resized() {
+		var disabled = !this.set.size;
+		if (!this.set.size) selection.$remove.disabled = true;
+		this.set.forEach(
+			function (selection) {
+				selection.$remove.disabled = disabled;
+			}
+		);
+	},
+	add(selection) {
+		selection.$remove.disabled = !this.set.size;
+		if (this.set.size === 1)
+			this.set.forEach(
+				function (selection) {
+					selection.$remove.disabled = false;
+				}
+			);
+		this.set.add(selection);
+		this.$container.appendChild(selection.$form);
+	},
+	delete(selection) {
+		this.$container.removeChild(selection.$form);
+		this.set.delete(selection);
+		if (!selections.size) {
+			$query_table.hidden = true;
+			$query_tbody.textContent = null;
+		}
+		else if (this.set.size <= 1)
+			this.set.forEach(
+				function (selection) {
+					selection.$remove.disabled = true;
+				}
+			);
+	},
+	values() {
+		return this.set.values();
+	},
+	update_download() {
+		var search = data_filter_search();
+		this.set.forEach(
+			function (selection) {
+				selection.$download.href = selection.combined_URL() + search;
+			}
+		);
+	}
+
+};
+
+var selections = new Selections();
 
 function Selection() {
 	this.$form = document.createElement("form");
@@ -201,27 +267,24 @@ function Selection() {
 			this.$remove = document.createElement("button");
 				this.$load.setAttribute("type", "button");
 				this.$remove.appendChild(document.createTextNode("Remove"));
-				if (!selections.size) this.$remove.disabled = true;
 				this.$remove.addEventListener(
 					"click",
 					(event) => {
 						event.preventDefault();
-						this.remove();
+						this.parent.delete(this);
 					}
 				);
 			$fieldset.appendChild(this.$remove);
 		this.$form.appendChild($fieldset);
-	this.$parent.appendChild(this.$form);
 	this.$form.addEventListener("submit", (event) => event.preventDefault());
 	this.$load.addEventListener("click", this.load_campaigns.bind(this));
 	this.$organisation.addEventListener("change", this.load_campaigns.bind(this));
 	this.$campaign.addEventListener("change", this.load_devices.bind(this));
 	this.load_campaigns();
-	selections.add(this);
 	return this;
 }
 Selection.prototype = {
-	$parent: document.getElementById("selections"),
+	parent: selections,
 	combined_URL() {
 		return (
 			"combined/"
@@ -232,20 +295,6 @@ Selection.prototype = {
 				+ encodeURIComponent(this.$device.value)
 				+ ".csv"
 		);
-	},
-	remove() {
-		this.$parent.removeChild(this.$form);
-		selections.delete(this);
-		if (!selections.size) {
-			$query_table.hidden = true;
-			$query_tbody.textContent = null;
-		}
-		else if (selections.size === 1)
-			selections.forEach(
-				function (selection) {
-					selection.$remove.disabled = true;
-				}
-			);
 	},
 	load_campaigns() {
 		this.$device.parentElement.hidden = true;
@@ -395,39 +444,7 @@ Selection.prototype = {
 	}
 };
 
-function selections_all_values() {
-	return Array.from(
-		selections.values(),
-		function (selection) {
-			return selection.values();
-		}
-	);
-}
-
-function selections_update_download() {
-	var search = data_filter_search();
-	selections.forEach(
-		function (selection) {
-			selection.$download.href = selection.combined_URL() + search;
-		}
-	);
-}
-
-new Selection;
-
-$query_select.addEventListener(
-	"submit",
-	(event) => {
-		event.preventDefault();
-		if (selections.size === 1)
-			selections.forEach(
-				function (selection) {
-					selection.$remove.disabled = false;
-				}
-			);
-		new Selection;
-	}
-);
+selections.add(new Selection());
 
 $query_filter.elements.namedItem("begin").value = iso_date(Date.now() - 24*60*60*1000);
 
@@ -567,8 +584,15 @@ function data_load() {
 	);
 }
 
-$query_filter.elements.namedItem("begin").addEventListener("change", selections_update_download);
-$query_filter.elements.namedItem("end").addEventListener("change", selections_update_download);
+$query_filter.elements.namedItem("begin").addEventListener(
+	"change",
+	() => selections.update_download()
+);
+
+$query_filter.elements.namedItem("end").addEventListener(
+	"change",
+	() => selections.update_download()
+);
 
 $query_filter.addEventListener(
 	"submit",
