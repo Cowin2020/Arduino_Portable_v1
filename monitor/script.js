@@ -164,21 +164,21 @@ function Selection() {
 			this.$load = document.createElement("button");
 				this.$load.hidden = true;
 				this.$load.setAttribute("type", "button");
-				this.$load.appendChild(document.createTextNode("Reload organisations"));
+				this.$load.appendChild(document.createTextNode("Reload campaigns"));
 			$fieldset.appendChild(this.$load);
-			var $label = document.createElement("label");
-				$label.hidden = true;
-				$label.appendChild(document.createTextNode("Organisation:"));
-				this.$organisation = document.createElement("select");
-					this.$organisation.setAttribute("name", "organisation");
-				$label.appendChild(this.$organisation);
-			$fieldset.appendChild($label);
 			var $label = document.createElement("label");
 				$label.hidden = true;
 				$label.appendChild(document.createTextNode("Campaign:"));
 				this.$campaign = document.createElement("select");
 					this.$campaign.setAttribute("name", "campaign");
 				$label.appendChild(this.$campaign);
+			$fieldset.appendChild($label);
+			var $label = document.createElement("label");
+				$label.hidden = true;
+				$label.appendChild(document.createTextNode("Organisation:"));
+				this.$organisation = document.createElement("select");
+					this.$organisation.setAttribute("name", "organisation");
+				$label.appendChild(this.$organisation);
 			$fieldset.appendChild($label);
 			var $label = document.createElement("label");
 				$label.hidden = true;
@@ -213,10 +213,10 @@ function Selection() {
 		this.$form.appendChild($fieldset);
 	this.$parent.appendChild(this.$form);
 	this.$form.addEventListener("submit", (event) => event.preventDefault());
-	this.$load.addEventListener("click", this.load_organisations.bind(this));
+	this.$load.addEventListener("click", this.load_campaigns.bind(this));
 	this.$organisation.addEventListener("change", this.load_campaigns.bind(this));
 	this.$campaign.addEventListener("change", this.load_devices.bind(this));
-	this.load_organisations();
+	this.load_campaigns();
 	selections.add(this);
 	return this;
 }
@@ -225,9 +225,9 @@ Selection.prototype = {
 	combined_URL() {
 		return (
 			"combined/"
-				+ encodeURIComponent(this.$organisation.value)
-				+ "/"
 				+ encodeURIComponent(this.$campaign.value)
+				+ "/"
+				+ encodeURIComponent(this.$organisation.value)
 				+ "/"
 				+ encodeURIComponent(this.$device.value)
 				+ ".csv"
@@ -247,59 +247,13 @@ Selection.prototype = {
 				}
 			);
 	},
-	load_organisations() {
+	load_campaigns() {
 		this.$device.parentElement.hidden = true;
 		this.$campaign.parentElement.hidden = true;
 		this.$organisation.parentElement.hidden = true;
 		this.$loading.hidden = false;
 		return (
-			fetch("list/organisations.txt")
-			.then(
-				(response) => {
-					if (!response.ok)
-						return Promise.reject(String(response.status) + " from server");
-					return response.text();
-				}
-			)
-			.then(
-				(text) => {
-					this.$loading.hidden = true;
-					return Promise.resolve(text.split("\n").filter(Boolean, this));
-				}
-			)
-			.then(
-				(organisations) => {
-					this.$organisation.textContent = null;
-					organisations.forEach(
-						function (organisation) {
-							var $option = document.createElement("option");
-							$option.setAttribute("value", organisation);
-							$option.appendChild(document.createTextNode(organisation));
-							this.$organisation.appendChild($option);
-						},
-						this
-					);
-					this.$organisation.parentElement.hidden = false;
-					this.$download.hidden = true;
-				}
-			)
-			.then(
-				() => this.load_campaigns().catch(() => {})
-			)
-			.catch(
-				(error) => {
-					alert("Failed to load organisation list: " + String(error));
-					console.error(error);
-				}
-			)
-		);
-	},
-	load_campaigns() {
-		this.$device.parentElement.hidden = true;
-		this.$campaign.parentElement.hidden = true;
-		this.$loading.hidden = false;
-		return (
-			fetch("list/" + encodeURIComponent(this.$organisation.value) + "/campaigns.txt")
+			fetch("list/campaigns.txt")
 			.then(
 				(response) => {
 					if (!response.ok)
@@ -330,11 +284,57 @@ Selection.prototype = {
 				}
 			)
 			.then(
-				() => this.load_devices().catch(() => {})
+				() => this.load_organisations().catch(() => {})
 			)
 			.catch(
 				(error) => {
 					alert("Failed to load campaign list: " + String(error));
+					console.error(error);
+				}
+			)
+		);
+	},
+	load_organisations() {
+		this.$device.parentElement.hidden = true;
+		this.$organisation.parentElement.hidden = true;
+		this.$loading.hidden = false;
+		return (
+			fetch("list/" + encodeURIComponent(this.$campaign.value) + "/organisations.txt")
+			.then(
+				(response) => {
+					if (!response.ok)
+						return Promise.reject(String(response.status) + " from server");
+					return response.text();
+				}
+			)
+			.then(
+				(text) => {
+					this.$loading.hidden = true;
+					return Promise.resolve(text.split("\n").filter(Boolean, this));
+				}
+			)
+			.then(
+				(organisations) => {
+					this.$organisation.textContent = null;
+					organisations.forEach(
+						function (organisation) {
+							var $option = document.createElement("option");
+							$option.setAttribute("value", organisation);
+							$option.appendChild(document.createTextNode(organisation));
+							this.$organisation.appendChild($option);
+						},
+						this
+					);
+					this.$organisation.parentElement.hidden = false;
+					this.$download.hidden = true;
+				}
+			)
+			.then(
+				() => this.load_devices().catch(() => {})
+			)
+			.catch(
+				(error) => {
+					alert("Failed to load organisation list: " + String(error));
 					console.error(error);
 				}
 			)
@@ -346,9 +346,9 @@ Selection.prototype = {
 		return (
 			fetch(
 				"list/"
-					+ encodeURIComponent(this.$organisation.value)
-					+ "/"
 					+ encodeURIComponent(this.$campaign.value)
+					+ "/"
+					+ encodeURIComponent(this.$organisation.value)
 					+ "/devices.txt"
 			)
 			.then(
@@ -400,6 +400,15 @@ function selections_all_values() {
 		selections.values(),
 		function (selection) {
 			return selection.values();
+		}
+	);
+}
+
+function selections_update_download() {
+	var search = data_filter_search();
+	selections.forEach(
+		function (selection) {
+			selection.$download.href = selection.combined_URL() + search;
 		}
 	);
 }
@@ -469,7 +478,7 @@ function data_list() {
 			records.forEach(
 				function (record) {
 					var $tr = document.createElement("tr");
-					[0, 1, 2, 3, 6, 7, 11, 12, 13].forEach(
+					[0, 1, 2, 3, 6, 7, /* 8, */ 11, 12, 13].forEach(
 						function (i) {
 							var $td = document.createElement("td");
 							$td.appendChild(document.createTextNode(record[i]));
@@ -558,6 +567,9 @@ function data_load() {
 	);
 }
 
+$query_filter.elements.namedItem("begin").addEventListener("change", selections_update_download);
+$query_filter.elements.namedItem("end").addEventListener("change", selections_update_download);
+
 $query_filter.addEventListener(
 	"submit",
 	(event) => {
@@ -574,12 +586,7 @@ $query_load.addEventListener(
 	}
 );
 
-$query_element.addEventListener(
-	"change",
-	(event) => {
-		data_plot();
-	}
-);
+$query_element.addEventListener("change", data_plot);
 
 /**************************************************************************** / ************************************** / ******/
 

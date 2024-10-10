@@ -3,8 +3,8 @@
 
 #define SENSOR SENSOR_SHT40
 
-static String organisation_name = "OrganisationName";
 static String campaign_name = "CampaignName";
+static String organisation_name = "OrganisationName";
 static String device_name = "DeviceName";
 static bool use_AP_mode = true;
 static unsigned int measure_interval = 60000;

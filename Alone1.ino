@@ -152,8 +152,8 @@ static void save_settings(void) {
 		Serial.println("ERROR: failed to open setting file");
 		return;
 	}
-	file.println(organisation_name);
 	file.println(campaign_name);
+	file.println(organisation_name);
 	file.println(device_name);
 	file.println(measure_interval / 1000);
 	file.println(int(use_AP_mode));
@@ -182,10 +182,10 @@ static bool load_settings(void) {
 		return false;
 	}
 
-	organisation_name = file.readStringUntil('\n');
-	organisation_name.trim();
 	campaign_name = file.readStringUntil('\n');
 	campaign_name.trim();
+	organisation_name = file.readStringUntil('\n');
+	organisation_name.trim();
 	device_name = file.readStringUntil('\n');
 	device_name.trim();
 	s = file.readStringUntil('\n');
@@ -659,10 +659,10 @@ R"HTML(
 		void function () {
 			var $p;
 			$p = $E("p");
-			c_($p, $T("Organisation: "));
-			c_($p, $T(Alone.organisation));
-			c_($p, $T(" | Camp: "));
+			c_($p, $T("Campaign: "));
 			c_($p, $T(Alone.campaign));
+			c_($p, $T(" | Organisation: "));
+			c_($p, $T(Alone.organisation));
 			c_($p, $T(" | Device: "));
 			c_($p, $T(Alone.device));
 			c_(document.body, $p);
@@ -947,8 +947,8 @@ R"HTML(
 				if ("geolocation" in window.navigator) if (window.isSecureContext) {
 					function GPS_upload(planned_time, browser_time, position_time, coords) {
 						var body = new URLSearchParams;
-						body.append("organisation",  Alone.organisation);
 						body.append("campaign",      Alone.campaign);
+						body.append("organisation",  Alone.organisation);
 						body.append("device",        Alone.device);
 						body.append("time",          planned_time);
 						body.append("browser_time",  browser_time);
@@ -962,8 +962,8 @@ R"HTML(
 					}
 					function GPS_report(timestamp, coords) {
 						var body = new URLSearchParams;
-						body.append("organisation", Alone.organisation);
 						body.append("campaign",     Alone.campaign);
+						body.append("organisation", Alone.organisation);
 						body.append("device",       Alone.device);
 						body.append("time",         timestamp);
 						body.append("latitude",     coords.latitude);
@@ -1020,8 +1020,8 @@ R"HTML(
 						function (event) {
 							event.preventDefault();
 							var identity =
-								Alone.organisation + "\r\n" +
 								Alone.campaign + "\r\n" +
+								Alone.organisation + "\r\n" +
 								Alone.device + "\r\n" +
 								Alone.password + "\r\n";
 							new Promise(
@@ -1111,10 +1111,10 @@ R"HTML(
 		response.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
 		response.beginSend();
 		response.write(reinterpret_cast<uint8_t const *>(home_html_1), sizeof home_html_1 - 1);
-		response.print("\t\t\torganisation: \"");
-		response.print(javascript_escape(organisation_name));
 		response.print("\",\r\n\t\t\tcampaign: \"");
 		response.print(javascript_escape(campaign_name));
+		response.print("\t\t\torganisation: \"");
+		response.print(javascript_escape(organisation_name));
 		response.print("\",\r\n\t\t\tdevice: \"");
 		response.print(javascript_escape(device_name));
 		response.print("\",\r\n\t\t\tmeasure_interval: \"");
@@ -1441,20 +1441,6 @@ R"HTML('
 			"</form>\r\n"
 		);
 
-		setting_form(&response, "set_organisation");
-		response.print(
-			"\t<label>\r\n"
-			"\t\tOrganisation\r\n"
-			"\t\t<input type='text' name='organisation' required='' value='"
-		);
-		response.print(XML_escape(organisation_name));
-		response.print(
-			"' />\r\n"
-			"\t</label>\r\n"
-			"\t<button type='submit'>Set</button>\r\n"
-			"</form>\r\n"
-		);
-
 		setting_form(&response, "set_campaign");
 		response.print(
 			"\t<label>\r\n"
@@ -1462,6 +1448,20 @@ R"HTML('
 			"\t\t<input type='text' name='campaign' required='' value='"
 		);
 		response.print(XML_escape(campaign_name));
+		response.print(
+			"' />\r\n"
+			"\t</label>\r\n"
+			"\t<button type='submit'>Set</button>\r\n"
+			"</form>\r\n"
+		);
+
+		setting_form(&response, "set_organisation");
+		response.print(
+			"\t<label>\r\n"
+			"\t\tOrganisation\r\n"
+			"\t\t<input type='text' name='organisation' required='' value='"
+		);
+		response.print(XML_escape(organisation_name));
 		response.print(
 			"' />\r\n"
 			"\t</label>\r\n"
@@ -1644,18 +1644,18 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 				Serial.println(parameter->value());
 			}
 		}
-		parameter = request->getParam("organisation");
-		if (parameter != nullptr) {
-			Serial.print("INFO: command organisation = ");
-			Serial.println(parameter->value());
-			organisation_name = parameter->value();
-			need_save = true;
-		}
 		parameter = request->getParam("campaign");
 		if (parameter != nullptr) {
 			Serial.print("INFO: command campaign = ");
 			Serial.println(parameter->value());
 			campaign_name = parameter->value();
+			need_save = true;
+		}
+		parameter = request->getParam("organisation");
+		if (parameter != nullptr) {
+			Serial.print("INFO: command organisation = ");
+			Serial.println(parameter->value());
+			organisation_name = parameter->value();
 			need_save = true;
 		}
 		parameter = request->getParam("device");

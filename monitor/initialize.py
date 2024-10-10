@@ -10,8 +10,8 @@ try:
 	print("Create data table")
 	cursor.execute('''
 CREATE TABLE data (
-	organisation TEXT NOT NULL,
 	campaign TEXT NOT NULL,
+	organisation TEXT NOT NULL,
 	device TEXT NOT NULL,
 	time DATETIME NOT NULL,
 	device_time DATETIME,
@@ -19,7 +19,7 @@ CREATE TABLE data (
 	temperature REAL,
 	pressure REAL,
 	humidity REAL,
-	PRIMARY KEY (organisation, campaign, device, time)
+	PRIMARY KEY (campaign, organisation, device, time)
 )''')
 except Exception as e:
 	print(e)
@@ -29,8 +29,8 @@ try:
 	print("Create position table")
 	cursor.execute('''
 CREATE TABLE position (
-	organisation TEXT NOT NULL,
 	campaign TEXT NOT NULL,
+	organisation TEXT NOT NULL,
 	device TEXT NOT NULL,
 	time DATETIME NOT NULL,
 	browser_time DATETIME,
@@ -38,7 +38,7 @@ CREATE TABLE position (
 	latitude REAL,
 	longitude REAL,
 	altitude REAL,
-	PRIMARY KEY (organisation, campaign, device, time)
+	PRIMARY KEY (campaign, organisation, device, time)
 )''')
 except Exception as e:
 	print(e)
@@ -48,9 +48,9 @@ try:
 	print("Create password table")
 	cursor.execute('''
 CREATE TABLE password (
-	organisation TEXT NOT NULL,
+	campaign TEXT NOT NULL,
 	password TEXT NOT NULL,
-	PRIMARY KEY (organisation)
+	PRIMARY KEY (campaign)
 )''')
 except Exception as e:
 	print(e)

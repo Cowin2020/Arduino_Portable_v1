@@ -62,12 +62,12 @@ def to_CSV_value(x):
 database = sqlite3.connect(config.database)
 
 def select_data(table_name, fields, match, query):
-	organisation = match[1]
-	campaign = match[2]
+	campaign = match[1]
+	organisation = match[2]
 	device = match[3]
 	select = " FROM " + table_name
-	select = select + " WHERE organisation = ? AND campaign = ? AND device = ?"
-	bindings = [organisation, campaign, device]
+	select = select + " WHERE campaign = ? AND organisation = ? AND device = ?"
+	bindings = [campaign, organisation, device]
 	parameter = query.get("begin", [None])[0]
 	if parameter:
 		select = select + " AND time >= ?"
@@ -81,7 +81,7 @@ def select_data(table_name, fields, match, query):
 	cursor.execute("SELECT COUNT(*) " + select, bindings)
 	count = cursor.fetchone()[0]
 	cursor = database.cursor()
-	cursor.execute("SELECT " + "organisation, campaign, device, time, " + ", ".join(fields) + select, bindings)
+	cursor.execute("SELECT " + "campaign, organisation, device, time, " + ", ".join(fields) + select, bindings)
 	return (cursor, count)
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -106,7 +106,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 		self.send_header("CONTENT-TYPE", "text/csv; charset=UTF-8")
 		self.send_header("X-TOTAL-COUNT", str(count))
 		self.end_headers()
-		self.wfile.write(b"organisation,campaign,device,time,")
+		self.wfile.write(b"campaign,organisation,device,time,")
 		self.wfile.write(bytes(",".join(fields) + "\n", "UTF-8"))
 		for row in cursor:
 			self.wfile.write(bytes(",".join(map(to_CSV_value, row)), "UTF-8"))
@@ -114,16 +114,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 	def get_combined_CSV(self, match, query):
 		sql = (
-			"SELECT data.organisation, data.campaign, data.device, data.time, " +
+			"SELECT data.campaign, data.organisation, data.device, data.time, " +
 			", ".join(data_fields + position_fields) +
 			" FROM "
 				" data"
 					" LEFT OUTER JOIN position ON "
-						" position.organisation = data.organisation AND"
 						" position.campaign = data.campaign AND"
+						" position.organisation = data.organisation AND"
 						" position.device = data.device AND"
 						" position.time = data.time"
-				" WHERE data.organisation = ? AND data.campaign = ? AND data.device = ?"
+				" WHERE data.campaign = ? AND data.organisation = ? AND data.device = ?"
 		)
 		bindings = [match.group(1), match.group(2), match.group(3)]
 		parameter = query.get("begin", [None])[0]
@@ -140,7 +140,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 		self.send_response_only(http.HTTPStatus.OK, "OK")
 		self.send_header("CONTENT-TYPE", "text/csv; charset=UTF-8")
 		self.end_headers()
-		self.wfile.write(b"organisation,campaign,device,time,")
+		self.wfile.write(b"campaign,organisation,device,time,")
 		self.wfile.write(bytes(",".join(data_fields), "UTF-8"))
 		self.wfile.write(b",")
 		self.wfile.write(bytes(",".join(position_fields), "UTF-8"))
@@ -154,14 +154,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
 		lines = body.decode("UTF-8").split("\r\n")
 		if len(lines) < 5:
 			return self.send_error(400, "too few rows: " + len(lines))
-		organisation = lines[0]
-		campaign = lines[1]
+		campaign = lines[0]
+		organisation = lines[1]
 		device = lines[2]
 		password = lines[3]
 		parsed = list(csv.reader(lines[4:]))
 		rows = parsed[1:]
 		cursor = database.cursor()
-		cursor.execute("SELECT password FROM password WHERE organisation = ?", (organisation,))
+		cursor.execute("SELECT password FROM password WHERE campaign = ?", (campaign,))
 		if all(map(lambda row: row[0] != password, cursor)):
 			self.send_error(403)
 		cursor = database.cursor()
@@ -169,17 +169,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
 			if len(row) != len(fields) + 1:
 				continue
 			cursor.execute(
-				"INSERT INTO " + table_name + " (organisation, campaign, device, time, " + ", ".join(fields) + ") "
+				"INSERT INTO " + table_name + " (campaign, organisation, device, time, " + ", ".join(fields) + ") "
 					"VALUES (?, ?, ?, ?, " + ", ".join(map(lambda x: "?", fields)) + ") "
 					"ON CONFLICT DO NOTHING",
-				[organisation, campaign, device] + row)
+				[campaign, organisation, device] + row)
 		database.commit()
 		self.send_response_only(http.HTTPStatus.OK, "OK")
 		self.send_header("CONTENT-TYPE", "text/plain")
 		self.send_header("ACCESS-CONTROL-ALLOW-ORIGIN", "*")
 		self.end_headers()
 
-	pattern_list_campaigns = re.compile(r"/list/([^/]+)/campaigns.txt")
+	pattern_list_organisations = re.compile(r"/list/([^/]+)/organisations.txt")
 	pattern_list_devices = re.compile(r"/list/([^/]+)/([^/]+)/devices.txt")
 	pattern_data_JSON = re.compile(r"/data/([^/]+)/([^/]+)/(.+)\.json")
 	pattern_position_JSON = re.compile(r"/position/([^/]+)/([^/]+)/(.+)\.json")
@@ -192,7 +192,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 		url = urllib.parse.urlparse(self.path)
 		if homepage and url.path == "/":
 			self.send_response_only(http.HTTPStatus.OK, "OK")
-			#self.send_header("CONTENT-TYPE", "application/xhtml+xml")
+			#	self.send_header("CONTENT-TYPE", "application/xhtml+xml")
 			self.send_header("CONTENT-TYPE", "text/html")
 			self.end_headers()
 			self.wfile.write(homepage)
@@ -221,28 +221,28 @@ class Handler(http.server.BaseHTTPRequestHandler):
 			self.end_headers()
 			self.wfile.write(bytes(json.dumps(current), "UTF-8"))
 			return
-		if url.path == "/list/organisations.txt":
+		if url.path == "/list/campaigns.txt":
 			self.send_response_only(http.HTTPStatus.OK, "OK")
 			self.send_header("CONTENT-TYPE", "text/plain")
 			self.end_headers()
 			cursor = database.cursor()
-			cursor.execute("SELECT DISTINCT organisation FROM data ORDER BY organisation ASC")
+			cursor.execute("SELECT DISTINCT campaign FROM data ORDER BY campaign ASC")
 			for record in cursor:
 				self.wfile.write(bytes(record[0], "UTF-8"))
 				self.wfile.write(b"\n")
 			return
-		match = self.pattern_list_campaigns.fullmatch(url.path)
+		match = self.pattern_list_organisations.fullmatch(url.path)
 		if match:
 			self.send_response_only(http.HTTPStatus.OK, "OK")
 			self.send_header("CONTENT-TYPE", "text/plain")
 			self.end_headers()
 			cursor = database.cursor()
 			cursor.execute(
-				"SELECT DISTINCT campaign "
+				"SELECT DISTINCT organisation "
 					"FROM data "
-					"WHERE organisation = ? "
-					"ORDER BY campaign ASC",
-				(match.group(1),))
+					"WHERE campaign = ? "
+					"ORDER BY organisation ASC",
+				[match.group(1)])
 			for record in cursor:
 				self.wfile.write(bytes(record[0], "UTF-8"))
 				self.wfile.write(b"\n")
@@ -256,9 +256,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
 			cursor.execute(
 				"SELECT DISTINCT device "
 					"FROM data "
-					"WHERE organisation = ? AND campaign = ?"
+					"WHERE campaign = ? AND organisation = ?"
 					"ORDER BY device ASC",
-				(match.group(1), match.group(2)))
+				[match.group(1), match.group(2)])
 			for record in cursor:
 				self.wfile.write(bytes(record[0], "UTF-8"))
 				self.wfile.write(b"\n")
@@ -291,13 +291,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
 		if self.path == "/report":
 			body = self.content()
 			queries = {k: v[0] for k, v in urllib.parse.parse_qs(body.decode("UTF-8")).items()}
-			organisation = queries.get("organisation")
-			if organisation is None:
-				self.send_error(400, "organisation is missed")
-				return
 			campaign = queries.get("campaign")
 			if campaign is None:
 				self.send_error(400, "campaign is missed")
+				return
+			organisation = queries.get("organisation")
+			if organisation is None:
+				self.send_error(400, "organisation is missed")
 				return
 			device = queries.get("device")
 			if device is None:
