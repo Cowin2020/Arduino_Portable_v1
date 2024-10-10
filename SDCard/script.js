@@ -67,8 +67,8 @@ document.body.style["margin"] = "1ex";
 
 document.body.appendChild(
 	$E("p", null, [
-		$T("Organisation: "), $T(Alone.organisation),
-		$T(" | Camp: "), $T(Alone.campaign),
+		$T("Camp: "), $T(Alone.campaign),
+		$T(" | Organisation: "), $T(Alone.organisation),
 		$T(" | Device: "), $T(Alone.device)
 	])
 );
@@ -481,8 +481,8 @@ if (Alone.operator) {
 	else {
 		function GPS_upload(planned_time, browser_time, position_time, coords) {
 			var body = new URLSearchParams;
-			body.append("organisation", Alone.organisation);
 			body.append("campaign",     Alone.campaign);
+			body.append("organisation", Alone.organisation);
 			body.append("device",       Alone.device);
 			body.append("time",          planned_time);
 			body.append("browser_time",  browser_time);
@@ -495,8 +495,8 @@ if (Alone.operator) {
 		}
 		function GPS_report(timestamp, coords) {
 			var body = new URLSearchParams;
-			body.append("organisation", Alone.organisation);
 			body.append("campaign",     Alone.campaign);
+			body.append("organisation", Alone.organisation);
 			body.append("device",       Alone.device);
 			body.append("time",         timestamp);
 			body.append("latitude",     coords.latitude);
@@ -553,8 +553,8 @@ if (Alone.operator) {
 			function (event) {
 				event.preventDefault();
 				var identity =
-					Alone.organisation + "\r\n" +
 					Alone.campaign + "\r\n" +
+					Alone.organisation + "\r\n" +
 					Alone.device + "\r\n" +
 					Alone.password + "\r\n";
 				fetch("data/recent.csv")
