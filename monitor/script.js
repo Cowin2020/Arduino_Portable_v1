@@ -61,7 +61,12 @@ Current.prototype = {
 					L.latLng(device.latitude, device.longitude),
 					{
 						permanent: true,
-						content: device.identity
+						content:
+							device.identity +
+							"<br/>" +
+							iso_date(device.time, "<br/>") +
+							"<br/>" +
+							device.altitude + "m"
 					}
 				);
 				this.tooltips.push(tooltip);
