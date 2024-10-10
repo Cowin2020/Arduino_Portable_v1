@@ -79,7 +79,7 @@ def select_data(table_name, fields, match, query):
 	select = select + " ORDER BY time ASC"
 	cursor = database.cursor()
 	cursor.execute("SELECT COUNT(*) " + select, bindings)
-	count = fetchone()[0]
+	count = cursor.fetchone()[0]
 	cursor = database.cursor()
 	cursor.execute("SELECT " + "organisation, campaign, device, time, " + ", ".join(fields) + select, bindings)
 	return (cursor, count)
