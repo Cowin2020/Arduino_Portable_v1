@@ -2,6 +2,8 @@
 
 /* ************************************************************************** / ************************************** / **** */
 
+var modal_waiting = false;
+
 function iso_date(date_string, seperator="T") {
 	var date = new Date(date_string);
 	return (
@@ -121,7 +123,9 @@ Current.prototype = {
 			)
 			.catch(
 				(error) => {
+					modal_waiting = true;
 					alert("Failed to load current position: " + String(error));
+					modal_waiting = false;
 					console.error(error);
 				}
 			)
@@ -130,6 +134,7 @@ Current.prototype = {
 	run(interval, delay) {
 		setTimeout(
 			function () {
+				if (modal_waiting) return;
 				this.load();
 				if (this.interval) clearInterval(this.interval);
 				setInterval(this.load.bind(this), interval);
@@ -263,6 +268,9 @@ function Selection() {
 			this.$loading = document.createElement("span");
 				this.$loading.appendChild(document.createTextNode("Loading..."));
 			$fieldset.appendChild(this.$loading);
+			var $span = document.createElement("span");
+				$span.className = "grow";
+			$fieldset.appendChild($span);
 			this.$download = document.createElement("a");
 				this.$download.hidden = true;
 				this.$download.setAttribute("href", "#");
@@ -278,12 +286,9 @@ function Selection() {
 				this.$raw_position.setAttribute("href", "#");
 				this.$raw_position.appendChild(document.createTextNode("Raw GPS data"));
 			$fieldset.appendChild(this.$raw_position);
-			var $span = document.createElement("span");
-				$span.className = "grow";
-			$fieldset.appendChild($span);
 			this.$remove = document.createElement("button");
 				this.$load.setAttribute("type", "button");
-				this.$remove.appendChild(document.createTextNode("Remove"));
+				this.$remove.appendChild(document.createTextNode("Remove device"));
 				this.$remove.addEventListener(
 					"click",
 					(event) => {
@@ -363,7 +368,9 @@ Selection.prototype = {
 			)
 			.catch(
 				(error) => {
+					modal_waiting = true;
 					alert("Failed to load campaign list: " + String(error));
+					modal_waiting = false;
 					console.error(error);
 				}
 			)
@@ -409,7 +416,9 @@ Selection.prototype = {
 			)
 			.catch(
 				(error) => {
+					modal_waiting = true;
 					alert("Failed to load organisation list: " + String(error));
+					modal_waiting = false;
 					console.error(error);
 				}
 			)
@@ -466,7 +475,9 @@ Selection.prototype = {
 			)
 			.catch(
 				(error) => {
+					modal_waiting = true;
 					alert("Failed to load device list: " + String(error));
+					modal_waiting = false;
 					console.error(error);
 				}
 			)
@@ -607,7 +618,9 @@ function data_load() {
 	)
 	.catch(
 		(error) => {
+			modal_waiting = true;
 			alert("Failed to load data: " + String(error));
+			modal_waiting = false;
 			console.error(error);
 			return null;
 		}
@@ -628,6 +641,7 @@ $query_filter.addEventListener(
 	"submit",
 	(event) => {
 		event.preventDefault();
+		if (modal_waiting) return;
 		data_load();
 	}
 );
@@ -636,6 +650,7 @@ $query_load.addEventListener(
 	"submit",
 	(event) => {
 		event.preventDefault();
+		if (modal_waiting) return;
 		data_load();
 	}
 );
