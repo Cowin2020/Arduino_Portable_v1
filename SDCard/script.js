@@ -184,21 +184,25 @@ void function () {
 }();
 
 var $list;
+var $debug;
 document.body.appendChild(
 	$E("table", null, [
+		$E("caption", null, [$T("Weather data")]),
 		$E("thead", null, [
-			$E("tr", null,
-				["time"]
-					+ Alone.data_fields(Alone.data_meta).map(
+			$debug = $E("tr", null,
+				[$E("th", null, [$T("time")])].concat(
+					Alone.data_fields.slice(Alone.data_meta).map(
 						function (field) {
 							return $E("th", null, [$T(field.name)]);
 						}
 					)
+				)
 			)
 		]),
 		$list = $E("tbody")
 	])
 );
+console.debug("DEBUG: $debug =", $debug);
 
 var $plots = Alone.data_fields.slice(Alone.data_meta).map(
 	function () {
@@ -318,12 +322,13 @@ function data_load() {
 					var fields = rows[rows.length - i - 1];
 					$list.appendChild(
 						$E("tr", null,
-							fields[0]
-								+ fields.slice(Alone.data_meta).map(
+							[$E("td", null, [$T(fields[0])])].concat(
+								fields.slice(Alone.data_meta).map(
 									function (field) {
 										return $E("td", null, [$T(field)]);
 									}
 								)
+							)
 						)
 					);
 				}
