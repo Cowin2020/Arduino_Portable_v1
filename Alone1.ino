@@ -1111,9 +1111,9 @@ R"HTML(
 		response.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
 		response.beginSend();
 		response.write(reinterpret_cast<uint8_t const *>(home_html_1), sizeof home_html_1 - 1);
-		response.print("\",\r\n\t\t\tcampaign: \"");
+		response.print("\t\tcampaign: \"");
 		response.print(javascript_escape(campaign_name));
-		response.print("\t\t\torganisation: \"");
+		response.print("\",\r\n\t\t\t\torganisation: \"");
 		response.print(javascript_escape(organisation_name));
 		response.print("\",\r\n\t\t\tdevice: \"");
 		response.print(javascript_escape(device_name));
