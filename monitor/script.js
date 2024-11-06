@@ -300,8 +300,8 @@ function Selection() {
 		this.$form.appendChild($fieldset);
 	this.$form.addEventListener("submit", (event) => event.preventDefault());
 	this.$load.addEventListener("click", this.load_campaigns.bind(this));
-	this.$organisation.addEventListener("change", this.load_campaigns.bind(this));
-	this.$campaign.addEventListener("change", this.load_devices.bind(this));
+	this.$campaign.addEventListener("change", this.load_organisations.bind(this));
+	this.$organisation.addEventListener("change", this.load_devices.bind(this));
 	this.load_campaigns();
 	return this;
 }
@@ -430,7 +430,7 @@ Selection.prototype = {
 	},
 	load_devices() {
 		this.$device.parentElement.hidden = true;
-		if (!this.$campaign.value || !this.organisation.value) {
+		if (!this.$campaign.value || !this.$organisation.value) {
 			this.$loading.hidden = true;
 			return;
 		}
