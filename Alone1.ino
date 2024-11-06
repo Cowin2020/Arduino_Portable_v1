@@ -17,20 +17,10 @@
 #include <Adafruit_SSD1306.h>
 #include <Fonts/TomThumb.h>
 #include <SD.h>
-
-#define SENSOR_BME280 1
-#define SENSOR_SHT40 2
+#include <Adafruit_Sensor.h>
+#include <Adafruit_SHT4x.h>
 
 #include "config.h"
-
-#if SENSOR == SENSOR_BME280
-	#include <Adafruit_BME280.h>
-#elif SENSOR == SENSOR_SHT40
-	#include <Adafruit_Sensor.h>
-	#include <Adafruit_SHT4x.h>
-#else
-	#error Invalid sensor type
-#endif
 
 #define FONT_OFFSET 12
 
@@ -73,9 +63,6 @@ struct Data {
 	DateTime time;
 	DateTime device_time;
 	float temperature;
-#if SENSOR == SENSOR_BME280
-	float pressure;
-#endif
 	float humidity;
 };
 
@@ -84,9 +71,6 @@ static Field const data_fields[] = {
 	{"device time", nullptr},
 	{"clock synchronized", nullptr},
 	{"temperature", "\u2103"},
-#if SENSOR == SENSOR_BME280
-	{"pressure", "Pa"},
-#endif
 	{"humidity", "%"}
 };
 
@@ -97,9 +81,6 @@ static String CSV_Data(struct Data const *const data) {
 		+ ',' + show_time(&data->device_time)
 		+ ',' + clock_synchronized
 		+ ',' + data->temperature
-#if SENSOR == SENSOR_BME280
-		+ ',' + data->pressure
-#endif
 		+ ',' + data->humidity;
 }
 
@@ -261,11 +242,7 @@ static DateTime round_up_time(DateTime const *const datetime, unsigned long int 
 /* *************************************************************************** / ************************************ */
 /* Measurement */
 
-#if SENSOR == SENSOR_BME280
-	static Adafruit_BME280 BME280;
-#elif SENSOR == SENSOR_SHT40
-	static Adafruit_SHT4x SHT4x = Adafruit_SHT4x();;
-#endif
+static Adafruit_SHT4x SHT4x = Adafruit_SHT4x();;
 
 static size_t const records_max_size = 60;
 static std::deque<Data> data_records;
@@ -285,16 +262,10 @@ static DateTime measure(void) {
 		data.time = round_up_time(&data.device_time);
 	{
 		DEVICE_LOCK(device_lock);
-		#if SENSOR == SENSOR_BME280
-			data.temperature = BME280.readTemperature();
-			data.pressure = BME280.readPressure();
-			data.humidity = BME280.readHumidity();
-		#elif SENSOR == SENSOR_SHT40
-			sensors_event_t temperature_event, humidity_event;
-			SHT4x.getEvent(&humidity_event, &temperature_event);
-			data.temperature = temperature_event.temperature;
-			data.humidity = humidity_event.relative_humidity;
-		#endif
+		sensors_event_t temperature_event, humidity_event;
+		SHT4x.getEvent(&humidity_event, &temperature_event);
+		data.temperature = temperature_event.temperature;
+		data.humidity = humidity_event.relative_humidity;
 	}
 	String const data_string = CSV_Data(&data);
 	Serial.print("INFO: Measure ");
@@ -1886,10 +1857,6 @@ static void redraw_display(void) {
 		Monitor.println(time);
 		Monitor.println("Temperature:");
 		Monitor.println(data->temperature);
-		#if SENSOR == SENSOR_BME280
-			Monitor.println("Pressure:");
-			Monitor.println(data->pressure);
-		#endif
 		Monitor.println("Humidity:");
 		Monitor.println(data->humidity);
 	}
@@ -1988,29 +1955,17 @@ void setup(void) {
 	}
 
 	/* Sensor */
-	#if SENSOR == SENSOR_BME280
-		while (!BME280.begin()) {
-			Serial.println("ERROR: BME280 not found");
-			Monitor.println("BME280 not found");
-			Monitor.display();
-			delay(reinitialize_interval);
-		}
-		Serial.println("BME280 found");
-		Monitor.println("BME280 found");
+	while (!SHT4x.begin()) {
+		Serial.println("ERROR: SHT40 not found");
+		Monitor.println("SHT40 not found");
 		Monitor.display();
-	#elif SENSOR == SENSOR_SHT40
-		while (!SHT4x.begin()) {
-			Serial.println("ERROR: SHT40 not found");
-			Monitor.println("SHT40 not found");
-			Monitor.display();
-			delay(reinitialize_interval);
-		}
-		SHT4x.setPrecision(SHT4X_HIGH_PRECISION);
-		SHT4x.setHeater(SHT4X_NO_HEATER);
-		Serial.println("SHT40 found");
-		Monitor.println("SHT40 found");
-		Monitor.display();
-	#endif
+		delay(reinitialize_interval);
+	}
+	SHT4x.setPrecision(SHT4X_HIGH_PRECISION);
+	SHT4x.setHeater(SHT4X_NO_HEATER);
+	Serial.println("SHT40 found");
+	Monitor.println("SHT40 found");
+	Monitor.display();
 
 	/* WiFi */
 	WIFI::setup();

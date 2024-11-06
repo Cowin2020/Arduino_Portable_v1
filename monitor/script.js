@@ -379,6 +379,10 @@ Selection.prototype = {
 	load_organisations() {
 		this.$device.parentElement.hidden = true;
 		this.$organisation.parentElement.hidden = true;
+		if (!this.$campaign.value) {
+			this.$loading.hidden = true;
+			return;
+		}
 		this.$loading.hidden = false;
 		return (
 			fetch("list/" + encodeURIComponent(this.$campaign.value) + "/organisations.txt")
@@ -426,6 +430,10 @@ Selection.prototype = {
 	},
 	load_devices() {
 		this.$device.parentElement.hidden = true;
+		if (!this.$campaign.value || !this.organisation.value) {
+			this.$loading.hidden = true;
+			return;
+		}
 		this.$loading.hidden = false;
 		return (
 			fetch(
@@ -536,7 +544,7 @@ function data_list() {
 			records.forEach(
 				function (record) {
 					var $tr = document.createElement("tr");
-					[0, 1, 2, 3, 6, 7, /* 8, */ 11, 12, 13].forEach(
+					[0, 1, 2, 3, 6, 7, 10, 11, 12].forEach(
 						function (i) {
 							var $td = document.createElement("td");
 							$td.appendChild(document.createTextNode(record[i]));

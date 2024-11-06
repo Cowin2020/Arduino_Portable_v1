@@ -1,6 +1,13 @@
 import "./plotly.min.js";
 
+/* Options */
+
 var GPS_watch = false;
+
+/* Constants */
+
+var data_recent = "data/recent.csv";
+var gps_recent = "gps/recent.csv";
 
 /* Utilities */
 
@@ -133,7 +140,7 @@ document.body.appendChild(
 				);
 			}
 			children.push(
-				$E("a", {"href": "data/recent.csv", "download": "data_recent.csv"}, [
+				$E("a", {"href": data_recent, "download": "data_recent.csv"}, [
 					$T("Recent weather data")
 				])
 			);
@@ -143,7 +150,7 @@ document.body.appendChild(
 				])
 			);
 			children.push(
-				$E("a", {"href": "gps/recent.csv", "download": "gps_recent.csv"}, [
+				$E("a", {"href": gps_recent, "download": "gps_recent.csv"}, [
 					$T("Recent GPS data")
 				])
 			);
@@ -562,7 +569,7 @@ if (Alone.operator) {
 					Alone.organisation + "\r\n" +
 					Alone.device + "\r\n" +
 					Alone.password + "\r\n";
-				fetch("data/recent.csv")
+				fetch(Alone.data_file)
 				.then(
 					function (response) {
 						if (response.status !== 200)
@@ -589,7 +596,7 @@ if (Alone.operator) {
 				)
 				.then(
 					function () {
-						return fetch("gps/recent.csv");
+						return fetch(Alone.gps_file);
 					}
 				)
 				.then(

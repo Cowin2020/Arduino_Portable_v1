@@ -17,7 +17,6 @@ CREATE TABLE data (
 	device_time DATETIME,
 	clock_synchronized BOOLEAN,
 	temperature REAL,
-	pressure REAL,
 	humidity REAL,
 	PRIMARY KEY (campaign, organisation, device, time)
 )''')

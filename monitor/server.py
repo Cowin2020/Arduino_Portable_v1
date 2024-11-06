@@ -10,7 +10,7 @@ import ssl
 import sqlite3
 
 current_fields = ["time", "latitude", "longitude", "altitude"]
-data_fields = ["device_time", "clock_synchronized", "temperature", "humidity", "pressure"]
+data_fields = ["device_time", "clock_synchronized", "temperature", "humidity"]
 position_fields = ["browser_time", "position_time", "latitude", "longitude", "altitude"]
 
 current = dict()
