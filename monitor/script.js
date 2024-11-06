@@ -113,7 +113,7 @@ Current.prototype = {
 									time: record[0],
 									latitude: latitude,
 									longitude: longitude,
-									altitude: Number.parseFloat(record[3])
+									altitude: Number.parseFloat(record[3]).toFixed(1)
 								}
 							);
 					}
