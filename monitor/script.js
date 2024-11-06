@@ -239,11 +239,6 @@ function Selection() {
 			var $legend = document.createElement("legend");
 				$legend.appendChild(document.createTextNode("Select device"));
 			$fieldset.appendChild($legend);
-			this.$load = document.createElement("button");
-				this.$load.hidden = true;
-				this.$load.setAttribute("type", "button");
-				this.$load.appendChild(document.createTextNode("Reload campaigns"));
-			$fieldset.appendChild(this.$load);
 			var $label = document.createElement("label");
 				$label.hidden = true;
 				$label.appendChild(document.createTextNode("Campaign:"));
@@ -287,7 +282,7 @@ function Selection() {
 				this.$raw_position.appendChild(document.createTextNode("Raw GPS data"));
 			$fieldset.appendChild(this.$raw_position);
 			this.$remove = document.createElement("button");
-				this.$load.setAttribute("type", "button");
+				this.$remove.setAttribute("type", "button");
 				this.$remove.appendChild(document.createTextNode("Remove device"));
 				this.$remove.addEventListener(
 					"click",
@@ -299,7 +294,6 @@ function Selection() {
 			$fieldset.appendChild(this.$remove);
 		this.$form.appendChild($fieldset);
 	this.$form.addEventListener("submit", (event) => event.preventDefault());
-	this.$load.addEventListener("click", this.load_campaigns.bind(this));
 	this.$campaign.addEventListener("change", this.load_organisations.bind(this));
 	this.$organisation.addEventListener("change", this.load_devices.bind(this));
 	this.load_campaigns();
