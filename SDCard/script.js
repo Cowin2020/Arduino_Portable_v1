@@ -573,7 +573,7 @@ if (Alone.operator) {
 				.then(
 					function (response) {
 						if (response.status !== 200)
-							return Promise.reject(response.status)
+							return Promise.reject("Download weather data from device: " + response.status)
 						return response.text();
 					}
 				)
@@ -591,7 +591,7 @@ if (Alone.operator) {
 				.then(
 					function (response) {
 						if (response.status !== 200)
-							return Promise.reject(response.status)
+							return Promise.reject("Upload weather data to server: " + response.status)
 					}
 				)
 				.then(
@@ -602,7 +602,7 @@ if (Alone.operator) {
 				.then(
 					function (response) {
 						if (response.status !== 200)
-							return Promise.reject(response.status)
+							return Promise.reject("Download GPS data from device: " + response.status)
 						return response.text();
 					}
 				)
@@ -619,8 +619,8 @@ if (Alone.operator) {
 				)
 				.then(
 					function (response) {
-						if (response.status !== 200)
-							return Promise.reject(response.status)
+						if (response.status !== 200 && response.status !== 204)
+							return Promise.reject("Upload GPS data to server: " + response.status)
 					}
 				)
 				.catch(
