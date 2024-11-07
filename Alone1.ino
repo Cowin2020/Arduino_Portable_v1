@@ -980,6 +980,7 @@ R"HTML(
 						setInterval(GPS_request, Alone.measure_interval);
 					}
 					setTimeout(GPS_start, (Date.now() - MILLISECONDS_FROM_1970_TO_2000) % Alone.measure_interval);
+					setTimeout(GPS_request, 0);
 					function GPS_callback(spacetime) {
 						GPS_record(string_from_Date(spacetime.timestamp), spacetime);
 					}
