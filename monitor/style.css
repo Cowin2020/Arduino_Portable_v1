@@ -12,11 +12,15 @@ section#query .grow {
 	flex-grow: 1;
 }
 
-section#query form#query-select {
+section#query div#query-control {
+	display: flex;
+}
+
+section#query > div#query-control > form#query-select {
 	display: inline-block;
 }
 
-section#query form#query-load {
+section#query > div#query-control > form#query-load {
 	display: inline-block;
 }
 

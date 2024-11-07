@@ -176,7 +176,7 @@ function Selections() {
 	return this;
 }
 Selections.prototype = {
-	$container: document.getElementById("selections"),
+	$container: document.getElementById("query-selections"),
 	$add: document.getElementById("query-select"),
 	size() {
 		return this.set.size;

@@ -19,8 +19,8 @@
 					<label>End:<input type='datetime-local' name='end' step='1'/></label>
 				</fieldset>
 			</form>
-			<div id='selections'></div>
-			<div style='display: flex'>
+			<div id='query-selections'></div>
+			<div id='query-control'>
 				<form id='query-load'>
 					<button type='submit'>Load</button>
 				</form>
@@ -61,10 +61,15 @@
 			type='text/javascript'
 			src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
 			integrity='sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo='
-			crossorigin=''></script>
+			crossorigin=''
+		></script>
 		<script
 			type='text/javascript'
-			src='https://cdn.plot.ly/plotly-2.35.2.min.js'></script>
-		<script type='text/javascript' src='script.js'></script>
+			src='https://cdn.plot.ly/plotly-2.35.2.min.js'
+		></script>
+		<script
+			type='text/javascript'
+			src='script.js'
+		></script>
 	</body>
 </html>
