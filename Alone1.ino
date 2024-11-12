@@ -15,17 +15,21 @@
 #include <PsychicStreamResponse.h>
 #include <RTClib.h>
 #include <Adafruit_SSD1306.h>
-#include <Fonts/TomThumb.h>
 #include <SD.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_SHT4x.h>
 
+#include <Fonts/FreeSans9pt7b.h>
+#define FONT_0 FreeSans9pt7b
+#define FONT_0_OFFSET 16
+#include <Fonts/FreeSerif9pt7b.h>
+#define FONT_1 FreeSerif9pt7b
+#define FONT_1_OFFSET 16
+
 #include "config.h"
 
-#define FONT_OFFSET 12
-
 static String show_time(DateTime const *);
-static void redraw_display(void);
+static void redraw_display(bool start_over = false);
 
 /* *************************************************************************** / ************************************ */
 
@@ -287,7 +291,7 @@ static DateTime measure(void) {
 		file.close();
 	}
 
-	redraw_display();
+	redraw_display(true);
 	return data.device_time;
 }
 
@@ -443,7 +447,7 @@ namespace WIFI {
 				WiFi.localIP().printTo(Serial);
 				Serial.println();
 			}
-			redraw_display();
+			//	redraw_display();
 		}
 		return status;
 	}
@@ -480,6 +484,11 @@ namespace WIFI {
 			Serial.print("IP address: ");
 			WiFi.softAPIP().printTo(Serial);
 			Serial.println();
+			Monitor.print("AP:");
+			Monitor.println(WiFi.softAPSSID());
+			WiFi.softAPIP().printTo(Monitor);
+			Monitor.println();
+			Monitor.display();
 
 			/* DNS server */
 			//	static uint16_t const DNS_port = 53;
@@ -1822,60 +1831,71 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 /* *************************************************************************** / ************************************ */
 /* Main procedures */
 
-static void redraw_display(void) {
+static void redraw_display(bool start_over) {
+	static unsigned short int section = 0;
+	if (start_over) section = 0;
 	DISPLAY_LOCK(display_lock);
 	Monitor.clearDisplay();
-	Monitor.setCursor(0, FONT_OFFSET);
-	if (SD_card_exist)
-		Monitor.println("SD card found");
-	else
-		Monitor.println("No SD card");
-	if (use_AP_mode) {
-		Monitor.println("WiFi SSID:");
-		Monitor.println(WiFi.softAPSSID());
-		Monitor.println("IP address:");
-		WiFi.softAPIP().printTo(Monitor);
-		Monitor.println();
-	}
-	else {
-		signed int status = WiFi.status();
-		Monitor.println(WIFI::status_message(status));
-		if (WiFi.status() == WL_CONNECTED) {
-			Monitor.println("WiFi SSID:");
-			Monitor.println(WiFi.SSID());
-			Monitor.println("IP address:");
-			WiFi.localIP().printTo(Monitor);
-			Monitor.println();
-		}
-	}
-	if (data_records.size()) {
+	if (section == 0 && data_records.size()) {
 		Data const *const data = &data_records.back();
-		char date[11], time[9];
+		char year[6], date[7], time[6];
 		String fulltime = show_time(&data->time);
-		if (fulltime.length() ==19) {
-			memcpy(date, fulltime.c_str(), 10);
-			date[10] = 0;
-			memcpy(time, fulltime.c_str() + 11, 8);
-			time[8] = 0;
+		if (fulltime.length() == 19) {
+			memcpy(year, fulltime.c_str(), 5);
+			year[5] = 0;
+			memcpy(date, fulltime.c_str() + 5, 5);
+			date[5] = 0;
+			memcpy(time, fulltime.c_str() + 11, 5);
+			time[5] = 0;
 		}
 		else {
-			date[0] = '?';
-			date[1] = 0;
-			time[0] = '?';
-			time[1] = 0;
+			year[0] = date[0] = time[0] = '?';
+			year[1] = date[1] = time[1] = 0;
 		}
-		Monitor.println("Time:");
+		Monitor.setRotation(3);
+		Monitor.setFont(&FONT_0);
+		Monitor.setCursor(0, FONT_0_OFFSET);
+		Monitor.println(year);
 		Monitor.println(date);
 		Monitor.println(time);
-		Monitor.println("Temperature:");
-		Monitor.println(data->temperature);
-		Monitor.println("Humidity:");
-		Monitor.println(data->humidity);
+		Monitor.print(data->temperature, 1);
+		Monitor.println("C");
+		Monitor.print(data->humidity, 1);
+		Monitor.println("%");
+		++section;
+	}
+	else {
+		Monitor.setRotation(0);
+		Monitor.setFont(&FONT_1);
+		Monitor.setCursor(0, FONT_1_OFFSET);
+		if (SD_card_exist)
+			Monitor.println("SD card found");
+		else
+			Monitor.println("No SD card");
+		if (use_AP_mode) {
+			Monitor.print("AP:");
+			Monitor.println(WiFi.softAPSSID());
+			WiFi.softAPIP().printTo(Monitor);
+			Monitor.println();
+		}
+		else {
+			signed int status = WiFi.status();
+			Monitor.println(WIFI::status_message(status));
+			if (WiFi.status() == WL_CONNECTED) {
+				Monitor.print("STA:");
+				Monitor.println(WiFi.SSID());
+				WiFi.localIP().printTo(Monitor);
+				Monitor.println();
+			}
+		}
+		section = 0;
 	}
 	Monitor.display();
 }
 
 void loop(void) {
+	static unsigned short int count = 0;
+
 	delay(1000);
 
 	if (need_save) {
@@ -1898,6 +1918,11 @@ void loop(void) {
 			need_reboot = false;
 			esp_restart();
 		}
+	}
+
+	if (++count >= display_refresh_interval) {
+		count = 0;
+		redraw_display();
 	}
 }
 
@@ -1934,12 +1959,12 @@ void setup(void) {
 
 	/* OLED display */
 	Monitor.begin(SSD1306_SWITCHCAPVCC, 0x3C);
-	Monitor.setFont(&TomThumb);
-	Monitor.setTextColor(SSD1306_WHITE, SSD1306_BLACK);
 	Monitor.setRotation(3);
+	Monitor.invertDisplay(false);
+	Monitor.setTextColor(SSD1306_WHITE, SSD1306_BLACK);
+	Monitor.setCursor(0, 0);
 	Monitor.clearDisplay();
 	Monitor.display();
-	Monitor.setCursor(0, FONT_OFFSET);
 
 	/* Start-up delay */
 	delay(start_wait_time);
@@ -1948,35 +1973,38 @@ void setup(void) {
 	pinMode(SD_MISO, INPUT_PULLUP);
 	SPI.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
 	SD_card_exist = SD.begin(SD_CS, SPI);
-	if (SD_card_exist)
+	if (SD_card_exist) {
+		Serial.println("SD card found");
+		Monitor.println("OK SD card");
 		load_settings();
+	}
 	else {
 		Serial.println("SD card not found");
-		Monitor.println("SD card not found");
+		Monitor.println("No SD card");
 	}
 
 	/* Clock */
 	external_clock_available = external_clock.begin();
 	if (external_clock_available) {
 		Serial.println("Clock found");
-		Monitor.println("Clock found");
+		Monitor.println("OK clock");
 	}
 	else {
 		Serial.println("Clock not found");
-		Monitor.println("Clock not found");
+		Monitor.println("No clock");
 	}
 
 	/* Sensor */
 	while (!SHT4x.begin()) {
 		Serial.println("ERROR: SHT40 not found");
-		Monitor.println("SHT40 not found");
+		Monitor.println("No SHT40");
 		Monitor.display();
 		delay(reinitialize_interval);
 	}
 	SHT4x.setPrecision(SHT4X_HIGH_PRECISION);
 	SHT4x.setHeater(SHT4X_NO_HEATER);
 	Serial.println("SHT40 found");
-	Monitor.println("SHT40 found");
+	Monitor.println("OK SHT40");
 	Monitor.display();
 
 	/* WiFi */
@@ -1989,6 +2017,9 @@ void setup(void) {
 	/* Spawn measurement thread */
 	set_pthread_stack_size(4096);
 	std::thread(measure_thread).detach();
+
+	/* Main loop delay */
+	delay(start_wait_time);
 }
 
 /* *************************************************************************** / ************************************ */
