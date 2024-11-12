@@ -1858,10 +1858,12 @@ static void redraw_display(bool start_over) {
 		Monitor.println(year);
 		Monitor.println(date);
 		Monitor.println(time);
+		Monitor.println();
 		Monitor.print(data->temperature, 1);
 		Monitor.println("C");
 		Monitor.print(data->humidity, 1);
 		Monitor.println("%");
+		Monitor.drawLine(0, 76, 63, 76, SSD1306_WHITE);
 		++section;
 	}
 	else {
