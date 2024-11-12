@@ -191,12 +191,11 @@ void function () {
 }();
 
 var $list;
-var $debug;
 document.body.appendChild(
 	$E("table", null, [
 		$E("caption", null, [$T("Weather data")]),
 		$E("thead", null, [
-			$debug = $E("tr", null,
+			$E("tr", null,
 				[$E("th", null, [$T("time")])].concat(
 					Alone.data_fields.slice(Alone.data_meta).map(
 						function (field) {
@@ -209,8 +208,6 @@ document.body.appendChild(
 		$list = $E("tbody")
 	])
 );
-console.debug("DEBUG: $debug =", $debug);
-
 var $plots = Alone.data_fields.slice(Alone.data_meta).map(
 	function () {
 		var $plot = $E("div", {"class": "plot"});
@@ -351,6 +348,105 @@ var GPS_index_latitude = Alone.gps_fields.findIndex(function (field) {return fie
 var GPS_index_longitude = Alone.gps_fields.findIndex(function (field) {return field.name === "longitude";});
 var GPS_index_altitude = Alone.gps_fields.findIndex(function (field) {return field.name === "altitude";});
 
+if ("L" in window) {
+	/* initialize leaflet */
+	$GPS.plot.hidden = false;
+	$GPS.map =
+		window.L.map(
+			$GPS.plot,
+			{
+				center: L.latLng(22.35, 114.130),
+				zoom: 12
+			}
+		);
+	$GPS.map.addLayer(
+		new L.TileLayer(
+			"https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+			{
+				attribution: "Map data &#xA9; <a href='https://www.openstreetmap.org/about/'>OpenStreetMap</a>"
+			}
+		)
+	);
+	$GPS.plot.hidden = true;
+}
+
+function GPS_plot() {
+	if ("L" in window) {
+		/* use leaflet */
+		$GPS.plot.hidden = false;
+		if ("polyline" in $GPS) {
+			$GPS.polyline.remove();
+			delete $GPS.polyline;
+		}
+		$GPS.polyline =
+			window.L.polyline(
+				GPS.map(
+					function (record) {
+						return [record[GPS_index_latitude], record[GPS_index_longitude]];
+					}
+				),
+				{
+					color: "orangered"
+				}
+			);
+		$GPS.map.addLayer($GPS.polyline);
+	}
+	else {
+		/* use plotly */
+		$GPS.plot.hidden = false;
+		console.debug("DEBUG: Plotly.react");
+		Plotly.react(
+			$GPS.plot,
+			{
+				data: [
+					{
+						type: "scatter",
+						mode: "lines+markers",
+						marker: {color: "red"},
+						x: GPS.map(function (record) {return record[GPS_index_longitude];}),
+						y: GPS.map(function (record) {return record[GPS_index_latitude];})
+					}
+				],
+				layout: {
+					title: "Position",
+					xaxis: {
+						title: "Longitude (E)"
+					},
+					yaxis: {
+						title: "Latitude (N)",
+						scaleanchor: "x"
+					},
+					images: [
+						{
+							source: "HK.jpg",
+							layer: "below",
+							xref: "x",
+							yref: "y",
+							x: 113.8303978,
+							y: 22.1501391,
+							sizex: 0.61396362,
+							sizey: 0.41495771,
+							xanchor: "left",
+							yanchor: "bottom",
+							sizing: "stretch",
+							opacity: 0.75
+						}
+					],
+					uirevision: true,
+					dragmode: false,
+					margin: {
+						r: 8
+					}
+				},
+				config: {
+					responsive: true,
+					scrollZoom: true
+				}
+			}
+		);
+	}
+}
+
 function GPS_show() {
 	if (!GPS.length) {
 		$GPS.table.hidden = true;
@@ -365,56 +461,7 @@ function GPS_show() {
 	$GPS.altitude.textContent = last[GPS_index_altitude];
 	$GPS.table.hidden = false;
 
-	$GPS.plot.hidden = false;
-	Plotly.react(
-		$GPS.plot,
-		{
-			data: [
-				{
-					type: "scatter",
-					mode: "lines+markers",
-					marker: {color: "red"},
-					x: GPS.map(function (record) {return record[GPS_index_longitude];}),
-					y: GPS.map(function (record) {return record[GPS_index_latitude];})
-				}
-			],
-			layout: {
-				title: "Position",
-				xaxis: {
-					title: "Longitude (E)"
-				},
-				yaxis: {
-					title: "Latitude (N)",
-					scaleanchor: "x"
-				},
-				images: [
-					{
-						source: "HK.jpg",
-						layer: "below",
-						xref: "x",
-						yref: "y",
-						x: 113.8303978,
-						y: 22.1501391,
-						sizex: 0.61396362,
-						sizey: 0.41495771,
-						xanchor: "left",
-						yanchor: "bottom",
-						sizing: "stretch",
-						opacity: 0.75
-					}
-				],
-				uirevision: true,
-				dragmode: false,
-				margin: {
-					r: 8
-				}
-			},
-			config: {
-				responsive: true,
-				scrollZoom: true
-			}
-		}
-	);
+	GPS_plot();
 }
 
 function GPS_load() {

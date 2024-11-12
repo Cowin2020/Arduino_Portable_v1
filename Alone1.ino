@@ -575,9 +575,20 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 <meta name='viewport' content='width=device-width, initial-scale=1' />
 <title>Weather data</title>
 <link rel='stylesheet' type='text/css' href='style.css' />
+<link
+	rel='stylesheet'
+	href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'
+	integrity='sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY='
+	crossorigin='' />
 </head>
 <body>
 <noscript>Javascript is required for this web page.</noscript>
+<script
+	type='text/javascript'
+	src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
+	integrity='sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo='
+	crossorigin=''
+></script>
 <script type='text/javascript'>
 	(function(p){document.readyState!=="loading"?p():document.addEventListener("DOMContentLoaded",p)})(function(p){
 		window.Alone = {
