@@ -42,7 +42,6 @@ function Current(element_id) {
 			}
 		)
 	);
-	this.map.addLayer(new L.LayerGroup());
 	this.tooltips = new Array();
 	this.interval = null;
 	return this;
