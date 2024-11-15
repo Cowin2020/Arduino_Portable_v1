@@ -155,7 +155,7 @@ document.body.appendChild(
 				])
 			);
 			children.push(
-				$E("a", {"href": "gps.csv", "download": ""}, [
+				$E("a", {"href": Alone.gps_file, "download": ""}, [
 					$T("All GPS data")
 				])
 			);
@@ -394,7 +394,6 @@ function GPS_plot() {
 	else {
 		/* use plotly */
 		$GPS.plot.hidden = false;
-		console.debug("DEBUG: Plotly.react");
 		Plotly.react(
 			$GPS.plot,
 			{

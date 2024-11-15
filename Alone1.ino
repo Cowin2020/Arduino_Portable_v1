@@ -283,6 +283,8 @@ static DateTime measure(void) {
 		SDCARD_LOCK(sdcard_lock);
 		File file = SD.open(data_filename, "a", true);
 		try {
+			if (!file.position())
+				file.println(data_header);
 			file.println(data_string);
 		}
 		catch (...) {
@@ -1342,7 +1344,9 @@ R"HTML(
 			SDCARD_LOCK(sdcard_lock);
 			File file = SD.open(gps_filename, "a", true);
 			try {
-				file.println(CSV_GPS(&gps));
+				if (!file.position())
+					file.println(gps_header);
+				file.println(GPS_string);
 			}
 			catch (...) {
 				Serial.println("ERROR: failed to write GPS data into SD card");
@@ -1749,16 +1753,22 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 			data_records.clear();
 			gps_records.clear();
 			SDCARD_LOCK(sdcard_lock);
-			SD.remove(data_filename);
-			SD.remove(gps_filename);
-			File file = SD.open(data_filename, "w", true);
+			File data_file = SD.open(data_filename, "w", true);
 			try {
-				file.println(data_header);
+				data_file.println(data_header);
 			}
 			catch (...) {
 				Serial.println("ERROR: failed to write header into data file");
 			}
-			file.close();
+			data_file.close();
+			File gps_file = SD.open(gps_filename, "w", true);
+			try {
+				gps_file.println(gps_header);
+			}
+			catch (...) {
+				Serial.println("ERROR: failed to write header into GPS file");
+			}
+			gps_file.close();
 		}
 		if (request->hasParam("reboot")) {
 			Serial.println("INFO: command reboot");
