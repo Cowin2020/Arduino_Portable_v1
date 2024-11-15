@@ -29,7 +29,7 @@
 #include "config.h"
 
 static String show_time(DateTime const *);
-static void redraw_display(bool start_over = false);
+static void redraw_display(bool = false);
 
 /* *************************************************************************** / ************************************ */
 
@@ -447,7 +447,6 @@ namespace WIFI {
 				WiFi.localIP().printTo(Serial);
 				Serial.println();
 			}
-			//	redraw_display();
 		}
 		return status;
 	}
@@ -1831,7 +1830,7 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 /* *************************************************************************** / ************************************ */
 /* Main procedures */
 
-static void redraw_display(bool start_over) {
+static void redraw_display(bool const start_over) {
 	static unsigned short int section = 0;
 	if (start_over) section = 0;
 	DISPLAY_LOCK(display_lock);
@@ -1875,19 +1874,19 @@ static void redraw_display(bool start_over) {
 		else
 			Monitor.println("No SD card");
 		if (use_AP_mode) {
-			Monitor.print("AP:");
-			Monitor.println(WiFi.softAPSSID());
 			WiFi.softAPIP().printTo(Monitor);
 			Monitor.println();
+			Monitor.print("AP:");
+			Monitor.println(WiFi.softAPSSID());
 		}
 		else {
 			signed int status = WiFi.status();
 			Monitor.println(WIFI::status_message(status));
 			if (WiFi.status() == WL_CONNECTED) {
-				Monitor.print("STA:");
-				Monitor.println(WiFi.SSID());
 				WiFi.localIP().printTo(Monitor);
 				Monitor.println();
+				Monitor.print("STA:");
+				Monitor.println(WiFi.SSID());
 			}
 		}
 		section = 0;
