@@ -3,6 +3,13 @@ section#map {
 	height: calc(100vh - 30ex);
 }
 
+section#map div.tooltip {
+	background-color: #FFF8;
+	font-size: 1.5rem;
+	color: black;
+	text-shadow: 2px 2px 2px gray, -2px -2px 2px white;
+}
+
 section#query fieldset {
 	display: flex;
 	column-gap: 2ex;

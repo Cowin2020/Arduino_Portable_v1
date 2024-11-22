@@ -42,36 +42,66 @@ function Current(element_id) {
 			}
 		)
 	);
-	this.tooltips = new Array();
+	this.markers = new L.LayerGroup();
+	this.map.addLayer(this.markers);
 	this.interval = null;
 	return this;
 }
 Current.prototype = {
 	clear() {
-		this.tooltips.forEach(
-			function (tooltip) {
-				this.map.removeLayer(tooltip);
-			},
-			this
-		);
+		this.markers.clearLayers();
 	},
-	plot(devices) {
+	draw(devices) {
 		devices.forEach(
 			function (device) {
 				var tooltip = L.tooltip(
 					L.latLng(device.latitude, device.longitude),
 					{
 						permanent: true,
-						content:
-							device.identity +
-							"<br/>" +
-							iso_date(device.time, "<br/>") +
-							"<br/>" +
-							device.altitude + "m"
+						interactive: true,
+						direction: "top",
+						className: "tooltip",
+						content: device.identity
 					}
 				);
-				this.tooltips.push(tooltip);
-				tooltip.openOn(this.map);
+				var $detail = document.createElement("table");
+				var $tbody = document.createElement("tbody");
+				function add_defined_row(name, value, unit) {
+					if (value != null) {
+						var $tr = document.createElement("tr");
+						var $th = document.createElement("th");
+						$th.appendChild(document.createTextNode(name));
+						$tr.appendChild($th);
+						var $td = document.createElement("td");
+						$td.appendChild(document.createTextNode(value));
+						if (unit != null)
+							$td.appendChild(document.createTextNode(unit));
+						$tr.appendChild($td);
+						$tbody.appendChild($tr);
+					}
+				}
+				add_defined_row("Device", device.identity);
+				{
+					var datetime = iso_date(device.time);
+					var date = datetime.substring(0, 10);
+					var time = datetime.substring(11);
+					var $tr = document.createElement("tr");
+					var $th = document.createElement("th");
+					$th.appendChild(document.createTextNode("Last seen"));
+					$tr.appendChild($th);
+					var $td = document.createElement("td");
+					$td.appendChild(document.createTextNode(date));
+					$td.appendChild(document.createElement("br"));
+					$td.appendChild(document.createTextNode(time));
+					$tr.appendChild($td);
+					$tbody.appendChild($tr);
+				}
+				add_defined_row("Altitude", device.altitude, "m");
+				add_defined_row("Temperature", device.temperature, "\u2103");
+				add_defined_row("Relative humidity", device.humidity, "%");
+				$detail.appendChild($tbody);
+				tooltip.bindPopup($detail);
+				tooltip.openOn(this.markers);
 			},
 			this
 		);
@@ -112,12 +142,14 @@ Current.prototype = {
 									time: record[0],
 									latitude: latitude,
 									longitude: longitude,
-									altitude: Number.parseFloat(record[3]).toFixed(1)
+									altitude: Number.parseFloat(record[3]).toFixed(1),
+									temperature: Number.parseFloat(record[4]).toFixed(1),
+									humidity: Number.parseFloat(record[5]).toFixed(1)
 								}
 							);
 					}
 					this.clear();
-					this.plot(devices);
+					this.draw(devices);
 				}
 			)
 			.catch(

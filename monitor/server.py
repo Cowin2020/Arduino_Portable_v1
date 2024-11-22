@@ -9,7 +9,7 @@ import http.server
 import ssl
 import sqlite3
 
-current_fields = ["time", "latitude", "longitude", "altitude"]
+current_fields = ["time", "latitude", "longitude", "altitude", "temperature", "humidity"]
 data_fields = ["device_time", "clock_synchronized", "temperature", "humidity"]
 position_fields = ["browser_time", "position_time", "latitude", "longitude", "altitude"]
 
