@@ -80,54 +80,62 @@ document.body.appendChild(
 	])
 );
 
-var $dashboard = new Object;
-$dashboard.items = new Array(Alone.data_fields.length - Alone.data_meta);
-$dashboard.root = $E("div", {"id": "dashboard"}, [
-	$dashboard.nodata = $E("div", {"id": "nodata"}, [
-		$T("No data")
-	]),
-	$dashboard.datetime = $E("div", {"id": "datetime"}, [
-		$dashboard.date = $E("span"),
-		$dashboard.time = $E("span")
-	]),
-	$E("div", {"id": "items"},
-		Alone.data_fields.slice(Alone.data_meta).map(
-			function (field, index) {
-				return $E("div", {"class": "item"}, [
-					$E("span", {"class": "name"}, [$T(field.name)]),
-					$E("span", {"class": "value"}, [
-						$dashboard.items[index] = $E("span", {"class": "value"}),
-						$E("span", {"class": "unit"}, [$T(field.unit ? field.unit : "")])
-					])
-				]);
-			}
+function Dashboard() {
+	var num_of_data = Alone.data_fields.length - Alone.data_meta;
+	this.data = new Array(num_of_data);
+	this.items = new Array(num_of_data);
+	this.$root = $E("div", {"class": "dashboard"}, [
+		this.$nodata = $E("div", {"class": "nodata"}, [
+			$T("No data")
+		]),
+		this.$datetime = $E("div", {"class": "datetime"}, [
+			this.date = $E("span"),
+			this.time = $E("span")
+		]),
+		this.$items = $E("div", {"class": "items"},
+			Alone.data_fields.slice(Alone.data_meta).map(
+				function (field, index) {
+					return $E("div", {"class": "item"}, [
+						$E("span", {"class": "name"}, [$T(field.name)]),
+						$E("span", {"class": "value"}, [
+							this.items[index] = $E("span", {"class": "value"}),
+							$E("span", {"class": "unit"}, [$T(field.unit ? field.unit : "")])
+						])
+					]);
+				},
+				this
+			)
 		)
-	)
-]);
-$dashboard.nodata.hidden = true;
-$dashboard.datetime.hidden = true;
-$dashboard.items.hidden = true;
-document.body.appendChild($dashboard.root);
-
-function show_dashboard(row) {
-	if (row == null) {
-		$dashboard.nodata.hidden = false;
-		$dashboard.datetime.hidden = true;
-		$dashboard.items.hidden = true;
-	}
-	else {
-		$dashboard.nodata.hidden = true;
-		$dashboard.datetime.hidden = false;
-		$dashboard.items.hidden = false;
-		var date_time = row[0].split("T");
-		$dashboard.date.textContent = date_time[0];
-		$dashboard.time.textContent = date_time[1];
-		for (var i = Alone.data_meta; i < Alone.data_fields.length; ++i)
-			$dashboard.items[i - Alone.data_meta].textContent = row[i];
-	}
+	]);
+	this.$nodata.hidden = true;
+	this.$datetime.hidden = true;
+	this.$items.hidden = true;
+	return this;
 }
+Dashboard.prototype = {
+	show(row) {
+		if (row == null) {
+			this.$nodata.hidden = false;
+			this.$datetime.hidden = true;
+			this.$items.hidden = true;
+		}
+		else {
+			this.$nodata.hidden = true;
+			this.$datetime.hidden = false;
+			this.$items.hidden = false;
+			var date_time = row[0].split("T");
+			this.date.textContent = date_time[0];
+			this.time.textContent = date_time[1];
+			for (var i = Alone.data_meta; i < Alone.data_fields.length; ++i)
+				this.items[i - Alone.data_meta].textContent = this.data[i - Alone.data_meta] = row[i];
+		}
+	}
+};
 
-show_dashboard(null);
+var dashboard = new Dashboard;
+document.body.appendChild(dashboard.$root);
+
+dashboard.show(null);
 
 document.body.appendChild(
 	$E("p", {"class": "download-links"},
@@ -316,11 +324,11 @@ function data_load() {
 				while (rows.length && rows[rows.length - 1].length < Alone.data_fields.length)
 					rows.pop();
 				if (!(rows.length > 0)) {
-					show_dashboard(null);
+					dashboard.show(null);
 					data_plots(null);
 					return Promise.resolve();
 				}
-				show_dashboard(rows[rows.length - 1]);
+				dashboard.show(rows[rows.length - 1]);
 				data_plots(rows);
 				for (var i = 0; rows.length > i; ++i) {
 					var fields = rows[rows.length - i - 1];
@@ -560,6 +568,9 @@ if (Alone.operator) {
 			body.append("latitude",     coords.latitude);
 			body.append("longitude",    coords.longitude);
 			body.append("altitude",     coords.altitude);
+			for (var i = 0; i < dashboard.data.length; ++i)
+				if (dashboard.data[i] != null)
+					body.append(Alone.data_fields[Alone.data_meta + i].name, dashboard.data[i]);
 			fetch(Alone.report_URL, {method: "POST", body: body})
 				.catch(function () {});
 		}

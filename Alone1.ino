@@ -760,6 +760,7 @@ R"HTML(
 			}();
 		}
 		var $data_list;
+		var data_latest = null;
 		void function () {
 			var $table, $caption, $thead, $tr, $th, $tbody;
 			$table = $E("table");
@@ -825,7 +826,6 @@ R"HTML(
 		$GPS_loading.hidden = true;
 		c_($GPS_loading, $T("Loading..."));
 		c_(document.body, $GPS_loading);
-
 		function data_load() {
 			return new Promise(
 				function (resolve, reject) {
@@ -847,14 +847,17 @@ R"HTML(
 							if (!line || typeof line !== "string") continue;
 							fields = line.split(",");
 							var $tr = $E("tr");
+							data_latest = new Object;
 							for (var j = 0; fields.length > j; ++j) {
 								var $td = $E("td");
 								s_($td, "border-style", "solid");
 								s_($td, "border-width", "thin");
 								s_($td, "text-align", "center");
-								if (j === 0) c_($td, $T(string_from_Date(fields[j])));
-								else c_($td, $T(fields[j]));
+								var v = j === 0 ? string_from_Date(fields[j]) : fields[j];
+								c_($td, $T(v));
 								c_($tr, $td);
+								if (Alone.data_meta > j)
+									data_latest[Alone.data_fields[j].name] = v;
 							}
 							c_($data_list, $tr);
 						}
@@ -961,6 +964,8 @@ R"HTML(
 						body.append("latitude",     coords.latitude);
 						body.append("longitude",    coords.longitude);
 						body.append("altitude",     coords.altitude);
+						for (var field in data_latest)
+							body.append(field, data_latest[field]);
 						var xhr = new XMLHttpRequest();
 						xhr.open("POST", Alone.report_URL, true);
 						xhr.send(body);
