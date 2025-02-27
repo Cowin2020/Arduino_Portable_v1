@@ -67,18 +67,17 @@ Current.prototype = {
 				var $detail = document.createElement("table");
 				var $tbody = document.createElement("tbody");
 				function add_defined_row(name, value, unit) {
-					if (value != null) {
-						var $tr = document.createElement("tr");
-						var $th = document.createElement("th");
-						$th.appendChild(document.createTextNode(name));
-						$tr.appendChild($th);
-						var $td = document.createElement("td");
-						$td.appendChild(document.createTextNode(value));
-						if (unit != null)
-							$td.appendChild(document.createTextNode(unit));
-						$tr.appendChild($td);
-						$tbody.appendChild($tr);
-					}
+					if (value == null) return;
+					var $tr = document.createElement("tr");
+					var $th = document.createElement("th");
+					$th.appendChild(document.createTextNode(name));
+					$tr.appendChild($th);
+					var $td = document.createElement("td");
+					$td.appendChild(document.createTextNode(value));
+					if (unit != null)
+						$td.appendChild(document.createTextNode(unit));
+					$tr.appendChild($td);
+					$tbody.appendChild($tr);
 				}
 				add_defined_row("Device", device.identity);
 				{
