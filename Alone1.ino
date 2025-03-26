@@ -601,20 +601,26 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 <meta name='viewport' content='width=device-width, initial-scale=1' />
 <title>Weather data</title>
 <link rel='stylesheet' type='text/css' href='style.css' />
-<link
+)HTML";
+
+	static PROGMEM char const home_html_2[] =
+R"HTML(<link
 	rel='stylesheet'
 	href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'
 	integrity='sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY='
 	crossorigin='' />
-</head>
-<body>
-<noscript>Javascript is required for this web page.</noscript>
 <script
 	type='text/javascript'
 	src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
 	integrity='sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo='
 	crossorigin=''
 ></script>
+)HTML";
+
+	static PROGMEM char const home_html_3[] =
+R"HTML(</head>
+<body>
+<noscript>Javascript is required for this web page.</noscript>
 <script type='text/javascript'>
 	(function(p){document.readyState!=="loading"?p():document.addEventListener("DOMContentLoaded",p)})(function(p){
 		window.Alone = {
@@ -622,7 +628,7 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 
 )HTML";
 
-	static PROGMEM char const home_html_2[] =
+	static PROGMEM char const home_html_4[] =
 R"HTML(
 		};
 		return import("./script.js").then(function(){}, p);
@@ -1125,6 +1131,9 @@ R"HTML(
 		response.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
 		response.beginSend();
 		response.write(reinterpret_cast<uint8_t const *>(home_html_1), sizeof home_html_1 - 1);
+		if (!use_AP_mode)
+			response.write(reinterpret_cast<uint8_t const *>(home_html_2), sizeof home_html_2 - 1);
+		response.write(reinterpret_cast<uint8_t const *>(home_html_3), sizeof home_html_3 - 1);
 		response.print("\t\tcampaign: \"");
 		response.print(javascript_escape(campaign_name));
 		response.print("\",\r\n\t\t\t\torganisation: \"");
@@ -1190,7 +1199,7 @@ R"HTML(
 		response.print("],\r\n\t\t\tgps_meta: ");
 		response.print(gps_meta);
 		response.print("\r\n");
-		response.write(reinterpret_cast<uint8_t const *>(home_html_2), sizeof home_html_2 - 1);
+		response.write(reinterpret_cast<uint8_t const *>(home_html_4), sizeof home_html_4 - 1);
 		return response.endSend();
 	}
 
