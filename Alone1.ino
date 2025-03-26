@@ -66,8 +66,10 @@ struct Field {
 struct Data {
 	DateTime time;
 	DateTime device_time;
-	float temperature;
-	float humidity;
+	#if SENSOR == SENSOR_SHT40
+		float temperature;
+		float humidity;
+	#endif
 };
 
 static Field const data_fields[] = {
@@ -148,6 +150,8 @@ static void save_settings(void) {
 	file.println(STA_PASS);
 	file.println(monitor_URL);
 	file.println(upload_password);
+	file.println(temperature_slop);
+	file.println(temperature_intercept);
 	file.close();
 }
 
@@ -155,11 +159,8 @@ static bool load_settings(void) {
 	char *e;
 	String s;
 	unsigned long int u;
+	float f;
 
-	if (digitalRead(reset_pin) == HIGH) {
-		Serial.println("Setting is not loaded because of hardware switch");
-		return false;
-	}
 	SDCARD_LOCK(sdcard_lock);
 	File file = SD.open(setting_filename, "r", false);
 	if (!file) {
@@ -167,32 +168,68 @@ static bool load_settings(void) {
 		return false;
 	}
 
+	/* Campaign name */
 	campaign_name = file.readStringUntil('\n');
 	campaign_name.trim();
+
+	/* Organisation name */
 	organisation_name = file.readStringUntil('\n');
 	organisation_name.trim();
+
+	/* Device name */
 	device_name = file.readStringUntil('\n');
 	device_name.trim();
+
+	/* Measure interval */
 	s = file.readStringUntil('\n');
 	s.trim();
 	u = strtoul(s.c_str(), &e, 10);
-	if (!*e && u >= 15 && u <= 900) measure_interval = u * 1000;
+
+	/* AP mode */
+	if (!*e && u >= measure_interval_lowerbound && u <= measure_interval_upperbound)
+		measure_interval = u * 1000;
 	s = file.readStringUntil('\n');
 	s.trim();
 	u = strtoul(s.c_str(), &e, 10);
 	if (!*e) use_AP_mode = bool(u);
+
+	/* AP SSID */
 	AP_SSID = file.readStringUntil('\n');
 	AP_SSID.trim();
+
+	/* AP PASS */
 	AP_PASS = file.readStringUntil('\n');
 	AP_PASS.trim();
+
+	/* STA SSID */
 	STA_SSID = file.readStringUntil('\n');
 	STA_SSID.trim();
+
+	/* STA PASS */
 	STA_PASS = file.readStringUntil('\n');
 	STA_PASS.trim();
+
+	/* Monitor URL */
 	monitor_URL = file.readStringUntil('\n');
 	monitor_URL.trim();
+
+	/* Upload password */
 	upload_password = file.readStringUntil('\n');
 	upload_password.trim();
+
+	/* Temperature slop */
+	s = file.readStringUntil('\n');
+	s.trim();
+	f = strtof(s.c_str(), &e);
+	if (!*e && f >= temperature_slop_lowerbound && f <= temperature_slop_upperbound)
+		temperature_slop = f;
+
+	/* Temperature intercept */
+	s = file.readStringUntil('\n');
+	s.trim();
+	f = strtof(s.c_str(), &e);
+	if (!*e && f >= temperature_intercept_lowerbound && f <= temperature_intercept_upperbound)
+		temperature_intercept = f;
 
 	file.close();
 	return true;
@@ -264,13 +301,17 @@ static DateTime measure(void) {
 	}
 	else
 		data.time = round_up_time(&data.device_time);
+
+	#if SENSOR == SENSOR_SHT40
 	{
 		DEVICE_LOCK(device_lock);
 		sensors_event_t temperature_event, humidity_event;
 		SHT4x.getEvent(&humidity_event, &temperature_event);
-		data.temperature = temperature_event.temperature;
+		data.temperature = temperature_event.temperature * temperature_slop + temperature_intercept;
 		data.humidity = humidity_event.relative_humidity;
 	}
+	#endif
+
 	String const data_string = CSV_Data(&data);
 	Serial.print("INFO: Measure ");
 	Serial.println(data_string);
@@ -437,7 +478,7 @@ namespace WIFI {
 
 	static signed int WiFi_check_status(void) {
 		static signed int last_status = WL_NO_SHIELD;
-		signed int status = WiFi.status();
+		signed int const status = WiFi.status();
 		if (status != last_status) {
 			last_status = status;
 			Serial.println(status_message(status));
@@ -1398,6 +1439,16 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 <link rel='stylesheet' type='text/css' href='style.css' />
 </head>
 <body>
+<style>
+	label {
+		display: block;
+	}
+	form {
+		margin: 1ex;
+		border: solid thin;
+		padding: 1ex;
+	}
+</style>
 <p><a href='operator'>&#x2190; Back</a></p>
 )HTML";
 
@@ -1414,7 +1465,6 @@ R"HTML('
 	class='setting-form'
 	action='setting.exe'
 	method='POST'
-	style='margin: 1ex; border: solid thin; padding: 1ex'
 >
 )HTML";
 
@@ -1524,7 +1574,7 @@ R"HTML('
 
 		setting_form(&response, "set_wifi");
 		response.print(
-			"\t<label style='display: block'>\r\n"
+			"\t<label>\r\n"
 			"\t\tProvide WiFi\r\n"
 			"\t\t<select name='WiFi'>\r\n"
 			"\t\t\t<option value='AP'"
@@ -1543,7 +1593,7 @@ R"HTML('
 			"\t\t\t</option>\r\n"
 			"\t\t</select>\r\n"
 			"\t</label>\r\n"
-			"\t<label style='display: block'>\r\n"
+			"\t<label>\r\n"
 			"\t\tAP SSID\r\n"
 			"\t\t<input name='APSSID' value='"
 		);
@@ -1551,7 +1601,7 @@ R"HTML('
 		response.print(
 			"' />\r\n"
 			"\t</label>\r\n"
-			"\t<label style='display: block'>\r\n"
+			"\t<label>\r\n"
 			"\t\tAP PASS\r\n"
 			"\t\t<input name='APPASS' value='"
 		);
@@ -1559,7 +1609,7 @@ R"HTML('
 		response.print(
 			"' />\r\n"
 			"\t</label>\r\n"
-			"\t<label style='display: block'>\r\n"
+			"\t<label>\r\n"
 			"\t\tSTA SSID\r\n"
 			"\t\t<input name='STASSID' value='"
 		);
@@ -1567,7 +1617,7 @@ R"HTML('
 		response.print(
 			"' />\r\n"
 			"\t</label>\r\n"
-			"\t<label style='display: block'>\r\n"
+			"\t<label>\r\n"
 			"\t\tSTA PASS\r\n"
 			"\t\t<input name='STAPASS' value='"
 		);
@@ -1607,9 +1657,31 @@ R"HTML('
 			"</form>\r\n"
 		);
 
+		setting_form(&response, "set_temperature_slop");
+		response.print(
+			"\t<label>\r\n"
+			"\t\tCalibrate temperature slop\r\n"
+			"\t\t<input type='text' name='temperature_slop' value='"
+		);
+		response.print(temperature_slop);
+		response.print(
+			"' />\r\n"
+			"\t</label>\r\n"
+			"\t<label>\r\n"
+			"\t\tCalibrate temperature intercept\r\n"
+			"\t\t<input type='text' name='temperature_intercept' value='"
+		);
+		response.print(temperature_intercept);
+		response.print(
+			"' />\r\n"
+			"\t</label>\r\n"
+			"\t<button type='submit'>Set</button>\r\n"
+			"</form>\r\n"
+		);
+
 		setting_form(&response, "do_measure");
 		response.print(
-			"\t<label style='display: block'>\r\n"
+			"\t<label>\r\n"
 			"\t\tConfirm\r\n"
 			"\t\t<input type='checkbox' name='measure' />\r\n"
 			"\t</label>\r\n"
@@ -1619,7 +1691,7 @@ R"HTML('
 
 		setting_form(&response, "do_delete");
 		response.print(
-			"\t<label style='display: block'>\r\n"
+			"\t<label>\r\n"
 			"\t\tConfirm\r\n"
 			"\t\t<input type='checkbox' name='delete' />\r\n"
 			"\t</label>\r\n"
@@ -1629,7 +1701,7 @@ R"HTML('
 
 		setting_form(&response, "do_reboot");
 		response.print(
-			"\t<label style='display: block'>Confirm \r\n"
+			"\t<label>Confirm \r\n"
 			"\t\t<input type='checkbox' name='reboot' />\r\n"
 			"\t</label>\r\n"
 			"\t<button type='submit' name='reboot'>Reboot</button>\r\n"
@@ -1697,7 +1769,7 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 			Serial.println(value);
 			char *end;
 			unsigned long int const x = strtoul(value, &end, 10);
-			if (!*end && x >= 15 && x <= 900) {
+			if (!*end && x >= measure_interval_lowerbound && x <= measure_interval_upperbound) {
 				measure_interval = x * 1000;
 				need_save = true;
 			}
@@ -1767,6 +1839,40 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 			Serial.println(parameter->value());
 			upload_password = parameter->value();
 			need_save = true;
+		}
+		parameter = request->getParam("temperature_slop");
+		if (parameter != nullptr) {
+			char const *const value = parameter->value().c_str();
+			Serial.print("INFO: command temperature slop = ");
+			Serial.println(value);
+			char *end;
+			float const x = strtof(value, &end);
+			if (!*end && x >= temperature_slop_lowerbound && x <= temperature_slop_upperbound) {
+				temperature_slop = x;
+				need_save = true;
+			}
+			else {
+				Serial.print("WARN: incorrect command temperature slop = \"");
+				Serial.print(value);
+				Serial.println('"');
+			}
+		}
+		parameter = request->getParam("temperature_intercept");
+		if (parameter != nullptr) {
+			char const *const value = parameter->value().c_str();
+			Serial.print("INFO: command temperature intercept = ");
+			Serial.println(value);
+			char *end;
+			float const x = strtof(value, &end);
+			if (!*end && x >= temperature_intercept_lowerbound && x <= temperature_intercept_upperbound) {
+				temperature_intercept = x;
+				need_save = true;
+			}
+			else {
+				Serial.print("WARN: incorrect command temperature intercept = \"");
+				Serial.print(value);
+				Serial.println('"');
+			}
 		}
 		parameter = request->getParam("measure");
 		if (parameter != nullptr) {
@@ -1897,12 +2003,14 @@ static void redraw_display(bool const start_over) {
 		Monitor.println(year);
 		Monitor.println(date);
 		Monitor.println(time);
-		Monitor.println();
-		Monitor.print(data->temperature, 1);
-		Monitor.println("C");
-		Monitor.print(data->humidity, 1);
-		Monitor.println("%");
-		Monitor.drawLine(0, 76, 63, 76, SSD1306_WHITE);
+		Monitor.drawLine(0, 64, 63, 64, SSD1306_WHITE);
+		Monitor.setCursor(0, 65 + FONT_0_OFFSET);
+		#if SENSOR == SENSOR_SHT40
+			Monitor.print(data->temperature, 1);
+			Monitor.println("C");
+			Monitor.print(data->humidity, 1);
+			Monitor.println("%");
+		#endif
 		++section;
 	}
 	else {
@@ -1920,9 +2028,9 @@ static void redraw_display(bool const start_over) {
 			Monitor.println(WiFi.softAPSSID());
 		}
 		else {
-			signed int status = WiFi.status();
-			Monitor.println(WIFI::status_message(status));
-			if (WiFi.status() == WL_CONNECTED) {
+			signed int const status = WiFi.status();
+			Monitor.println(WIFI::status_message(WiFi.status()));
+			if (status == WL_CONNECTED) {
 				WiFi.localIP().printTo(Monitor);
 				Monitor.println();
 				Monitor.print("STA:");
@@ -2017,7 +2125,10 @@ void setup(void) {
 	if (SD_card_exist) {
 		Serial.println("SD card found");
 		Monitor.println("OK SD card");
-		load_settings();
+		if (digitalRead(reset_pin) == HIGH)
+			Serial.println("Setting is not loaded because of hardware switch");
+		else if (!load_settings())
+			Serial.println("Failed to load settings");
 	}
 	else {
 		Serial.println("SD card not found");
