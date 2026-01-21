@@ -1,9 +1,10 @@
 Board
 	Additional Boards Manager URLs:
 		https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_dev_index.json
-	Boards Manager: esp32 (3.0.5)
+	Boards Manager: esp32 (3.0.7)
 	Board: TTGo LoRa32-OLED
 	Board Revision: TTGo LoRa32-OLED (1.6.1)
+
 Libraries:
 	RTClib (2.1.4)
 	Adafruit BusIO (1.16.1)
@@ -16,6 +17,12 @@ Libraries:
 	PsychicHttp (1.2.1)
 		UrlEncode (1.0.1)
 		ArduinoJson (7.2.0)
+
+Modified library:
+	For ESP32 (3.1.3), patch file "src/async_worker.cpp" in
+	library "PsychicHttp" to add "__attribute__((weak))" to
+	functions "httpd_req_async_handler_begin"
+	and "httpd_req_async_handler_complete".
 
 Setup:
 	Copy files in "SDCard" to SD card if SD card is used
@@ -67,7 +74,8 @@ Setup:
 
 To modify elements:
 	Edit "Alone1.ino":
-		modify "measure" to fit how the values measured
+		modify "SENSOR" for different sensors
 		modify fields "struct Data", "data_fields[]" "CSV_Data()" and "pretty_Data()"
+		modify "measure" to fit how the values measured
 	Edit "SDCard/script.js":
 		modify "data_fields"
