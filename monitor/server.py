@@ -288,7 +288,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 	def do_POST(self):
 		self.log_request()
-		if self.path == "/report":
+		if self.path == "/monitor":
 			body = self.content()
 			queries = {k: v[0] for k, v in urllib.parse.parse_qs(body.decode("UTF-8")).items()}
 			campaign = queries.get("campaign")

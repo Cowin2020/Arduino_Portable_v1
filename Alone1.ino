@@ -12,6 +12,8 @@
 #include <PsychicHttp.h>
 #include <PsychicHttpServer.h>
 #include <PsychicHttpsServer.h>
+#include <PsychicRequest.h>
+#include <PsychicResponse.h>
 #include <PsychicStreamResponse.h>
 #include <RTClib.h>
 #include <Adafruit_SSD1306.h>
@@ -29,7 +31,7 @@
 #include "config.h"
 
 static String show_time(DateTime const *);
-static void redraw_display(bool = false);
+static void redraw_display(bool);
 
 /* *************************************************************************** / ************************************ */
 
@@ -51,10 +53,6 @@ static bool need_reboot = false;
 
 static Adafruit_SSD1306 Monitor(128, 64);
 
-static char const report_path[] = "report";
-static char const upload_data_path[] = "upload/data";
-static char const upload_position_path[] = "upload/position";
-
 /* *************************************************************************** / ************************************ */
 /* Data */
 
@@ -74,10 +72,10 @@ struct Data {
 
 static Field const data_fields[] = {
 	{"time", nullptr},
-	{"device time", nullptr},
-	{"clock synchronized", nullptr},
-	{"temperature", "\u2103"},
-	{"humidity", "%"}
+	{"device_time", nullptr},
+	{"clock_synchronized", nullptr},
+	{"BME280_temperature", "\u2103"},
+	{"BME280_humidity", "%"}
 };
 
 static size_t const data_meta = 3;
@@ -101,8 +99,8 @@ struct GPS {
 
 static Field const gps_fields[] = {
 	{"time", nullptr},
-	{"browser time", nullptr},
-	{"position time", nullptr},
+	{"browser_time", nullptr},
+	{"position_time", nullptr},
 	{"latitude", "\u00B0"},
 	{"longitude", "\u00B0"},
 	{"altitude", "m"}
@@ -149,6 +147,8 @@ static void save_settings(void) {
 	file.println(STA_SSID);
 	file.println(STA_PASS);
 	file.println(monitor_URL);
+	file.println(upload_URL);
+	file.println(upload_username);
 	file.println(upload_password);
 	file.println(temperature_slop);
 	file.println(temperature_intercept);
@@ -212,6 +212,14 @@ static bool load_settings(void) {
 	/* Monitor URL */
 	monitor_URL = file.readStringUntil('\n');
 	monitor_URL.trim();
+
+	/* Upload URL */
+	upload_URL = file.readStringUntil('\n');
+	upload_URL.trim();
+
+	/* Upload username */
+	upload_username = file.readStringUntil('\n');
+	upload_username.trim();
 
 	/* Upload password */
 	upload_password = file.readStringUntil('\n');
@@ -666,15 +674,21 @@ R"HTML(</head>
 	(function(p){document.readyState!=="loading"?p():document.addEventListener("DOMContentLoaded",p)})(function(p){
 		window.Alone = {
 			operator: location.pathname === "/operator",
-
 )HTML";
 
 	static PROGMEM char const home_html_4[] =
 R"HTML(
 		};
-		return import("./script.js").then(function(){}, p);
-	}
-	(function(SD_load_error){
+		if (typeof Uint8Array.prototype.toBase64 !== "function") {
+			/* polyfill for compatible */
+			Uint8Array.prototype.toBase64 = function () {
+				return btoa(Array.from(this).map(function (c) {return String.fromCharCode(c);}).join(""));
+			}
+		}
+		return function () {
+			import("./script.js").catch(p);
+		};
+	}(function (SD_load_error) {
 		"use strict";
 		console.log("Failed to load script from SD card:", SD_load_error);
 		var GPS_watch = false;
@@ -895,6 +909,7 @@ R"HTML(
 					$data_list.textContent = null;
 					$data_loading.hidden = false;
 					var xhr = new XMLHttpRequest();
+					xhr.onerror = reject;
 					xhr.onloadend = function (event) {
 						$data_loading.hidden = true;
 						var text = xhr.responseText;
@@ -910,7 +925,7 @@ R"HTML(
 							if (!line || typeof line !== "string") continue;
 							fields = line.split(",");
 							var $tr = $E("tr");
-							data_latest = new Object;
+							data_latest = new Object();
 							for (var j = 0; fields.length > j; ++j) {
 								var $td = $E("td");
 								s_($td, "border-style", "solid");
@@ -927,7 +942,7 @@ R"HTML(
 						return resolve();
 					};
 					xhr.open("GET", "data/recent.csv", true);
-					xhr.send(null);
+					xhr.send();
 				}
 			);
 		}
@@ -937,6 +952,7 @@ R"HTML(
 					$GPS_list.textContent = null;
 					$GPS_loading.hidden = false;
 					var xhr = new XMLHttpRequest();
+					xhr.onerror = reject;
 					xhr.onloadend = function (event) {
 						$GPS_loading.hidden = true;
 						var text = xhr.responseText;
@@ -965,7 +981,7 @@ R"HTML(
 						return resolve();
 					};
 					xhr.open("GET", "gps/recent.csv", true);
-					xhr.send(null);
+					xhr.send();
 				}
 			);
 		}
@@ -1002,9 +1018,9 @@ R"HTML(
 		setTimeout(load_all, 3000);
 		if (Alone.operator)
 			void function () {
-				if ("geolocation" in window.navigator) if (window.isSecureContext) {
+				if (window.isSecureContext) if ("geolocation" in window.navigator) {
 					function GPS_upload(planned_time, browser_time, position_time, coords) {
-						var body = new URLSearchParams;
+						var body = new URLSearchParams();
 						body.append("campaign",      Alone.campaign);
 						body.append("organisation",  Alone.organisation);
 						body.append("device",        Alone.device);
@@ -1019,7 +1035,7 @@ R"HTML(
 						xhr.send(body);
 					}
 					function GPS_report(timestamp, coords) {
-						var body = new URLSearchParams;
+						var body = new URLSearchParams();
 						body.append("campaign",     Alone.campaign);
 						body.append("organisation", Alone.organisation);
 						body.append("device",       Alone.device);
@@ -1030,7 +1046,7 @@ R"HTML(
 						for (var field in data_latest)
 							body.append(field, data_latest[field]);
 						var xhr = new XMLHttpRequest();
-						xhr.open("POST", Alone.report_URL, true);
+						xhr.open("POST", Alone.monitor_URL, true);
 						xhr.send(body);
 					}
 					function GPS_record(planned_time, spacetime) {
@@ -1076,18 +1092,60 @@ R"HTML(
 					if (GPS_watch) navigator.geolocation.watchPosition(GPS_callback, GPS_error, GPS_options);
 				}
 				void function () {
+					var subtle = null;
+					if (window.isSecureContext) if ("crypto" in window) if ("subtle" in window.crypto) {
+						subtle = window.crypto.subtle;
+					}
+					function authorization(query, body) {
+						if (subtle == null)
+							return Promise.resolve("BEARER " + Alone.upload_password);
+						var credential = Alone.upload_username + query + body + Alone.upload_username;
+						var binary = new TextEncoder().encode(credential);
+						return subtle.digest("SHA-256", binary).then(
+							function (hash) {
+								var digest = new Uint8Array(hash);
+								var password = new TextEncoder().encode(Alone.upload_password);
+								var binary = new Uint8Array(password.length + 1 + digest.byteLength);
+								binary.set(password, 0);
+								binary[password.length] = 0x3A;  /* ASCII 3A = ':' */
+								binary.set(digest, password.length + 1);
+								var base64 = binary.toBase64();
+								return Promise.resolve("BASIC " + base64);
+							}
+						);
+					}
+					function upload(site, device, body) {
+						var params = new URLSearchParams();
+						params.set("site", Alone.campaign);
+						params.set("device", Alone.device);
+						var query = params.toString();
+						return authorization(query, body).then(
+							function (auth) {
+								return new Promise(
+									function (resolve, reject) {
+										var xhr = new XMLHttpRequest();
+										xhr.onerror = reject;
+										xhr.onloadend = function () {
+											if (200 > xhr.status || xhr.status >= 300)
+												return reject();
+											return resolve();
+										};
+										xhr.open("POST", Alone.upload_URL + "?" + query, true);
+										xhr.setRequestHeader("AUTHORIZATION", auth);
+										xhr.send(body);
+									}
+								);
+							}
+						);
+					}
 					$upload.addEventListener(
 						"click",
 						function (event) {
 							event.preventDefault();
-							var identity =
-								Alone.campaign + "\r\n" +
-								Alone.organisation + "\r\n" +
-								Alone.device + "\r\n" +
-								Alone.password + "\r\n";
 							new Promise(
 								function (resolve, reject) {
 									var xhr = new XMLHttpRequest();
+									xhr.onerror = reject;
 									xhr.onloadend = function () {
 										var text = xhr.responseText;
 										if (xhr.status !== 200 || text == null)
@@ -1095,28 +1153,18 @@ R"HTML(
 										return resolve(text);
 									};
 									xhr.open("GET", Alone.data_file, true);
-									xhr.send(null);
+									xhr.send();
+								}
+							).then(
+								function (text) {
+									return upload(Alone.campaign, Alone.device, text);
 								}
 							).then(
 								function (text) {
 									return new Promise(
 										function (resolve, reject) {
 											var xhr = new XMLHttpRequest();
-											xhr.onloadend = function () {
-												if (xhr.status !== 200)
-													return reject();
-												return resolve();
-											};
-											xhr.open("POST", Alone.upload_data_URL, true);
-											xhr.send(identity + text);
-										}
-									);
-								}
-							).then(
-								function (text) {
-									return new Promise(
-										function (resolve, reject) {
-											var xhr = new XMLHttpRequest();
+											xhr.onerror = reject;
 											xhr.onloadend = function () {
 												var text = xhr.responseText;
 												if (xhr.status !== 200 || text == null)
@@ -1124,24 +1172,13 @@ R"HTML(
 												return resolve(text);
 											};
 											xhr.open("GET", Alone.gps_file, true);
-											xhr.send(null);
+											xhr.send();
 										}
 									);
 								}
 							).then(
 								function (text) {
-									return new Promise(
-										function (resolve, reject) {
-											var xhr = new XMLHttpRequest();
-											xhr.onloadend = function () {
-												if (xhr.status !== 200)
-													return reject();
-												return resolve();
-											};
-											xhr.open("POST", Alone.upload_position_URL, true);
-											xhr.send(identity + text);
-										}
-									);
+									return upload(Alone.campaign, Alone.device, text);
 								}
 							).catch(
 								function (e) {
@@ -1167,81 +1204,79 @@ R"HTML(
 </html>
 )HTML";
 
-	static esp_err_t home_handle(PsychicRequest *const request) {
-		PsychicStreamResponse response(request, XHTML_content_type);
-		response.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
-		response.beginSend();
-		response.write(reinterpret_cast<uint8_t const *>(home_html_1), sizeof home_html_1 - 1);
+	static esp_err_t home_handle(PsychicRequest *const request, PsychicResponse *const response) {
+		PsychicStreamResponse stream(response, XHTML_content_type);
+		stream.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
+		stream.beginSend();
+		stream.write(reinterpret_cast<uint8_t const *>(home_html_1), sizeof home_html_1 - 1);
 		if (!use_AP_mode)
-			response.write(reinterpret_cast<uint8_t const *>(home_html_2), sizeof home_html_2 - 1);
-		response.write(reinterpret_cast<uint8_t const *>(home_html_3), sizeof home_html_3 - 1);
-		response.print("\t\tcampaign: \"");
-		response.print(javascript_escape(campaign_name));
-		response.print("\",\r\n\t\t\t\torganisation: \"");
-		response.print(javascript_escape(organisation_name));
-		response.print("\",\r\n\t\t\tdevice: \"");
-		response.print(javascript_escape(device_name));
-		response.print("\",\r\n\t\t\tmeasure_interval: \"");
-		response.print(measure_interval);
-		response.print("\",\r\n\t\t\tdata_file: \"");
-		response.print(javascript_escape(data_filename));
-		response.print("\",\r\n\t\t\tgps_file: \"");
-		response.print(javascript_escape(gps_filename));
-		response.print("\",\r\n\t\t\tmonitor_URL: \"");
-		response.print(javascript_escape(monitor_URL));
-		response.print("\",\r\n\t\t\treport_URL: \"");
-		response.print(javascript_escape(monitor_URL + report_path));
-		response.print("\",\r\n\t\t\tupload_data_URL: \"");
-		response.print(javascript_escape(monitor_URL + upload_data_path));
-		response.print("\",\r\n\t\t\tupload_position_URL: \"");
-		response.print(javascript_escape(monitor_URL + upload_position_path));
-		response.print("\",\r\n\t\t\tpassword: \"");
-		response.print(javascript_escape(upload_password));
-		response.print("\",\r\n\t\t\tdata_fields: [");
+			stream.write(reinterpret_cast<uint8_t const *>(home_html_2), sizeof home_html_2 - 1);
+		stream.write(reinterpret_cast<uint8_t const *>(home_html_3), sizeof home_html_3 - 1);
+		stream.print("\t\tcampaign: \"");
+		stream.print(javascript_escape(campaign_name));
+		stream.print("\",\r\n\t\t\t\torganisation: \"");
+		stream.print(javascript_escape(organisation_name));
+		stream.print("\",\r\n\t\t\tdevice: \"");
+		stream.print(javascript_escape(device_name));
+		stream.print("\",\r\n\t\t\tmeasure_interval: \"");
+		stream.print(measure_interval);
+		stream.print("\",\r\n\t\t\tdata_file: \"");
+		stream.print(javascript_escape(data_filename));
+		stream.print("\",\r\n\t\t\tgps_file: \"");
+		stream.print(javascript_escape(gps_filename));
+		stream.print("\",\r\n\t\t\tmonitor_URL: \"");
+		stream.print(javascript_escape(monitor_URL));
+		stream.print("\",\r\n\t\t\tupload_URL: \"");
+		stream.print(javascript_escape(upload_URL));
+		stream.print("\",\r\n\t\t\tupload_username: \"");
+		stream.print(javascript_escape(upload_username));
+		stream.print("\",\r\n\t\t\tupload_password: \"");
+		stream.print(javascript_escape(upload_password));
+		stream.print("\",\r\n\t\t\tdata_fields: [");
 		bool first = true;
 		for (Field const field: data_fields) {
 			if (first)
 				first = false;
 			else
-				response.print(", ");
-			response.print("{name:\"");
-			response.print(javascript_escape(field.name));
-			response.print("\",unit:");
+				stream.print(", ");
+			stream.print("{name:\"");
+			stream.print(javascript_escape(field.name));
+			stream.print("\",unit:");
 			if (field.unit == nullptr)
-				response.print("null");
+				stream.print("null");
 			else {
-				response.print('"');
-				response.print(javascript_escape(field.unit));
-				response.print('"');
+				stream.print('"');
+				stream.print(javascript_escape(field.unit));
+				stream.print('"');
 			}
-			response.print("}");
+			stream.print("}");
 		}
-		response.print("],\r\n\t\t\tdata_meta: ");
-		response.print(data_meta);
-		response.print(",\r\n\t\t\tgps_fields: [");
+		stream.print("],\r\n\t\t\tdata_meta: ");
+		stream.print(data_meta);
+		stream.print(",\r\n\t\t\tgps_fields: [");
 		first = true;
 		for (Field const field: gps_fields) {
 			if (first)
 				first = false;
 			else
-				response.print(", ");
-			response.print("{name:\"");
-			response.print(javascript_escape(field.name));
-			response.print("\",unit:");
+				stream.print(", ");
+			stream.print("{name:\"");
+			stream.print(javascript_escape(field.name));
+			stream.print("\",unit:");
 			if (field.unit == nullptr)
-				response.print("null");
+				stream.print("null");
 			else {
-				response.print('"');
-				response.print(javascript_escape(field.unit));
-				response.print('"');
+				stream.print('"');
+				stream.print(javascript_escape(field.unit));
+				stream.print('"');
 			}
-			response.print("}");
+			stream.print("}");
 		}
-		response.print("],\r\n\t\t\tgps_meta: ");
-		response.print(gps_meta);
-		response.print("\r\n");
-		response.write(reinterpret_cast<uint8_t const *>(home_html_4), sizeof home_html_4 - 1);
-		return response.endSend();
+		stream.print("],\r\n\t\t\tgps_meta: ");
+		stream.print(gps_meta);
+		stream.print("\r\n");
+		stream.write(reinterpret_cast<uint8_t const *>(home_html_4), sizeof home_html_4 - 1);
+		return stream.endSend();
 	}
 
 	static PROGMEM char const icon_data[] = {
@@ -1281,51 +1316,51 @@ R"HTML(
 		0x73, 0x75, 0x01, 0x18
 	};
 
-	static esp_err_t icon_handle(PsychicRequest *const request) {
-		return request->reply(200, "image/png", icon_data);
+	static esp_err_t icon_handle(PsychicRequest *const request, PsychicResponse *const response) {
+		return response->send(200, "image/png", icon_data);
 	}
 
-	static esp_err_t data_recent_handle(PsychicRequest *const request) {
-		PsychicStreamResponse response(request, "text/csv");
-		response.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
-		response.beginSend();
-		response.println(data_header);
+	static esp_err_t data_recent_handle(PsychicRequest *const request, PsychicResponse *const response) {
+		PsychicStreamResponse stream(response, "text/csv");
+		stream.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
+		stream.beginSend();
+		stream.println(data_header);
 		for (Data const &record: data_records)
-			response.println(CSV_Data(&record));
-		return response.endSend();
+			stream.println(CSV_Data(&record));
+		return stream.endSend();
 	}
 
-	static esp_err_t data_latest_handle(PsychicRequest *const request) {
-		PsychicStreamResponse response(request, "text/csv");
-		response.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
-		response.beginSend();
-		response.println(data_header);
+	static esp_err_t data_latest_handle(PsychicRequest *const request, PsychicResponse *const response) {
+		PsychicStreamResponse stream(response, "text/csv");
+		stream.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
+		stream.beginSend();
+		stream.println(data_header);
 		if (!data_records.empty())
-			response.println(CSV_Data(&data_records.back()));
-		return response.endSend();
+			stream.println(CSV_Data(&data_records.back()));
+		return stream.endSend();
 	}
 
-	static esp_err_t gps_recent_handle(PsychicRequest *const request) {
-		PsychicStreamResponse response(request, "text/csv");
-		response.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
-		response.beginSend();
-		response.println(gps_header);
+	static esp_err_t gps_recent_handle(PsychicRequest *const request, PsychicResponse *const response) {
+		PsychicStreamResponse stream(response, "text/csv");
+		stream.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
+		stream.beginSend();
+		stream.println(gps_header);
 		for (GPS const &record: gps_records)
-			response.println(CSV_GPS(&record));
-		return response.endSend();
+			stream.println(CSV_GPS(&record));
+		return stream.endSend();
 	}
 
-	static esp_err_t gps_latest_handle(PsychicRequest *const request) {
-		PsychicStreamResponse response(request, "text/csv");
-		response.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
-		response.beginSend();
-		response.println(gps_header);
+	static esp_err_t gps_latest_handle(PsychicRequest *const request, PsychicResponse *const response) {
+		PsychicStreamResponse stream(response, "text/csv");
+		stream.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
+		stream.beginSend();
+		stream.println(gps_header);
 		if (!data_records.empty())
-			response.println(CSV_Data(&data_records.back()));
-		return response.endSend();
+			stream.println(CSV_Data(&data_records.back()));
+		return stream.endSend();
 	}
 
-	static esp_err_t gps_upload_handle(PsychicRequest *const request) {
+	static esp_err_t gps_upload_handle(PsychicRequest *const request, PsychicResponse *const response) {
 		GPS gps = {.time = (uint32_t)0, .latitude = NAN, .longitude = NAN, .altitude = NAN};
 		PsychicWebParameter *parameter;
 		parameter = request->getParam("time");
@@ -1425,7 +1460,7 @@ R"HTML(
 			file.close();
 		}
 
-		return request->reply(204, "text/plain", "");
+		return response->send(204, "text/plain", "");
 	}
 
 	static PROGMEM char const setting_html_1[] =
@@ -1468,9 +1503,17 @@ R"HTML('
 >
 )HTML";
 
-	static String XML_escape(String const &string) {
+	static PROGMEM char const setting_form_3[] =
+R"HTML(' />
+	</label>
+	<button type='submit'>Set</button>
+</form>
+)HTML";
+
+	static String XML_escape(char const *string) {
 		String result;
-		for (char const c: string)
+		char c;
+		while (c = *(string++))
 			switch (c) {
 			case '&':
 				result.concat("&amp;");
@@ -1493,101 +1536,87 @@ R"HTML('
 		return result;
 	}
 
-	static void setting_form(PsychicStreamResponse *const response, char const *const id) {
-		response->write(reinterpret_cast<uint8_t const *>(setting_form_1), sizeof setting_form_1 - 1);
-		response->print(XML_escape(id));
-		response->write(reinterpret_cast<uint8_t const *>(setting_form_2), sizeof setting_form_2 - 1);
+	static String XML_escape(String const &string) {
+		return XML_escape(string.c_str());
 	}
 
-	static esp_err_t setting_handle(PsychicRequest *const request) {
-		PsychicStreamResponse response(request, XHTML_content_type);
-		response.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
-		response.beginSend();
+	static void setting_form(PsychicStreamResponse *const stream, char const *const id) {
+		stream->write(reinterpret_cast<uint8_t const *>(setting_form_1), sizeof setting_form_1 - 1);
+		stream->print(XML_escape(id));
+		stream->write(reinterpret_cast<uint8_t const *>(setting_form_2), sizeof setting_form_2 - 1);
+	}
 
-		response.write(reinterpret_cast<uint8_t const *>(setting_html_1), sizeof setting_html_1 - 1);
+	static void setting_form_set(PsychicStreamResponse *const stream) {
+		stream->write(reinterpret_cast<uint8_t const *>(setting_form_3), sizeof setting_form_3 - 1);
+	}
 
-		setting_form(&response, "set_time");
-		response.print(
+	static esp_err_t setting_handle(PsychicRequest *const request, PsychicResponse *const response) {
+		PsychicStreamResponse stream(response, XHTML_content_type);
+		stream.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
+		stream.beginSend();
+
+		stream.write(reinterpret_cast<uint8_t const *>(setting_html_1), sizeof setting_html_1 - 1);
+
+		setting_form(&stream, "set_time");
+		stream.print(
 			"\t<label>\r\n"
 			"\t\tCurrent time \r\n"
-			"\t\t<input type='datetime-local' name='time' required='' />\r\n"
-			"\t</label>\r\n"
-			"\t<button type='submit'>Set</button>\r\n"
-			"</form>\r\n"
+			"\t\t<input type='datetime-local' name='time' required='"
 		);
+		setting_form_set(&stream);
 
-		setting_form(&response, "set_campaign");
-		response.print(
+		setting_form(&stream, "set_campaign");
+		stream.print(
 			"\t<label>\r\n"
 			"\t\tCampaign\r\n"
 			"\t\t<input type='text' name='campaign' required='' value='"
 		);
-		response.print(XML_escape(campaign_name));
-		response.print(
-			"' />\r\n"
-			"\t</label>\r\n"
-			"\t<button type='submit'>Set</button>\r\n"
-			"</form>\r\n"
-		);
+		stream.print(XML_escape(campaign_name));
+		setting_form_set(&stream);
 
-		setting_form(&response, "set_organisation");
-		response.print(
+		setting_form(&stream, "set_organisation");
+		stream.print(
 			"\t<label>\r\n"
 			"\t\tOrganisation\r\n"
 			"\t\t<input type='text' name='organisation' required='' value='"
 		);
-		response.print(XML_escape(organisation_name));
-		response.print(
-			"' />\r\n"
-			"\t</label>\r\n"
-			"\t<button type='submit'>Set</button>\r\n"
-			"</form>\r\n"
-		);
+		stream.print(XML_escape(organisation_name));
+		setting_form_set(&stream);
 
-		setting_form(&response, "set_device");
-		response.print(
+		setting_form(&stream, "set_device");
+		stream.print(
 			"\t<label>\r\n"
 			"\t\tDevice ID\r\n"
 			"\t\t<input type='text' name='device' required='' value='"
 		);
-		response.print(XML_escape(device_name));
-		response.print(
-			"' />\r\n"
-			"\t</label>\r\n"
-			"\t<button type='submit'>Set</button>\r\n"
-			"</form>\r\n"
-		);
+		stream.print(XML_escape(device_name));
+		setting_form_set(&stream);
 
-		setting_form(&response, "set_interval");
-		response.print(
+		setting_form(&stream, "set_interval");
+		stream.print(
 			"\t<label>\r\n"
 			"\t\tMeasure interval / seconds\r\n"
 			"\t\t<input type='number' name='interval' min='10' max='900' required='' value='"
 		);
-		response.print(String(measure_interval / 1000));
-		response.print(
-			"' />"
-			"\t</label>\r\n"
-			"\t<button type='submit'>Set</button>\r\n"
-			"</form>\r\n"
-		);
+		stream.print(String(measure_interval / 1000));
+		setting_form_set(&stream);
 
-		setting_form(&response, "set_wifi");
-		response.print(
+		setting_form(&stream, "set_wifi");
+		stream.print(
 			"\t<label>\r\n"
 			"\t\tProvide WiFi\r\n"
 			"\t\t<select name='WiFi'>\r\n"
 			"\t\t\t<option value='AP'"
 		);
-		if (use_AP_mode) response.print(" selected=''");
-		response.print(
+		if (use_AP_mode) stream.print(" selected=''");
+		stream.print(
 			">\r\n"
 			"\t\t\t\tAccess point\r\n"
 			"\t\t\t</option>\r\n"
 			"\t\t\t<option value='STA'"
 		);
-		if (!use_AP_mode) response.print(" selected=''");
-		response.print(
+		if (!use_AP_mode) stream.print(" selected=''");
+		stream.print(
 			">\r\n"
 			"\t\t\t\tStation\r\n"
 			"\t\t\t</option>\r\n"
@@ -1597,90 +1626,88 @@ R"HTML('
 			"\t\tAP SSID\r\n"
 			"\t\t<input name='APSSID' value='"
 		);
-		response.print(XML_escape(AP_SSID));
-		response.print(
+		stream.print(XML_escape(AP_SSID));
+		stream.print(
 			"' />\r\n"
 			"\t</label>\r\n"
 			"\t<label>\r\n"
 			"\t\tAP PASS\r\n"
 			"\t\t<input name='APPASS' value='"
 		);
-		response.print(XML_escape(AP_PASS));
-		response.print(
+		stream.print(XML_escape(AP_PASS));
+		stream.print(
 			"' />\r\n"
 			"\t</label>\r\n"
 			"\t<label>\r\n"
 			"\t\tSTA SSID\r\n"
 			"\t\t<input name='STASSID' value='"
 		);
-		response.print(XML_escape(STA_SSID));
-		response.print(
+		stream.print(XML_escape(STA_SSID));
+		stream.print(
 			"' />\r\n"
 			"\t</label>\r\n"
 			"\t<label>\r\n"
 			"\t\tSTA PASS\r\n"
 			"\t\t<input name='STAPASS' value='"
 		);
-		response.print(XML_escape(STA_PASS));
-		response.print(
-			"' />\r\n"
-			"\t</label>\r\n"
-			"\t<button type='submit'>Set</button>\r\n\r\n"
-			"</form>\r\n"
-		);
+		stream.print(XML_escape(STA_PASS));
+		setting_form_set(&stream);
 
-		setting_form(&response, "set_monitor");
-		response.print(
+		setting_form(&stream, "set_monitor");
+		stream.print(
 			"\t<label>\r\n"
 			"\t\tMonitor server URL\r\n"
 			"\t\t<input type='text' name='monitor' required='' value='"
 		);
-		response.print(XML_escape(monitor_URL));
-		response.print(
-			"' />\r\n"
-			"\t</label>\r\n"
-			"\t<button type='submit'>Set</button>\r\n"
-			"</form>\r\n"
-		);
+		stream.print(XML_escape(monitor_URL));
+		setting_form_set(&stream);
 
-		setting_form(&response, "set_password");
-		response.print(
+		setting_form(&stream, "set_upload");
+		stream.print(
+			"\t<label>\r\n"
+			"\t\tUpload host\r\n"
+			"\t\t<input type='text' name='upload' required='' value='"
+		);
+		stream.print(XML_escape(upload_URL));
+		setting_form_set(&stream);
+
+		setting_form(&stream, "set_username");
+		stream.print(
+			"\t<label>\r\n"
+			"\t\tUpload username\r\n"
+			"\t\t<input type='text' name='username' required='' value='"
+		);
+		stream.print(XML_escape(upload_username));
+		setting_form_set(&stream);
+
+		setting_form(&stream, "set_password");
+		stream.print(
 			"\t<label>\r\n"
 			"\t\tUpload password\r\n"
 			"\t\t<input type='text' name='password' required='' value='"
 		);
-		response.print(XML_escape(upload_password));
-		response.print(
-			"' />\r\n"
-			"\t</label>\r\n"
-			"\t<button type='submit'>Set</button>\r\n"
-			"</form>\r\n"
-		);
+		stream.print(XML_escape(upload_password));
+		setting_form_set(&stream);
 
-		setting_form(&response, "set_temperature_slop");
-		response.print(
+		setting_form(&stream, "set_temperature_slop");
+		stream.print(
 			"\t<label>\r\n"
 			"\t\tCalibrate temperature slop\r\n"
 			"\t\t<input type='text' name='temperature_slop' value='"
 		);
-		response.print(temperature_slop);
-		response.print(
+		stream.print(temperature_slop);
+		stream.print(
 			"' />\r\n"
 			"\t</label>\r\n"
 			"\t<label>\r\n"
 			"\t\tCalibrate temperature intercept\r\n"
 			"\t\t<input type='text' name='temperature_intercept' value='"
 		);
-		response.print(temperature_intercept);
-		response.print(
-			"' />\r\n"
-			"\t</label>\r\n"
-			"\t<button type='submit'>Set</button>\r\n"
-			"</form>\r\n"
-		);
+		stream.print(temperature_intercept);
+		setting_form_set(&stream);
 
-		setting_form(&response, "do_measure");
-		response.print(
+		setting_form(&stream, "do_measure");
+		stream.print(
 			"\t<label>\r\n"
 			"\t\tConfirm\r\n"
 			"\t\t<input type='checkbox' name='measure' />\r\n"
@@ -1689,8 +1716,8 @@ R"HTML('
 			"</form>\r\n"
 		);
 
-		setting_form(&response, "do_delete");
-		response.print(
+		setting_form(&stream, "do_delete");
+		stream.print(
 			"\t<label>\r\n"
 			"\t\tConfirm\r\n"
 			"\t\t<input type='checkbox' name='delete' />\r\n"
@@ -1699,8 +1726,8 @@ R"HTML('
 			"</form>\r\n"
 		);
 
-		setting_form(&response, "do_reboot");
-		response.print(
+		setting_form(&stream, "do_reboot");
+		stream.print(
 			"\t<label>Confirm \r\n"
 			"\t\t<input type='checkbox' name='reboot' />\r\n"
 			"\t</label>\r\n"
@@ -1708,8 +1735,8 @@ R"HTML('
 			"</form>\r\n"
 		);
 
-		response.write(reinterpret_cast<uint8_t const *>(setting_html_2), sizeof setting_html_2 - 1);
-		return response.endSend();
+		stream.write(reinterpret_cast<uint8_t const *>(setting_html_2), sizeof setting_html_2 - 1);
+		return stream.endSend();
 	}
 
 	static PROGMEM char const command_html[] =
@@ -1727,7 +1754,7 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 </html>
 )HTML";
 
-	static esp_err_t command_handle(PsychicRequest *const request) {
+	static esp_err_t command_handle(PsychicRequest *const request, PsychicResponse *const response) {
 		PsychicWebParameter *parameter;
 		parameter = request->getParam("time");
 		if (parameter != nullptr) {
@@ -1833,6 +1860,20 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 			monitor_URL = parameter->value();
 			need_save = true;
 		}
+		parameter = request->getParam("upload");
+		if (parameter != nullptr) {
+			Serial.print("INFO: command upload = ");
+			Serial.println(parameter->value());
+			upload_URL = parameter->value();
+			need_save = true;
+		}
+		parameter = request->getParam("username");
+		if (parameter != nullptr) {
+			Serial.print("INFO: command username = ");
+			Serial.println(parameter->value());
+			upload_username = parameter->value();
+			need_save = true;
+		}
 		parameter = request->getParam("password");
 		if (parameter != nullptr) {
 			Serial.print("INFO: command password = ");
@@ -1913,53 +1954,34 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 			need_save = false;
 		}
 
-		PsychicResponse response(request);
-		response.setCode(303);
-		response.setContentType("application/xhtml+xml; charset=UTF-8");
-		response.addHeader("LOCATION", "/setting.html");
-		response.setContent(reinterpret_cast<uint8_t const *>(command_html), sizeof command_html - 1);
-		return response.send();
+		response->setCode(303);
+		response->setContentType("application/xhtml+xml; charset=UTF-8");
+		response->addHeader("LOCATION", "/setting.html");
+		response->setContent(reinterpret_cast<uint8_t const *>(command_html), sizeof command_html - 1);
+		return response->send();
 	}
 
 	static void setup(void) {
-		HTTPd.config.max_uri_handlers = 20;
-		while (HTTPd.listen(HTTP_port) != ESP_OK) {
-			Serial.println("ERROR: failed to start HTTP server");
-			Monitor.println("Failed to start HTTPS server");
-			Monitor.display();
-			delay(reinitialize_interval);
-		}
-		Serial.println("HTTP server started");
-
-		HTTPSd.config.max_uri_handlers = 20;
-		while (HTTPSd.listen(HTTPS_port, tls_cert, tls_key) != ESP_OK) {
-			Serial.println("ERROR: failed to start HTTPS server");
-			Monitor.println("Failed to start HTTPS server");
-			Monitor.display();
-			delay(reinitialize_interval);
-		}
-		Serial.println("HTTPS server started");
-
-		HTTPd .on("/",                HTTP_GET, home_handle);
-		HTTPSd.on("/",                HTTP_GET, home_handle);
-		HTTPd .on("/operator",        HTTP_GET, home_handle);
-		HTTPSd.on("/operator",        HTTP_GET, home_handle);
-		HTTPd .on("/favicon.ico",     HTTP_GET, icon_handle);
-		HTTPSd.on("/favicon.ico",     HTTP_GET, icon_handle);
-		HTTPd .on("/data/recent.csv", HTTP_GET, data_recent_handle);
-		HTTPSd.on("/data/recent.csv", HTTP_GET, data_recent_handle);
-		HTTPd .on("/data/latest.csv", HTTP_GET, data_latest_handle);
-		HTTPSd.on("/data/latest.csv", HTTP_GET, data_latest_handle);
-		HTTPd .on("/gps/recent.csv",  HTTP_GET, gps_recent_handle);
-		HTTPSd.on("/gps/recent.csv",  HTTP_GET, gps_recent_handle);
-		HTTPd .on("/gps/latest.csv",  HTTP_GET, gps_latest_handle);
-		HTTPSd.on("/gps/latest.csv",  HTTP_GET, gps_latest_handle);
-		HTTPd .on("/gps/upload.exe", HTTP_POST, gps_upload_handle);
-		HTTPSd.on("/gps/upload.exe", HTTP_POST, gps_upload_handle);
-		HTTPd .on("/setting.html",    HTTP_GET, setting_handle);
-		HTTPSd.on("/setting.html",    HTTP_GET, setting_handle);
-		HTTPd .on("/setting.exe",    HTTP_POST, command_handle);
-		HTTPSd.on("/setting.exe",    HTTP_POST, command_handle);
+		HTTPd .on("/",                HTTP_GET,  home_handle);
+		HTTPSd.on("/",                HTTP_GET,  home_handle);
+		HTTPd .on("/operator",        HTTP_GET,  home_handle);
+		HTTPSd.on("/operator",        HTTP_GET,  home_handle);
+		HTTPd .on("/favicon.ico",     HTTP_GET,  icon_handle);
+		HTTPSd.on("/favicon.ico",     HTTP_GET,  icon_handle);
+		HTTPd .on("/data/recent.csv", HTTP_GET,  data_recent_handle);
+		HTTPSd.on("/data/recent.csv", HTTP_GET,  data_recent_handle);
+		HTTPd .on("/data/latest.csv", HTTP_GET,  data_latest_handle);
+		HTTPSd.on("/data/latest.csv", HTTP_GET,  data_latest_handle);
+		HTTPd .on("/gps/recent.csv",  HTTP_GET,  gps_recent_handle);
+		HTTPSd.on("/gps/recent.csv",  HTTP_GET,  gps_recent_handle);
+		HTTPd .on("/gps/latest.csv",  HTTP_GET,  gps_latest_handle);
+		HTTPSd.on("/gps/latest.csv",  HTTP_GET,  gps_latest_handle);
+		HTTPd .on("/gps/upload.exe",  HTTP_POST, gps_upload_handle);
+		HTTPSd.on("/gps/upload.exe",  HTTP_POST, gps_upload_handle);
+		HTTPd .on("/setting.html",    HTTP_GET,  setting_handle);
+		HTTPSd.on("/setting.html",    HTTP_GET,  setting_handle);
+		HTTPd .on("/setting.exe",     HTTP_POST, command_handle);
+		HTTPSd.on("/setting.exe",     HTTP_POST, command_handle);
 		if (SD_card_exist) {
 			HTTPd .serveStatic("/", SD, "/", "max-age=604800");
 			HTTPSd.serveStatic("/", SD, "/", "max-age=604800");
@@ -1970,6 +1992,23 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 			HTTPd .on(gps_filename,  HTTP_GET, gps_recent_handle);
 			HTTPSd.on(gps_filename,  HTTP_GET, gps_recent_handle);
 		}
+
+		while (HTTPd.start() != ESP_OK) {
+			Serial.println("ERROR: failed to start HTTP server");
+			Monitor.println("Failed to start HTTP server");
+			Monitor.display();
+			delay(reinitialize_interval);
+		}
+		Serial.println("HTTP server started");
+
+		HTTPSd.setCertificate(tls_cert, tls_key);
+		while (HTTPSd.start() != ESP_OK) {
+			Serial.println("ERROR: failed to start HTTPS server");
+			Monitor.println("Failed to start HTTPS server");
+			Monitor.display();
+			delay(reinitialize_interval);
+		}
+		Serial.println("HTTPS server started");
 	}
 }
 
@@ -2071,7 +2110,7 @@ void loop(void) {
 
 	if (++count >= display_refresh_interval) {
 		count = 0;
-		redraw_display();
+		redraw_display(false);
 	}
 }
 

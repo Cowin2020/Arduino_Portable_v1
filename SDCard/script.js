@@ -618,38 +618,69 @@ if (Alone.operator) {
 		if (GPS_watch) navigator.geolocation.watchPosition(GPS_callback, GPS_error, GPS_options);
 	}
 	void function () {
+		var subtle = null;
+		if (window.isSecureContext) if ("crypto" in window) if ("subtle" in window.crypto) {
+			subtle = window.crypto.subtle;
+		}
+		function authorization(query, body) {
+			if (subtle == null)
+				return Promise.resolve("BEARER " + Alone.upload_password);
+			var credential = Alone.upload_username + query + body + Alone.upload_username;
+			var binary = new TextEncoder().encode(credential);
+			return subtle.digest("SHA-256", binary).then(
+				function (hash) {
+					var digest = new Uint8Array(hash);
+					var password = new TextEncoder().encode(Alone.upload_password);
+					var binary = new Uint8Array(password.length + 1 + digest.byteLength);
+					binary.set(password, 0);
+					binary[password.length] = 0x3A;  /* ASCII 3A = ':' */
+					binary.set(digest, password.length + 1);
+					var base64 = binary.toBase64();
+					return Promise.resolve("BASIC " + base64);
+				}
+			);
+		}
+		function upload(site, device, body) {
+			var params = new URLSearchParams();
+			params.set("site", Alone.campaign);
+			params.set("device", Alone.device);
+			var query = params.toString();
+			return authorization(query, body).then(
+				function (auth) {
+					var headers = new Headers();
+					headers.set("AUTHORIZATION", auth);
+					return fetch(
+						Alone.upload_URL + "?" + query,
+						{
+							method: "POST",
+							headers: headers,
+							body: body
+						}
+					);
+				}
+			);
+		}
 		$upload.addEventListener(
 			"click",
 			function (event) {
 				event.preventDefault();
-				var identity =
-					Alone.campaign + "\r\n" +
-					Alone.organisation + "\r\n" +
-					Alone.device + "\r\n" +
-					Alone.password + "\r\n";
 				fetch(Alone.data_file)
 				.then(
 					function (response) {
-						if (response.status !== 200)
-							return Promise.reject("Download weather data from device: " + response.status)
+						if (!response.ok)
+							return Promise.reject("download weather data from device: " + response.status)
 						return response.text();
 					}
 				)
 				.then(
 					function (text) {
-						return fetch(
-							Alone.upload_data_URL,
-							{
-								method: "POST",
-								body: identity + text
-							}
-						);
+						return upload(Alone.campaign, Alone.device, text);
 					}
 				)
 				.then(
 					function (response) {
-						if (response.status !== 200)
-							return Promise.reject("Upload weather data to server: " + response.status)
+						if (!response.ok)
+							return Promise.reject("upload weather data to server: " + response.status)
 					}
 				)
 				.then(
@@ -659,26 +690,20 @@ if (Alone.operator) {
 				)
 				.then(
 					function (response) {
-						if (response.status !== 200)
-							return Promise.reject("Download GPS data from device: " + response.status)
+						if (!response.ok)
+							return Promise.reject("download GPS data from device: " + response.status)
 						return response.text();
 					}
 				)
 				.then(
 					function (text) {
-						return fetch(
-							Alone.upload_position_URL,
-							{
-								method: "POST",
-								body: identity + text
-							}
-						);
+						return upload(Alone.campaign, Alone.device, text);
 					}
 				)
 				.then(
 					function (response) {
-						if (response.status !== 200 && response.status !== 204)
-							return Promise.reject("Upload GPS data to server: " + response.status)
+						if (!response.ok)
+							return Promise.reject("upload GPS data to server: " + response.status)
 					}
 				)
 				.catch(
