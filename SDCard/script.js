@@ -571,7 +571,7 @@ if (Application.operator) {
 			for (var i = 0; i < dashboard.data.length; ++i)
 				if (dashboard.data[i] != null)
 					body.append(Application.data_fields[Application.data_meta + i].name, dashboard.data[i]);
-			fetch(Application.report_URL, {method: "POST", body: body})
+			fetch(Application.monitor_URL, {method: "POST", body: body})
 				.catch(function () {});
 		}
 
