@@ -58,7 +58,7 @@ Timer.prototype = {
 	set(enabled) {
 		if (enabled) {
 			if (this.interval !== null) return;
-			this.interval = setInterval(this.run.bind(this), Alone.measure_interval);
+			this.interval = setInterval(this.run.bind(this), Application.measure_interval);
 		}
 		else {
 			if (this.interval === null) return;
@@ -74,14 +74,14 @@ document.body.style["margin"] = "1ex";
 
 document.body.appendChild(
 	$E("p", null, [
-		$T("Camp: "), $T(Alone.campaign),
-		$T(" | Organisation: "), $T(Alone.organisation),
-		$T(" | Device: "), $T(Alone.device)
+		$T("Camp: "), $T(Application.campaign),
+		$T(" | Organisation: "), $T(Application.organisation),
+		$T(" | Device: "), $T(Application.device)
 	])
 );
 
 function Dashboard() {
-	var num_of_data = Alone.data_fields.length - Alone.data_meta;
+	var num_of_data = Application.data_fields.length - Application.data_meta;
 	this.data = new Array(num_of_data);
 	this.items = new Array(num_of_data);
 	this.$root = $E("div", {"class": "dashboard"}, [
@@ -93,7 +93,7 @@ function Dashboard() {
 			this.time = $E("span")
 		]),
 		this.$items = $E("div", {"class": "items"},
-			Alone.data_fields.slice(Alone.data_meta).map(
+			Application.data_fields.slice(Application.data_meta).map(
 				function (field, index) {
 					return $E("div", {"class": "item"}, [
 						$E("span", {"class": "name"}, [$T(field.name)]),
@@ -126,8 +126,8 @@ Dashboard.prototype = {
 			var date_time = row[0].split("T");
 			this.date.textContent = date_time[0];
 			this.time.textContent = date_time[1];
-			for (var i = Alone.data_meta; i < Alone.data_fields.length; ++i)
-				this.items[i - Alone.data_meta].textContent = this.data[i - Alone.data_meta] = row[i];
+			for (var i = Application.data_meta; i < Application.data_fields.length; ++i)
+				this.items[i - Application.data_meta].textContent = this.data[i - Application.data_meta] = row[i];
 		}
 	}
 };
@@ -140,7 +140,7 @@ dashboard.show(null);
 document.body.appendChild(
 	$E("p", {"class": "download-links"},
 		(function (children) {
-			if (Alone.operator) {
+			if (Application.operator) {
 				children.push(
 					$E("a", {"href": "setting.html"}, [
 						$T("Settings")
@@ -153,7 +153,7 @@ document.body.appendChild(
 				])
 			);
 			children.push(
-				$E("a", {"href": Alone.data_file, "download": ""}, [
+				$E("a", {"href": Application.data_file, "download": ""}, [
 					$T("All weather data")
 				])
 			);
@@ -163,7 +163,7 @@ document.body.appendChild(
 				])
 			);
 			children.push(
-				$E("a", {"href": Alone.gps_file, "download": ""}, [
+				$E("a", {"href": Application.gps_file, "download": ""}, [
 					$T("All GPS data")
 				])
 			);
@@ -182,7 +182,7 @@ $refresh = $E("form", {"class": "refresh"}, [
 ]);
 void function () {
 	var $forms = [$refresh];
-	if (Alone.operator)
+	if (Application.operator)
 		$forms.push(
 			$E("p", {"class": "timers"}, [
 				$refresh,
@@ -205,7 +205,7 @@ document.body.appendChild(
 		$E("thead", null, [
 			$E("tr", null,
 				[$E("th", null, [$T("time")])].concat(
-					Alone.data_fields.slice(Alone.data_meta).map(
+					Application.data_fields.slice(Application.data_meta).map(
 						function (field) {
 							return $E("th", null, [$T(field.name)]);
 						}
@@ -216,7 +216,7 @@ document.body.appendChild(
 		$list = $E("tbody")
 	])
 );
-var $plots = Alone.data_fields.slice(Alone.data_meta).map(
+var $plots = Application.data_fields.slice(Application.data_meta).map(
 	function () {
 		var $plot = $E("div", {"class": "plot"});
 		$plot.hidden = true;
@@ -277,7 +277,7 @@ function data_plots(rows) {
 		var config = {
 			responsive: true
 		};
-		Alone.data_fields.slice(Alone.data_meta).forEach(
+		Application.data_fields.slice(Application.data_meta).forEach(
 			function (field, index) {
 				$plots[index].hidden = false;
 				if (field.unit == null)
@@ -287,7 +287,7 @@ function data_plots(rows) {
 				Plotly.react(
 					$plots[index],
 					{
-						data: [{x: time, y: rows.map(function (row) {return row[index + Alone.data_meta];})}],
+						data: [{x: time, y: rows.map(function (row) {return row[index + Application.data_meta];})}],
 						layout: {title: title},
 						config: config
 					}
@@ -321,7 +321,7 @@ function data_load() {
 					}
 				);
 				rows.shift();
-				while (rows.length && rows[rows.length - 1].length < Alone.data_fields.length)
+				while (rows.length && rows[rows.length - 1].length < Application.data_fields.length)
 					rows.pop();
 				if (!(rows.length > 0)) {
 					dashboard.show(null);
@@ -335,7 +335,7 @@ function data_load() {
 					$list.appendChild(
 						$E("tr", null,
 							[$E("td", null, [$T(fields[0])])].concat(
-								fields.slice(Alone.data_meta).map(
+								fields.slice(Application.data_meta).map(
 									function (field) {
 										return $E("td", null, [$T(field)]);
 									}
@@ -352,9 +352,9 @@ function data_load() {
 
 var GPS = new Array;
 
-var GPS_index_latitude = Alone.gps_fields.findIndex(function (field) {return field.name === "latitude";});
-var GPS_index_longitude = Alone.gps_fields.findIndex(function (field) {return field.name === "longitude";});
-var GPS_index_altitude = Alone.gps_fields.findIndex(function (field) {return field.name === "altitude";});
+var GPS_index_latitude = Application.gps_fields.findIndex(function (field) {return field.name === "latitude";});
+var GPS_index_longitude = Application.gps_fields.findIndex(function (field) {return field.name === "longitude";});
+var GPS_index_altitude = Application.gps_fields.findIndex(function (field) {return field.name === "altitude";});
 
 if ("L" in window) {
 	/* initialize leaflet */
@@ -495,7 +495,7 @@ function GPS_load() {
 					var fields = line.split(",");
 					var record = new Array;
 					for (var j = 0; j < fields.length; ++j)
-						if (Alone.gps_fields[j].unit)
+						if (Application.gps_fields[j].unit)
 							record.push(Number.parseFloat(fields[j]));
 						else
 							record.push(fields[j]);
@@ -541,15 +541,15 @@ var refresh_timer = new RefreshTimer();
 $auto_refresh.addEventListener("change", refresh_timer.update.bind(refresh_timer));
 load_all();
 
-if (Alone.operator) {
+if (Application.operator) {
 	if (!("geolocation" in navigator))
 		document.body.appendChild($E("p", null, [$T("Geo-location is not support in this browser")]));
 	else {
 		function GPS_upload(planned_time, browser_time, position_time, coords) {
 			var body = new URLSearchParams;
-			body.append("campaign",     Alone.campaign);
-			body.append("organisation", Alone.organisation);
-			body.append("device",       Alone.device);
+			body.append("campaign",     Application.campaign);
+			body.append("organisation", Application.organisation);
+			body.append("device",       Application.device);
 			body.append("time",          planned_time);
 			body.append("browser_time",  browser_time);
 			body.append("position_time", position_time);
@@ -561,17 +561,17 @@ if (Alone.operator) {
 		}
 		function GPS_report(timestamp, coords) {
 			var body = new URLSearchParams;
-			body.append("campaign",     Alone.campaign);
-			body.append("organisation", Alone.organisation);
-			body.append("device",       Alone.device);
+			body.append("campaign",     Application.campaign);
+			body.append("organisation", Application.organisation);
+			body.append("device",       Application.device);
 			body.append("time",         timestamp);
 			body.append("latitude",     coords.latitude);
 			body.append("longitude",    coords.longitude);
 			body.append("altitude",     coords.altitude);
 			for (var i = 0; i < dashboard.data.length; ++i)
 				if (dashboard.data[i] != null)
-					body.append(Alone.data_fields[Alone.data_meta + i].name, dashboard.data[i]);
-			fetch(Alone.report_URL, {method: "POST", body: body})
+					body.append(Application.data_fields[Application.data_meta + i].name, dashboard.data[i]);
+			fetch(Application.report_URL, {method: "POST", body: body})
 				.catch(function () {});
 		}
 
@@ -590,27 +590,27 @@ if (Alone.operator) {
 			console.error("GeoLocationError: ", error.message);
 		}
 		var GPS_options = {
-			timeout: Alone.measure_interval / 4,
+			timeout: Application.measure_interval / 4,
 			enableHighAccuracy: true
 		};
 		function GPS_request() {
 			var now_plus_half =
 				Date.now()
 					- MILLISECONDS_FROM_1970_TO_2000
-					+ Alone.measure_interval / 2;
+					+ Application.measure_interval / 2;
 			var planned_time =
 				string_from_Date(
 					now_plus_half
-						- now_plus_half % Alone.measure_interval
+						- now_plus_half % Application.measure_interval
 						+ MILLISECONDS_FROM_1970_TO_2000,
 					"T"
 				);
 			navigator.geolocation.getCurrentPosition(GPS_record.bind(this, planned_time), GPS_error, GPS_options);
 		}
 		function GPS_start() {
-			setInterval(GPS_request, Alone.measure_interval);
+			setInterval(GPS_request, Application.measure_interval);
 		}
-		setTimeout(GPS_start, (Date.now() - MILLISECONDS_FROM_1970_TO_2000) % Alone.measure_interval);
+		setTimeout(GPS_start, (Date.now() - MILLISECONDS_FROM_1970_TO_2000) % Application.measure_interval);
 		setTimeout(GPS_request, 0);
 		function GPS_callback(spacetime) {
 			GPS_record(string_from_Date(spacetime.timestamp), spacetime);
@@ -624,13 +624,13 @@ if (Alone.operator) {
 		}
 		function authorization(query, body) {
 			if (subtle == null)
-				return Promise.resolve("BEARER " + Alone.upload_password);
-			var credential = Alone.upload_username + query + body + Alone.upload_username;
+				return Promise.resolve("BEARER " + Application.upload_password);
+			var credential = Application.upload_username + query + body + Application.upload_username;
 			var binary = new TextEncoder().encode(credential);
 			return subtle.digest("SHA-256", binary).then(
 				function (hash) {
 					var digest = new Uint8Array(hash);
-					var password = new TextEncoder().encode(Alone.upload_password);
+					var password = new TextEncoder().encode(Application.upload_password);
 					var binary = new Uint8Array(password.length + 1 + digest.byteLength);
 					binary.set(password, 0);
 					binary[password.length] = 0x3A;  /* ASCII 3A = ':' */
@@ -642,15 +642,15 @@ if (Alone.operator) {
 		}
 		function upload(site, device, body) {
 			var params = new URLSearchParams();
-			params.set("site", Alone.campaign);
-			params.set("device", Alone.device);
+			params.set("site", Application.campaign);
+			params.set("device", Application.device);
 			var query = params.toString();
 			return authorization(query, body).then(
 				function (auth) {
 					var headers = new Headers();
 					headers.set("AUTHORIZATION", auth);
 					return fetch(
-						Alone.upload_URL + "?" + query,
+						Application.upload_URL + "?" + query,
 						{
 							method: "POST",
 							headers: headers,
@@ -664,7 +664,7 @@ if (Alone.operator) {
 			"click",
 			function (event) {
 				event.preventDefault();
-				fetch(Alone.data_file)
+				fetch(Application.data_file)
 				.then(
 					function (response) {
 						if (!response.ok)
@@ -674,7 +674,7 @@ if (Alone.operator) {
 				)
 				.then(
 					function (text) {
-						return upload(Alone.campaign, Alone.device, text);
+						return upload(Application.campaign, Application.device, text);
 					}
 				)
 				.then(
@@ -685,7 +685,7 @@ if (Alone.operator) {
 				)
 				.then(
 					function () {
-						return fetch(Alone.gps_file);
+						return fetch(Application.gps_file);
 					}
 				)
 				.then(
@@ -697,7 +697,7 @@ if (Alone.operator) {
 				)
 				.then(
 					function (text) {
-						return upload(Alone.campaign, Alone.device, text);
+						return upload(Application.campaign, Application.device, text);
 					}
 				)
 				.then(

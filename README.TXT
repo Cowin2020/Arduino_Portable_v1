@@ -73,7 +73,7 @@ Setup:
 		Pin to control the loading of settings
 
 To modify elements:
-	Edit "Alone1.ino":
+	Edit "Arduino_Portable_v1.ino":
 		modify "SENSOR" for different sensors
 		modify fields "struct Data", "data_fields[]" "CSV_Data()" and "pretty_Data()"
 		modify "measure" to fit how the values measured

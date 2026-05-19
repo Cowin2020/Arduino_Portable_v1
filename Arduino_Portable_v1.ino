@@ -672,7 +672,7 @@ R"HTML(</head>
 <noscript>Javascript is required for this web page.</noscript>
 <script type='text/javascript'>
 	(function(p){document.readyState!=="loading"?p():document.addEventListener("DOMContentLoaded",p)})(function(p){
-		window.Alone = {
+		window.Application = {
 			operator: location.pathname === "/operator",
 )HTML";
 
@@ -729,11 +729,11 @@ R"HTML(
 			var $p;
 			$p = $E("p");
 			c_($p, $T("Campaign: "));
-			c_($p, $T(Alone.campaign));
+			c_($p, $T(Application.campaign));
 			c_($p, $T(" | Organisation: "));
-			c_($p, $T(Alone.organisation));
+			c_($p, $T(Application.organisation));
 			c_($p, $T(" | Device: "));
-			c_($p, $T(Alone.device));
+			c_($p, $T(Application.device));
 			c_(document.body, $p);
 		}
 		void function () {
@@ -747,7 +747,7 @@ R"HTML(
 			s_($p, "display", "flex");
 			s_($p, "flex-flow", "row wrap");
 			s_($p, "text-align", "center");
-			if (Alone.operator) {
+			if (Application.operator) {
 				$a = $E("a");
 				style_$a();
 				a_($a, "href", "setting.html");
@@ -762,7 +762,7 @@ R"HTML(
 			c_($p, $a);
 			$a = $E("a");
 			style_$a();
-			a_($a, "href", Alone.data_file);
+			a_($a, "href", Application.data_file);
 			a_($a, "download", "");
 			c_($a, $T("All weather data"));
 			c_($p, $a);
@@ -774,7 +774,7 @@ R"HTML(
 			c_($p, $a);
 			$a = $E("a");
 			style_$a();
-			a_($a, "href", Alone.gps_file);
+			a_($a, "href", Application.gps_file);
 			a_($a, "download", "");
 			c_($a, $T("All GPS data"));
 			c_($p, $a);
@@ -803,7 +803,7 @@ R"HTML(
 			c_($form, $button);
 			c_(document.body, $form);
 		}();
-		if (Alone.operator) {
+		if (Application.operator) {
 			var $report_auto;
 			var $upload;
 			void function () {
@@ -850,7 +850,7 @@ R"HTML(
 			$thead = $E("thead");
 			s_($thead, "border-bottom-style", "solid");
 			$tr = $E("tr");
-			Alone.data_fields.forEach(
+			Application.data_fields.forEach(
 				function (field) {
 					var text = field.name[0].toUpperCase() + field.name.substring(1);
 					if (field.unit)
@@ -883,7 +883,7 @@ R"HTML(
 			$thead = $E("thead");
 			s_($thead, "border-bottom-style", "solid");
 			$tr = $E("tr");
-			Alone.gps_fields.forEach(
+			Application.gps_fields.forEach(
 				function (field) {
 					var text = field.name[0].toUpperCase() + field.name.substring(1);
 					if (field.unit)
@@ -934,8 +934,8 @@ R"HTML(
 								var v = j === 0 ? string_from_Date(fields[j]) : fields[j];
 								c_($td, $T(v));
 								c_($tr, $td);
-								if (Alone.data_meta > j)
-									data_latest[Alone.data_fields[j].name] = v;
+								if (Application.data_meta > j)
+									data_latest[Application.data_fields[j].name] = v;
 							}
 							c_($data_list, $tr);
 						}
@@ -1006,7 +1006,7 @@ R"HTML(
 			function (event) {
 				if ($refresh_auto.checked) {
 					if (refresh_timer !== null) return;
-					refresh_timer = setInterval(load_all, Alone.measure_interval);
+					refresh_timer = setInterval(load_all, Application.measure_interval);
 				}
 				else {
 					if (refresh_timer === null) return;
@@ -1016,14 +1016,14 @@ R"HTML(
 			}
 		);
 		setTimeout(load_all, 3000);
-		if (Alone.operator)
+		if (Application.operator)
 			void function () {
 				if (window.isSecureContext) if ("geolocation" in window.navigator) {
 					function GPS_upload(planned_time, browser_time, position_time, coords) {
 						var body = new URLSearchParams();
-						body.append("campaign",      Alone.campaign);
-						body.append("organisation",  Alone.organisation);
-						body.append("device",        Alone.device);
+						body.append("campaign",      Application.campaign);
+						body.append("organisation",  Application.organisation);
+						body.append("device",        Application.device);
 						body.append("time",          planned_time);
 						body.append("browser_time",  browser_time);
 						body.append("position_time", position_time);
@@ -1036,9 +1036,9 @@ R"HTML(
 					}
 					function GPS_report(timestamp, coords) {
 						var body = new URLSearchParams();
-						body.append("campaign",     Alone.campaign);
-						body.append("organisation", Alone.organisation);
-						body.append("device",       Alone.device);
+						body.append("campaign",     Application.campaign);
+						body.append("organisation", Application.organisation);
+						body.append("device",       Application.device);
 						body.append("time",         timestamp);
 						body.append("latitude",     coords.latitude);
 						body.append("longitude",    coords.longitude);
@@ -1046,7 +1046,7 @@ R"HTML(
 						for (var field in data_latest)
 							body.append(field, data_latest[field]);
 						var xhr = new XMLHttpRequest();
-						xhr.open("POST", Alone.monitor_URL, true);
+						xhr.open("POST", Application.monitor_URL, true);
 						xhr.send(body);
 					}
 					function GPS_record(planned_time, spacetime) {
@@ -1054,7 +1054,7 @@ R"HTML(
 						var browser_time = string_from_Date(Date.now(), "T");
 						var position_time = string_from_Date(spacetime.timestamp, "T");
 						var coords = spacetime.coords;
-						if (Alone.operator) {
+						if (Application.operator) {
 							GPS_upload(planned_time, browser_time, position_time, coords);
 							if ($report_auto.checked)
 								GPS_report(position_time, coords);
@@ -1064,27 +1064,27 @@ R"HTML(
 						console.error("GeoLocationError: ", error.message);
 					}
 					var GPS_options = {
-						timeout: Alone.measure_interval / 4,
+						timeout: Application.measure_interval / 4,
 						enableHighAccuracy: true
 					};
 					function GPS_request() {
 						var now_plus_half =
 							Date.now()
 								- MILLISECONDS_FROM_1970_TO_2000
-								+ Alone.measure_interval / 2;
+								+ Application.measure_interval / 2;
 						var planned_time =
 							string_from_Date(
 								now_plus_half
-									- now_plus_half % Alone.measure_interval
+									- now_plus_half % Application.measure_interval
 									+ MILLISECONDS_FROM_1970_TO_2000,
 								"T"
 							);
 						navigator.geolocation.getCurrentPosition(GPS_record.bind(this, planned_time), GPS_error, GPS_options)
 					}
 					function GPS_start() {
-						setInterval(GPS_request, Alone.measure_interval);
+						setInterval(GPS_request, Application.measure_interval);
 					}
-					setTimeout(GPS_start, (Date.now() - MILLISECONDS_FROM_1970_TO_2000) % Alone.measure_interval);
+					setTimeout(GPS_start, (Date.now() - MILLISECONDS_FROM_1970_TO_2000) % Application.measure_interval);
 					setTimeout(GPS_request, 0);
 					function GPS_callback(spacetime) {
 						GPS_record(string_from_Date(spacetime.timestamp), spacetime);
@@ -1098,13 +1098,13 @@ R"HTML(
 					}
 					function authorization(query, body) {
 						if (subtle == null)
-							return Promise.resolve("BEARER " + Alone.upload_password);
-						var credential = Alone.upload_username + query + body + Alone.upload_username;
+							return Promise.resolve("BEARER " + Application.upload_password);
+						var credential = Application.upload_username + query + body + Application.upload_username;
 						var binary = new TextEncoder().encode(credential);
 						return subtle.digest("SHA-256", binary).then(
 							function (hash) {
 								var digest = new Uint8Array(hash);
-								var password = new TextEncoder().encode(Alone.upload_password);
+								var password = new TextEncoder().encode(Application.upload_password);
 								var binary = new Uint8Array(password.length + 1 + digest.byteLength);
 								binary.set(password, 0);
 								binary[password.length] = 0x3A;  /* ASCII 3A = ':' */
@@ -1116,8 +1116,8 @@ R"HTML(
 					}
 					function upload(site, device, body) {
 						var params = new URLSearchParams();
-						params.set("site", Alone.campaign);
-						params.set("device", Alone.device);
+						params.set("site", Application.campaign);
+						params.set("device", Application.device);
 						var query = params.toString();
 						return authorization(query, body).then(
 							function (auth) {
@@ -1130,7 +1130,7 @@ R"HTML(
 												return reject();
 											return resolve();
 										};
-										xhr.open("POST", Alone.upload_URL + "?" + query, true);
+										xhr.open("POST", Application.upload_URL + "?" + query, true);
 										xhr.setRequestHeader("AUTHORIZATION", auth);
 										xhr.send(body);
 									}
@@ -1152,12 +1152,12 @@ R"HTML(
 											return reject();
 										return resolve(text);
 									};
-									xhr.open("GET", Alone.data_file, true);
+									xhr.open("GET", Application.data_file, true);
 									xhr.send();
 								}
 							).then(
 								function (text) {
-									return upload(Alone.campaign, Alone.device, text);
+									return upload(Application.campaign, Application.device, text);
 								}
 							).then(
 								function (text) {
@@ -1171,14 +1171,14 @@ R"HTML(
 													return reject();
 												return resolve(text);
 											};
-											xhr.open("GET", Alone.gps_file, true);
+											xhr.open("GET", Application.gps_file, true);
 											xhr.send();
 										}
 									);
 								}
 							).then(
 								function (text) {
-									return upload(Alone.campaign, Alone.device, text);
+									return upload(Application.campaign, Application.device, text);
 								}
 							).catch(
 								function (e) {
