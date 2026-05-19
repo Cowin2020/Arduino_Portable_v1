@@ -1355,8 +1355,8 @@ R"HTML(
 		stream.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
 		stream.beginSend();
 		stream.println(gps_header);
-		if (!data_records.empty())
-			stream.println(CSV_Data(&data_records.back()));
+		if (!gps_records.empty())
+			stream.println(CSV_GPS(&gps_records.back()));
 		return stream.endSend();
 	}
 
