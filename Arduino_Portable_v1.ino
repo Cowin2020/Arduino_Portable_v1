@@ -1180,7 +1180,10 @@ R"HTML(
 								function (text) {
 									return upload(Application.campaign, Application.device, text);
 								}
-							).catch(
+							).then(
+								function () {
+									alert("Success to upload data");
+								},
 								function (e) {
 									console.error(e);
 									alert("Failed to upload data");

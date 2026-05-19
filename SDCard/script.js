@@ -706,7 +706,10 @@ if (Application.operator) {
 							return Promise.reject("upload GPS data to server: " + response.status)
 					}
 				)
-				.catch(
+				.then(
+					function () {
+						alert("Success to upload data");
+					},
 					function (error) {
 						alert("Failed to upload data: " + String(error));
 					}
