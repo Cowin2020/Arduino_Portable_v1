@@ -1467,13 +1467,17 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 </head>
 <body>
 <style>
-	label {
-		display: block;
-	}
-	form {
+	form.setting-form {
 		margin: 1ex;
 		border: solid thin;
 		padding: 1ex;
+	}
+	form.setting-form label {
+		display: flex;
+	}
+	form.setting-form label input {
+		flex-grow: 1;
+		margin-left: 0.5em;
 	}
 </style>
 <p><a href='operator'>&#x2190; Back</a></p>
@@ -1493,6 +1497,7 @@ R"HTML('
 	action='setting.exe'
 	method='POST'
 >
+	<label>
 )HTML";
 
 	static PROGMEM char const setting_form_3[] =
@@ -1551,7 +1556,6 @@ R"HTML(' />
 
 		setting_form(&stream, "set_time");
 		stream.print(
-			"\t<label>\r\n"
 			"\t\tCurrent time \r\n"
 			"\t\t<input type='datetime-local' name='time' required='"
 		);
@@ -1559,7 +1563,6 @@ R"HTML(' />
 
 		setting_form(&stream, "set_campaign");
 		stream.print(
-			"\t<label>\r\n"
 			"\t\tCampaign\r\n"
 			"\t\t<input type='text' name='campaign' required='' value='"
 		);
@@ -1568,7 +1571,6 @@ R"HTML(' />
 
 		setting_form(&stream, "set_organisation");
 		stream.print(
-			"\t<label>\r\n"
 			"\t\tOrganisation\r\n"
 			"\t\t<input type='text' name='organisation' required='' value='"
 		);
@@ -1577,7 +1579,6 @@ R"HTML(' />
 
 		setting_form(&stream, "set_device");
 		stream.print(
-			"\t<label>\r\n"
 			"\t\tDevice ID\r\n"
 			"\t\t<input type='text' name='device' required='' value='"
 		);
@@ -1586,7 +1587,6 @@ R"HTML(' />
 
 		setting_form(&stream, "set_interval");
 		stream.print(
-			"\t<label>\r\n"
 			"\t\tMeasure interval / seconds\r\n"
 			"\t\t<input type='number' name='interval' min='10' max='900' required='' value='"
 		);
@@ -1595,7 +1595,6 @@ R"HTML(' />
 
 		setting_form(&stream, "set_wifi");
 		stream.print(
-			"\t<label>\r\n"
 			"\t\tProvide WiFi\r\n"
 			"\t\t<select name='WiFi'>\r\n"
 			"\t\t\t<option value='AP'"
@@ -1647,7 +1646,6 @@ R"HTML(' />
 
 		setting_form(&stream, "set_monitor");
 		stream.print(
-			"\t<label>\r\n"
 			"\t\tMonitor server URL\r\n"
 			"\t\t<input type='text' name='monitor' required='' value='"
 		);
@@ -1656,7 +1654,6 @@ R"HTML(' />
 
 		setting_form(&stream, "set_upload");
 		stream.print(
-			"\t<label>\r\n"
 			"\t\tUpload host\r\n"
 			"\t\t<input type='text' name='upload' required='' value='"
 		);
@@ -1665,7 +1662,6 @@ R"HTML(' />
 
 		setting_form(&stream, "set_username");
 		stream.print(
-			"\t<label>\r\n"
 			"\t\tUpload username\r\n"
 			"\t\t<input type='text' name='username' required='' value='"
 		);
@@ -1674,7 +1670,6 @@ R"HTML(' />
 
 		setting_form(&stream, "set_password");
 		stream.print(
-			"\t<label>\r\n"
 			"\t\tUpload password\r\n"
 			"\t\t<input type='text' name='password' required='' value='"
 		);
@@ -1683,7 +1678,6 @@ R"HTML(' />
 
 		setting_form(&stream, "set_temperature_slop");
 		stream.print(
-			"\t<label>\r\n"
 			"\t\tCalibrate temperature slop\r\n"
 			"\t\t<input type='text' name='temperature_slop' value='"
 		);
@@ -1700,7 +1694,6 @@ R"HTML(' />
 
 		setting_form(&stream, "do_measure");
 		stream.print(
-			"\t<label>\r\n"
 			"\t\tConfirm\r\n"
 			"\t\t<input type='checkbox' name='measure' />\r\n"
 			"\t</label>\r\n"
@@ -1710,7 +1703,6 @@ R"HTML(' />
 
 		setting_form(&stream, "do_delete");
 		stream.print(
-			"\t<label>\r\n"
 			"\t\tConfirm\r\n"
 			"\t\t<input type='checkbox' name='delete' />\r\n"
 			"\t</label>\r\n"
@@ -1720,7 +1712,7 @@ R"HTML(' />
 
 		setting_form(&stream, "do_reboot");
 		stream.print(
-			"\t<label>Confirm \r\n"
+			"\t\tConfirm \r\n"
 			"\t\t<input type='checkbox' name='reboot' />\r\n"
 			"\t</label>\r\n"
 			"\t<button type='submit'>Reboot</button>\r\n"
