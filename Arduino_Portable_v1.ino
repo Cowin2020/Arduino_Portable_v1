@@ -1723,7 +1723,7 @@ R"HTML(' />
 			"\t<label>Confirm \r\n"
 			"\t\t<input type='checkbox' name='reboot' />\r\n"
 			"\t</label>\r\n"
-			"\t<button type='submit' name='reboot'>Reboot</button>\r\n"
+			"\t<button type='submit'>Reboot</button>\r\n"
 			"</form>\r\n"
 		);
 
