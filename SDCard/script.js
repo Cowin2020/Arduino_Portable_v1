@@ -81,29 +81,37 @@ document.body.appendChild(
 );
 
 function Dashboard() {
-	var num_of_data = Application.data_fields.length - Application.data_meta;
-	this.data = new Array(num_of_data);
-	this.items = new Array(num_of_data);
+	this.data = new Array(Application.data_fields.length);
+	this.$item_list = new Array(Application.data_fields.length);
 	this.$root = $E("div", {"class": "dashboard"}, [
 		this.$nodata = $E("div", {"class": "nodata"}, [
 			$T("No data")
 		]),
 		this.$datetime = $E("div", {"class": "datetime"}, [
-			this.date = $E("span"),
-			this.time = $E("span")
+			this.$date = $E("span"),
+			this.$time = $E("span")
 		]),
 		this.$items = $E("div", {"class": "items"},
-			Application.data_fields.slice(Application.data_meta).map(
+			Application.data_fields
+			.map(
 				function (field, index) {
-					return $E("div", {"class": "item"}, [
-						$E("span", {"class": "name"}, [$T(field.name)]),
-						$E("span", {"class": "value"}, [
-							this.items[index] = $E("span", {"class": "value"}),
-							$E("span", {"class": "unit"}, [$T(field.unit ? field.unit : "")])
-						])
-					]);
+					if (field.title == null)
+						return this.$item_list[index] = null;
+					else
+						return $E("div", {"class": "item"}, [
+							$E("span", {"class": "name"}, [$T(field.title)]),
+							$E("span", {"class": "value"}, [
+								this.$item_list[index] = $E("span", {"class": "value"}),
+								$E("span", {"class": "unit"}, [$T(field.unit ? field.unit : "")])
+							])
+						]);
 				},
 				this
+			)
+			.filter(
+				function (element) {
+					return element != null;
+				}
 			)
 		)
 	]);
@@ -124,10 +132,15 @@ Dashboard.prototype = {
 			this.$datetime.hidden = false;
 			this.$items.hidden = false;
 			var date_time = row[0].split("T");
-			this.date.textContent = date_time[0];
-			this.time.textContent = date_time[1];
-			for (var i = Application.data_meta; i < Application.data_fields.length; ++i)
-				this.items[i - Application.data_meta].textContent = this.data[i - Application.data_meta] = row[i];
+			this.$date.textContent = date_time[0];
+			this.$time.textContent = date_time[1];
+			this.$item_list.forEach(
+				function ($item, index) {
+					if (this.$item != null)
+						this.$item.textContent = this.data[index] = row[index];
+				},
+				this
+			);
 		}
 	}
 };
@@ -205,9 +218,19 @@ document.body.appendChild(
 		$E("thead", null, [
 			$E("tr", null,
 				[$E("th", null, [$T("time")])].concat(
-					Application.data_fields.slice(Application.data_meta).map(
+					Application.data_fields
+					.map(
 						function (field) {
-							return $E("th", null, [$T(field.name)]);
+							if (field.title == null) return null;
+							var title = field.title;
+							if (field.unit != null)
+								title = title + " (" + field.unit + ")";
+							return $E("th", null, [$T(title)]);
+						}
+					)
+					.filter(
+						function ($th) {
+							return $th != null;
 						}
 					)
 				)
@@ -216,8 +239,9 @@ document.body.appendChild(
 		$list = $E("tbody")
 	])
 );
-var $plots = Application.data_fields.slice(Application.data_meta).map(
-	function () {
+var $plots = Application.data_fields.map(
+	function (field) {
+		if (field.title == null) return null;
 		var $plot = $E("div", {"class": "plot"});
 		$plot.hidden = true;
 		document.body.appendChild($plot);
@@ -261,7 +285,12 @@ document.body.appendChild($GPS.plot);
 /* Actions */
 
 function hide_plots() {
-	$plots.forEach(function ($plot) {$plot.hidden = true;});
+	$plots.forEach(
+		function ($plot) {
+			if ($plot != null)
+				$plot.hidden = true;
+		}
+	);
 }
 
 function data_plots(rows) {
@@ -277,23 +306,23 @@ function data_plots(rows) {
 		var config = {
 			responsive: true
 		};
-		Application.data_fields.slice(Application.data_meta).forEach(
-			function (field, index) {
-				$plots[index].hidden = false;
-				if (field.unit == null)
-					var title = field.name;
-				else
-					var title = field.name + " (" + field.unit + ")";
-				Plotly.react(
-					$plots[index],
-					{
-						data: [{x: time, y: rows.map(function (row) {return row[index + Application.data_meta];})}],
-						layout: {title: title},
-						config: config
-					}
-				);
-			}
-		);
+		for (var i = 0; Application.data_fields.length > i; ++i) {
+			var field = Application.data_fields[i];
+			var $plot = $plots[i];
+			if (field.title == null || $plot == null) continue;
+			$plot.hidden = false;
+			var title = field.title;
+			if (field.unit != null)
+				title = title + " (" + field.unit + ")";
+			Plotly.react(
+				$plot,
+				{
+					data: [{x: time, y: rows.map(function (row) {return row[i];})}],
+					layout: {title: title},
+					config: config
+				}
+			);
+		}
 	}
 }
 
@@ -330,16 +359,23 @@ function data_load() {
 				}
 				dashboard.show(rows[rows.length - 1]);
 				data_plots(rows);
-				for (var i = 0; rows.length > i; ++i) {
-					var fields = rows[rows.length - i - 1];
+				for (var i = rows.length; --i >= 0; ) {
+					var row = rows[i];
 					$list.appendChild(
 						$E("tr", null,
-							[$E("td", null, [$T(fields[0])])].concat(
-								fields.slice(Application.data_meta).map(
-									function (field) {
+							[$E("td", null, [$T(row[0])])]
+							.concat(
+								row.map(
+									function (field, j) {
+										if (Application.data_fields[j].title == null) return null;
 										return $E("td", null, [$T(field)]);
 									}
 								)
+							)
+							.filter(
+								function ($td) {
+									return $td != null;
+								}
 							)
 						)
 					);
@@ -489,12 +525,12 @@ function GPS_load() {
 				var lines = text.split("\r\n");
 				if (!lines || !(lines.length > 0)) return;
 				var records = new Array;
-				for (var i = 1; i < lines.length; ++i) {
+				for (var i = 1; lines.length > i; ++i) {
 					var line = lines[i].trim();
 					if (!line || typeof line !== "string") continue;
 					var fields = line.split(",");
 					var record = new Array;
-					for (var j = 0; j < fields.length; ++j)
+					for (var j = 0; fields.length > j; ++j)
 						if (Application.gps_fields[j].unit)
 							record.push(Number.parseFloat(fields[j]));
 						else
@@ -568,9 +604,9 @@ if (Application.operator) {
 			body.append("latitude",     coords.latitude);
 			body.append("longitude",    coords.longitude);
 			body.append("altitude",     coords.altitude);
-			for (var i = 0; i < dashboard.data.length; ++i)
+			for (var i = 0; dashboard.data.length > i; ++i)
 				if (dashboard.data[i] != null)
-					body.append(Application.data_fields[Application.data_meta + i].name, dashboard.data[i]);
+					body.append(Application.data_fields[i].name, dashboard.data[i]);
 			fetch(Application.monitor_URL, {method: "POST", body: body})
 				.catch(function () {});
 		}

@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <vector>
+#include <array>
 #include <deque>
 #include <chrono>
 #include <thread>
@@ -58,6 +59,7 @@ static Adafruit_SSD1306 Monitor(128, 64);
 
 struct Field {
 	char const *name;
+	char const *title;
 	char const *unit;
 };
 
@@ -70,15 +72,13 @@ struct Data {
 	#endif
 };
 
-static Field const data_fields[] = {
-	{"time", nullptr},
-	{"device_time", nullptr},
-	{"clock_synchronized", nullptr},
-	{"BME280_temperature", "\u2103"},
-	{"BME280_humidity", "%"}
+static std::array<Field, 5> const data_fields = {
+	Field{"time", nullptr, nullptr},
+	Field{"device_time", nullptr, nullptr},
+	Field{"clock_synchronized", nullptr, nullptr},
+	Field{"BME280_temperature", "Temperature", "\u2103"},
+	Field{"BME280_humidity", "Humidity", "%"}
 };
-
-static size_t const data_meta = 3;
 
 static String CSV_Data(struct Data const *const data) {
 	return show_time(&data->time)
@@ -97,16 +97,14 @@ struct GPS {
 	double altitude;
 };
 
-static Field const gps_fields[] = {
-	{"time", nullptr},
-	{"browser_time", nullptr},
-	{"position_time", nullptr},
-	{"latitude", "\u00B0"},
-	{"longitude", "\u00B0"},
-	{"altitude", "m"}
+static std::array<Field, 6> gps_fields = {
+	Field{"time", nullptr, nullptr},
+	Field{"browser_time", nullptr, nullptr},
+	Field{"position_time", nullptr, nullptr},
+	Field{"latitude", "Latitude", "\u00B0"},
+	Field{"longitude", "Longitude", "\u00B0"},
+	Field{"altitude", "Altitude", "m"}
 };
-
-static size_t gps_meta = 3;
 
 static String CSV_GPS(struct GPS const *const data) {
 	return show_time(&data->time)
@@ -852,7 +850,7 @@ R"HTML(
 			$tr = $E("tr");
 			Application.data_fields.forEach(
 				function (field) {
-					var text = field.name[0].toUpperCase() + field.name.substring(1);
+					var text = field.name;
 					if (field.unit)
 						text = text + " (" + field.unit + ")";
 					$th = $E("th");
@@ -885,7 +883,7 @@ R"HTML(
 			$tr = $E("tr");
 			Application.gps_fields.forEach(
 				function (field) {
-					var text = field.name[0].toUpperCase() + field.name.substring(1);
+					var text = field.name;
 					if (field.unit)
 						text = text + " (" + field.unit + ")";
 					$th = $E("th");
@@ -934,7 +932,7 @@ R"HTML(
 								var v = j === 0 ? string_from_Date(fields[j]) : fields[j];
 								c_($td, $T(v));
 								c_($tr, $td);
-								if (Application.data_meta > j)
+								if (Application.data_fields[j].title != null)
 									data_latest[Application.data_fields[j].name] = v;
 							}
 							c_($data_list, $tr);
@@ -1207,6 +1205,35 @@ R"HTML(
 </html>
 )HTML";
 
+	template <size_t N>
+	static void stream_print_fields(PsychicStreamResponse *const stream, std::array<Field, N> const *const fields) {
+		char const *prefix = "[";
+		for (Field const field: *fields) {
+			stream->print(prefix);
+			prefix = ", ";
+			stream->print("{name:\"");
+			stream->print(javascript_escape(field.name));
+			stream->print("\",title:");
+			if (field.title == nullptr)
+				stream->print("null");
+			else {
+				stream->print('"');
+				stream->print(javascript_escape(field.title));
+				stream->print('"');
+			}
+			stream->print(",unit:");
+			if (field.unit == nullptr)
+				stream->print("null");
+			else {
+				stream->print('"');
+				stream->print(javascript_escape(field.unit));
+				stream->print('"');
+			}
+			stream->print('}');
+		}
+		stream->print(']');
+	}
+
 	static esp_err_t home_handle(PsychicRequest *const request, PsychicResponse *const response) {
 		PsychicStreamResponse stream(response, XHTML_content_type);
 		stream.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
@@ -1235,48 +1262,10 @@ R"HTML(
 		stream.print(javascript_escape(upload_username));
 		stream.print("\",\r\n\t\t\tupload_password: \"");
 		stream.print(javascript_escape(upload_password));
-		stream.print("\",\r\n\t\t\tdata_fields: [");
-		bool first = true;
-		for (Field const field: data_fields) {
-			if (first)
-				first = false;
-			else
-				stream.print(", ");
-			stream.print("{name:\"");
-			stream.print(javascript_escape(field.name));
-			stream.print("\",unit:");
-			if (field.unit == nullptr)
-				stream.print("null");
-			else {
-				stream.print('"');
-				stream.print(javascript_escape(field.unit));
-				stream.print('"');
-			}
-			stream.print("}");
-		}
-		stream.print("],\r\n\t\t\tdata_meta: ");
-		stream.print(data_meta);
-		stream.print(",\r\n\t\t\tgps_fields: [");
-		first = true;
-		for (Field const field: gps_fields) {
-			if (first)
-				first = false;
-			else
-				stream.print(", ");
-			stream.print("{name:\"");
-			stream.print(javascript_escape(field.name));
-			stream.print("\",unit:");
-			if (field.unit == nullptr)
-				stream.print("null");
-			else {
-				stream.print('"');
-				stream.print(javascript_escape(field.unit));
-				stream.print('"');
-			}
-			stream.print("}");
-		}
-		stream.print("],\r\n\t\t\tgps_meta: ");
-		stream.print(gps_meta);
+		stream.print("\",\r\n\t\t\tdata_fields: ");
+		stream_print_fields(&stream, &data_fields);
+		stream.print(",\r\n\t\t\tgps_fields: ");
+		stream_print_fields(&stream, &gps_fields);
 		stream.print("\r\n");
 		stream.write(reinterpret_cast<uint8_t const *>(home_html_4), sizeof home_html_4 - 1);
 		return stream.endSend();
@@ -2128,7 +2117,7 @@ void setup(void) {
 	data_header = data_fields[0].name;
 	if (data_fields[0].unit)
 		data_header = data_header + " (" + data_fields[0].unit + ')';
-	for (unsigned int i = 1; i < sizeof data_fields / sizeof *data_fields; ++i) {
+	for (unsigned int i = 1; i < data_fields.size(); ++i) {
 		data_header = data_header + ',' + data_fields[i].name;
 		if (data_fields[i].unit)
 			data_header = data_header + " (" + data_fields[i].unit + ')';
@@ -2136,7 +2125,7 @@ void setup(void) {
 	gps_header = gps_fields[0].name;
 	if (gps_fields[0].unit)
 		gps_header = gps_header + " (" + gps_fields[0].unit + ')';
-	for (unsigned int i = 1; i < sizeof gps_fields / sizeof *gps_fields; ++i) {
+	for (unsigned int i = 1; i < gps_fields.size(); ++i) {
 		gps_header = gps_header + ',' + gps_fields[i].name;
 		if (gps_fields[i].unit)
 			gps_header = gps_header + " (" + gps_fields[i].unit + ')';
