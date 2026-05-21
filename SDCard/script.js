@@ -188,7 +188,7 @@ void function () {
 				$refresh,
 				$E("label", {"class": "report"}, [
 					$auto_report = $E("input", {"type": "checkbox", "checked": ""}),
-					$T("Auto report")
+					$T("Report position")
 				]),
 				$upload = $E("button", {"type": "button"}, [
 					$T("Upload data")
