@@ -70,7 +70,7 @@ Timer.prototype = {
 
 /* Page structure */
 
-document.body.style["margin"] = "1ex";
+document.body.textContent = "";
 
 document.body.appendChild(
 	$E("p", null, [
@@ -211,48 +211,6 @@ void function () {
 	document.body.appendChild($E("p", {"class": "timers"}, $forms))
 }();
 
-var $list;
-document.body.appendChild(
-	$E("table", null, [
-		$E("caption", null, [$T("Weather data")]),
-		$E("thead", null, [
-			$E("tr", null,
-				[$E("th", null, [$T("time")])].concat(
-					Application.data_fields
-					.map(
-						function (field) {
-							if (field.title == null) return null;
-							var title = field.title;
-							if (field.unit != null)
-								title = title + " (" + field.unit + ")";
-							return $E("th", null, [$T(title)]);
-						}
-					)
-					.filter(
-						function ($th) {
-							return $th != null;
-						}
-					)
-				)
-			)
-		]),
-		$list = $E("tbody")
-	])
-);
-var $plots = Application.data_fields.map(
-	function (field) {
-		if (field.title == null) return null;
-		var $plot = $E("div", {"class": "plot"});
-		$plot.hidden = true;
-		document.body.appendChild($plot);
-		return $plot;
-	}
-);
-
-var $data_loading = $E("h1", null, [$T("Loading...")]);
-$data_loading.hidden = true;
-document.body.appendChild($data_loading);
-
 var $GPS = new Object;
 $GPS.table = $E("table", null, [
 	$E("caption", null, [$T("Last GPS position")]),
@@ -281,6 +239,48 @@ document.body.appendChild($GPS.table);
 $GPS.plot = $E("div", {"class": "plot"});
 $GPS.plot.hidden = true;
 document.body.appendChild($GPS.plot);
+
+var $plots = Application.data_fields.map(
+	function (field) {
+		if (field.title == null) return null;
+		var $plot = $E("div", {"class": "plot"});
+		$plot.hidden = true;
+		document.body.appendChild($plot);
+		return $plot;
+	}
+);
+var $list;
+document.body.appendChild(
+	$E("table", null, [
+		$E("caption", null, [$T("Weather data")]),
+		$E("thead", null, [
+			$E("tr", null,
+				[$E("th", null, [$T("time")])].concat(
+					Application.data_fields
+					.map(
+						function (field) {
+							if (field.title == null) return null;
+							var title = field.title;
+							if (field.unit != null)
+								title = title + " (" + field.unit + ")";
+							return $E("th", null, [$T(title)]);
+						}
+					)
+					.filter(
+						function ($th) {
+							return $th != null;
+						}
+					)
+				)
+			)
+		]),
+		$list = $E("tbody")
+	])
+);
+
+var $data_loading = $E("h1", null, [$T("Loading...")]);
+$data_loading.hidden = true;
+document.body.appendChild($data_loading);
 
 /* Actions */
 
