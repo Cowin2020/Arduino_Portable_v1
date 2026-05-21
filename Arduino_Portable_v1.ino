@@ -1474,10 +1474,17 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 	}
 	form.setting-form label {
 		display: flex;
+		justify-content: start;
+		column-gap: 0.5em;
 	}
 	form.setting-form label input {
 		flex-grow: 1;
-		margin-left: 0.5em;
+	}
+	form.setting-form label input[type="checkbox"] {
+		flex-grow: unset;
+	}
+	form.setting-form label:has(input[type="checkbox"]:not(:checked)) + button {
+		display: none;
 	}
 </style>
 <p><a href='operator'>&#x2190; Back</a></p>
@@ -1694,28 +1701,28 @@ R"HTML(' />
 
 		setting_form(&stream, "do_measure");
 		stream.print(
-			"\t\tConfirm\r\n"
+			"\t\tMeasure now\r\n"
 			"\t\t<input type='checkbox' name='measure' />\r\n"
 			"\t</label>\r\n"
-			"\t<button type='submit'>Measure now</button>\r\n"
+			"\t<button type='submit'>Confirm</button>\r\n"
 			"</form>\r\n"
 		);
 
 		setting_form(&stream, "do_delete");
 		stream.print(
-			"\t\tConfirm\r\n"
+			"\t\tDelete all data\r\n"
 			"\t\t<input type='checkbox' name='delete' />\r\n"
 			"\t</label>\r\n"
-			"\t<button type='submit'>Delete all data</button>\r\n"
+			"\t<button type='submit'>Confirm</button>\r\n"
 			"</form>\r\n"
 		);
 
 		setting_form(&stream, "do_reboot");
 		stream.print(
-			"\t\tConfirm \r\n"
+			"\t\tReboot\r\n"
 			"\t\t<input type='checkbox' name='reboot' />\r\n"
 			"\t</label>\r\n"
-			"\t<button type='submit'>Reboot</button>\r\n"
+			"\t<button type='submit'>Confirm</button>\r\n"
 			"</form>\r\n"
 		);
 
