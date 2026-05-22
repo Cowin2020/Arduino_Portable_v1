@@ -76,8 +76,8 @@ static std::array<Field, 5> const data_fields = {
 	Field{"time", nullptr, nullptr},
 	Field{"device_time", nullptr, nullptr},
 	Field{"clock_synchronized", nullptr, nullptr},
-	Field{"BME280_temperature", "Temperature", "\u2103"},
-	Field{"BME280_humidity", "Humidity", "%"}
+	Field{"SHT40_temperature", "Temperature", "\u2103"},
+	Field{"SHT40_humidity", "Humidity", "%"}
 };
 
 static String CSV_Data(struct Data const *const data) {
