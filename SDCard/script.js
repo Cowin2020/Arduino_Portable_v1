@@ -136,8 +136,8 @@ Dashboard.prototype = {
 			this.$time.textContent = date_time[1];
 			this.$item_list.forEach(
 				function ($item, index) {
-					if (this.$item != null)
-						this.$item.textContent = this.data[index] = row[index];
+					if ($item != null)
+						$item.textContent = this.data[index] = row[index];
 				},
 				this
 			);
