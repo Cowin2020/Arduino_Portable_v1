@@ -1,7 +1,7 @@
 #include <stdlib.h>
-#include <vector>
 #include <array>
 #include <deque>
+#include <map>
 #include <chrono>
 #include <thread>
 #include <mutex>
@@ -19,8 +19,6 @@
 #include <RTClib.h>
 #include <Adafruit_SSD1306.h>
 #include <SD.h>
-#include <Adafruit_Sensor.h>
-#include <Adafruit_SHT4x.h>
 
 #include <Fonts/FreeSans9pt7b.h>
 #define FONT_0 FreeSans9pt7b
@@ -31,10 +29,23 @@
 
 #include "config.h"
 
-static String show_time(DateTime const *);
+/* *************************************************************************** / ************************************ */
+
+static Adafruit_SSD1306 Monitor(128, 64);
 static void redraw_display(bool);
 
 /* *************************************************************************** / ************************************ */
+/* Sensor */
+
+#if defined(ENABLE_SENSOR_SHT40)
+	#include <Adafruit_Sensor.h>
+	#include <Adafruit_SHT4x.h>
+
+	static Adafruit_SHT4x SHT4x;
+#endif
+
+/* *************************************************************************** / ************************************ */
+/* Locks and status */
 
 static std::mutex mutex_hardware;
 #define DISPLAY_LOCK(lock) std::lock_guard<std::mutex> lock(mutex_hardware)
@@ -42,17 +53,75 @@ static std::mutex mutex_hardware;
 #define SDCARD_LOCK(lock)
 static std::mutex mutex_data;
 #define DATA_LOCK(lock) std::lock_guard<std::mutex> lock(mutex_data)
-
 static std::mutex wait_measure_mutex;
 static std::condition_variable wait_measure_condition;
+
+std::map<unsigned int, unsigned int> active_sensors;
+
 static bool use_assigned_device_time = false;
 static DateTime assigned_device_time;
-
-static bool clock_synchronized = false;
 static bool need_save = false;
 static bool need_reboot = false;
 
-static Adafruit_SSD1306 Monitor(128, 64);
+/* *************************************************************************** / ************************************ */
+/* Real-time clock */
+
+namespace Clock {
+	static bool synchronized = false;
+	static RTC_Millis internal;
+	static bool internal_available = false;
+	static RTC_DS3231 external;
+	static bool external_available = false;
+
+	static void setup(void) {
+		external_available = external.begin();
+		if (external_available) {
+			Serial.println("Clock found");
+			Monitor.println("OK clock");
+		}
+		else {
+			Serial.println("Clock not found");
+			Monitor.println("No clock");
+		}
+	}
+
+	static bool available(void) {
+		return external_available || internal_available;
+	}
+
+	static void set_time(DateTime const *const datetime) {
+		if (external_available) {
+			DEVICE_LOCK(device_lock);
+			external.adjust(*datetime);
+		}
+		else {
+			internal.adjust(*datetime);
+			internal_available = true;
+		}
+		synchronized = true;
+	}
+
+	static DateTime get_time(void) {
+		if (external_available) {
+			DEVICE_LOCK(device_lock);
+			return external.now();
+		}
+		else
+			return internal.now();
+	}
+
+	static String show_time(DateTime const *const datetime) {
+		if (datetime->isValid())
+			return datetime->timestamp();
+		else
+			return String("?");
+	}
+
+	static DateTime round_up_time(DateTime const *const datetime, unsigned long int const interval = measure_interval) {
+		uint64_t shifted = (uint64_t)datetime->unixtime() * 1000 + (interval >> 1);
+		return DateTime((shifted - shifted % interval) / 1000);
+	}
+}
 
 /* *************************************************************************** / ************************************ */
 /* Data */
@@ -63,16 +132,25 @@ struct Field {
 	char const *unit;
 };
 
-struct Data {
+class Data {
+protected:
 	DateTime time;
 	DateTime device_time;
-	#if SENSOR == SENSOR_SHT40
+	#if defined(ENABLE_SENSOR_SHT40)
 		float temperature;
 		float humidity;
 	#endif
+public:
+	static std::array<Field, 5> const fields;
+	Data(void);
+	DateTime get_device_time(void) const {return device_time;}
+	String show_time(void) const;
+	String to_CSV(void) const;
+	void display(void) const;
+	void measure(void);
 };
 
-static std::array<Field, 5> const data_fields = {
+std::array<Field, 5> const Data::fields = {
 	Field{"time", nullptr, nullptr},
 	Field{"device_time", nullptr, nullptr},
 	Field{"clock_synchronized", nullptr, nullptr},
@@ -80,13 +158,56 @@ static std::array<Field, 5> const data_fields = {
 	Field{"SHT40_humidity", "Humidity", "%"}
 };
 
-static String CSV_Data(struct Data const *const data) {
-	return show_time(&data->time)
-		+ ',' + show_time(&data->device_time)
-		+ ',' + clock_synchronized
-		+ ',' + data->temperature
-		+ ',' + data->humidity;
+Data::Data(void) {
+	if (Clock::available())
+		device_time = Clock::get_time();
+	else
+		device_time = DateTime(0, 0, 0) + TimeSpan(millis() / 1000);
+	if (use_assigned_device_time) {
+		time = assigned_device_time;
+		use_assigned_device_time = false;
+	}
+	else
+		time = Clock::round_up_time(&device_time);
 }
+
+String Data::show_time(void) const {
+	return Clock::show_time(&time);
+}
+
+String Data::to_CSV(void) const {
+	return show_time()
+		+ ',' + Clock::show_time(&device_time)
+		+ ',' + Clock::synchronized
+		#if defined(ENABLE_SENSOR_SHT40)
+			+ ',' + temperature
+			+ ',' + humidity
+		#endif
+		;
+}
+
+void Data::display(void) const {
+	#if defined(ENABLE_SENSOR_SHT40)
+		Monitor.print(temperature, 1);
+		Monitor.println("C");
+		Monitor.print(humidity, 1);
+		Monitor.println("%");
+	#endif
+}
+
+void Data::measure(void) {
+	DEVICE_LOCK(device_lock);
+	#if defined(ENABLE_SENSOR_SHT40)
+	{
+		sensors_event_t temperature_event, humidity_event;
+		SHT4x.getEvent(&humidity_event, &temperature_event);
+		temperature = temperature_event.temperature * temperature_slop + temperature_intercept;
+		humidity = humidity_event.relative_humidity;
+	}
+	#endif
+}
+
+/* *************************************************************************** / ************************************ */
 
 struct GPS {
 	DateTime time;
@@ -106,219 +227,188 @@ static std::array<Field, 6> gps_fields = {
 	Field{"altitude", "Altitude", "m"}
 };
 
-static String CSV_GPS(struct GPS const *const data) {
-	return show_time(&data->time)
-		+ ',' + show_time(&data->browser_time)
-		+ ',' + show_time(&data->position_time)
-		+ ',' + String(data->latitude,  7)
-		+ ',' + String(data->longitude, 7)
-		+ ',' + String(data->altitude,  7);
+static String CSV_GPS(struct GPS const *const gps) {
+	return Clock::show_time(&gps->time)
+		+ ',' + Clock::show_time(&gps->browser_time)
+		+ ',' + Clock::show_time(&gps->position_time)
+		+ ',' + String(gps->latitude,  7)
+		+ ',' + String(gps->longitude, 7)
+		+ ',' + String(gps->altitude,  7);
 }
 
 /* *************************************************************************** / ************************************ */
 /* SD card */
 
-static char const setting_filename[] = "/setting.txt";
-static char const data_filename[] = "/data.csv";
-static char const gps_filename[] = "/gps.csv";
-static String data_header;
-static String gps_header;
+namespace SD_card {
+	static char const setting_filename[] = "/setting.txt";
+	static char const data_filename[] = "/data.csv";
+	static char const gps_filename[] = "/gps.csv";
+	static String data_header;
+	static String gps_header;
+	static bool exist;
 
-//	static SPIClass SPI_1(HSPI);
-static bool SD_card_exist;
-
-static void save_settings(void) {
-	if (!SD_card_exist) return;
-	SDCARD_LOCK(sdcard_lock);
-	File file = SD.open(setting_filename, "w", true);
-	if (!file) {
-		Serial.println("ERROR: failed to open setting file");
-		return;
-	}
-	file.println(campaign_name);
-	file.println(organisation_name);
-	file.println(device_name);
-	file.println(measure_interval / 1000);
-	file.println(int(use_AP_mode));
-	file.println(AP_SSID);
-	file.println(AP_PASS);
-	file.println(STA_SSID);
-	file.println(STA_PASS);
-	file.println(monitor_URL);
-	file.println(upload_URL);
-	file.println(upload_username);
-	file.println(upload_password);
-	file.println(temperature_slop);
-	file.println(temperature_intercept);
-	file.close();
-}
-
-static bool load_settings(void) {
-	char *e;
-	String s;
-	unsigned long int u;
-	float f;
-
-	SDCARD_LOCK(sdcard_lock);
-	File file = SD.open(setting_filename, "r", false);
-	if (!file) {
-		Serial.println("Failed to open setting file");
-		return false;
+	static void save_settings(void) {
+		if (!exist) return;
+		SDCARD_LOCK(sdcard_lock);
+		File file = SD.open(setting_filename, "w", true);
+		if (!file) {
+			Serial.println("ERROR: failed to open setting file");
+			return;
+		}
+		file.println(campaign_name);
+		file.println(organisation_name);
+		file.println(device_name);
+		file.println(measure_interval / 1000);
+		file.println(int(use_AP_mode));
+		file.println(AP_SSID);
+		file.println(AP_PASS);
+		file.println(STA_SSID);
+		file.println(STA_PASS);
+		file.println(monitor_URL);
+		file.println(upload_URL);
+		file.println(upload_username);
+		file.println(upload_password);
+		file.println(temperature_slop);
+		file.println(temperature_intercept);
+		file.close();
 	}
 
-	/* Campaign name */
-	campaign_name = file.readStringUntil('\n');
-	campaign_name.trim();
+	static bool load_settings(void) {
+		char *e;
+		String s;
+		unsigned long int u;
+		float f;
 
-	/* Organisation name */
-	organisation_name = file.readStringUntil('\n');
-	organisation_name.trim();
+		SDCARD_LOCK(sdcard_lock);
+		File file = SD.open(setting_filename, "r", false);
+		if (!file) {
+			Serial.println("Failed to open setting file");
+			return false;
+		}
 
-	/* Device name */
-	device_name = file.readStringUntil('\n');
-	device_name.trim();
+		/* Campaign name */
+		campaign_name = file.readStringUntil('\n');
+		campaign_name.trim();
 
-	/* Measure interval */
-	s = file.readStringUntil('\n');
-	s.trim();
-	u = strtoul(s.c_str(), &e, 10);
+		/* Organisation name */
+		organisation_name = file.readStringUntil('\n');
+		organisation_name.trim();
 
-	/* AP mode */
-	if (!*e && u >= measure_interval_lowerbound && u <= measure_interval_upperbound)
-		measure_interval = u * 1000;
-	s = file.readStringUntil('\n');
-	s.trim();
-	u = strtoul(s.c_str(), &e, 10);
-	if (!*e) use_AP_mode = bool(u);
+		/* Device name */
+		device_name = file.readStringUntil('\n');
+		device_name.trim();
 
-	/* AP SSID */
-	AP_SSID = file.readStringUntil('\n');
-	AP_SSID.trim();
+		/* Measure interval */
+		s = file.readStringUntil('\n');
+		s.trim();
+		u = strtoul(s.c_str(), &e, 10);
 
-	/* AP PASS */
-	AP_PASS = file.readStringUntil('\n');
-	AP_PASS.trim();
+		/* AP mode */
+		if (!*e && u >= measure_interval_lowerbound && u <= measure_interval_upperbound)
+			measure_interval = u * 1000;
+		s = file.readStringUntil('\n');
+		s.trim();
+		u = strtoul(s.c_str(), &e, 10);
+		if (!*e) use_AP_mode = bool(u);
 
-	/* STA SSID */
-	STA_SSID = file.readStringUntil('\n');
-	STA_SSID.trim();
+		/* AP SSID */
+		AP_SSID = file.readStringUntil('\n');
+		AP_SSID.trim();
 
-	/* STA PASS */
-	STA_PASS = file.readStringUntil('\n');
-	STA_PASS.trim();
+		/* AP PASS */
+		AP_PASS = file.readStringUntil('\n');
+		AP_PASS.trim();
 
-	/* Monitor URL */
-	monitor_URL = file.readStringUntil('\n');
-	monitor_URL.trim();
+		/* STA SSID */
+		STA_SSID = file.readStringUntil('\n');
+		STA_SSID.trim();
 
-	/* Upload URL */
-	upload_URL = file.readStringUntil('\n');
-	upload_URL.trim();
+		/* STA PASS */
+		STA_PASS = file.readStringUntil('\n');
+		STA_PASS.trim();
 
-	/* Upload username */
-	upload_username = file.readStringUntil('\n');
-	upload_username.trim();
+		/* Monitor URL */
+		monitor_URL = file.readStringUntil('\n');
+		monitor_URL.trim();
 
-	/* Upload password */
-	upload_password = file.readStringUntil('\n');
-	upload_password.trim();
+		/* Upload URL */
+		upload_URL = file.readStringUntil('\n');
+		upload_URL.trim();
 
-	/* Temperature slop */
-	s = file.readStringUntil('\n');
-	s.trim();
-	f = strtof(s.c_str(), &e);
-	if (!*e && f >= temperature_slop_lowerbound && f <= temperature_slop_upperbound)
-		temperature_slop = f;
+		/* Upload username */
+		upload_username = file.readStringUntil('\n');
+		upload_username.trim();
 
-	/* Temperature intercept */
-	s = file.readStringUntil('\n');
-	s.trim();
-	f = strtof(s.c_str(), &e);
-	if (!*e && f >= temperature_intercept_lowerbound && f <= temperature_intercept_upperbound)
-		temperature_intercept = f;
+		/* Upload password */
+		upload_password = file.readStringUntil('\n');
+		upload_password.trim();
 
-	file.close();
-	return true;
-}
+		/* Temperature slop */
+		s = file.readStringUntil('\n');
+		s.trim();
+		f = strtof(s.c_str(), &e);
+		if (!*e && f >= temperature_slop_lowerbound && f <= temperature_slop_upperbound)
+			temperature_slop = f;
 
-/* *************************************************************************** / ************************************ */
-/* Real-time clock */
+		/* Temperature intercept */
+		s = file.readStringUntil('\n');
+		s.trim();
+		f = strtof(s.c_str(), &e);
+		if (!*e && f >= temperature_intercept_lowerbound && f <= temperature_intercept_upperbound)
+			temperature_intercept = f;
 
-static RTC_Millis internal_clock;
-static bool internal_clock_available = false;
-static RTC_DS3231 external_clock;
-static bool external_clock_available = false;
-
-static bool clock_available(void) {
-	return external_clock_available || internal_clock_available;
-}
-
-static void set_time(DateTime const *const datetime) {
-	if (external_clock_available) {
-		DEVICE_LOCK(device_lock);
-		external_clock.adjust(*datetime);
+		file.close();
+		return true;
 	}
-	else {
-		internal_clock.adjust(*datetime);
-		internal_clock_available = true;
+
+	static void setup(void) {
+		data_header = Data::fields[0].name;
+		if (Data::fields[0].unit)
+			data_header = data_header + " (" + Data::fields[0].unit + ')';
+		for (unsigned int i = 1; i < Data::fields.size(); ++i) {
+			data_header = data_header + ',' + Data::fields[i].name;
+			if (Data::fields[i].unit)
+				data_header = data_header + " (" + Data::fields[i].unit + ')';
+		}
+		gps_header = gps_fields[0].name;
+		if (gps_fields[0].unit)
+			gps_header = gps_header + " (" + gps_fields[0].unit + ')';
+		for (unsigned int i = 1; i < gps_fields.size(); ++i) {
+			gps_header = gps_header + ',' + gps_fields[i].name;
+			if (gps_fields[i].unit)
+				gps_header = gps_header + " (" + gps_fields[i].unit + ')';
+		}
+
+		pinMode(SD_MISO, INPUT_PULLUP);
+		SPI.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
+		SD_card::exist = SD.begin(SD_CS, SPI);
+		if (SD_card::exist) {
+			Serial.println("SD card found");
+			Monitor.println("OK SD card");
+			if (digitalRead(reset_pin) == HIGH)
+				Serial.println("Setting is not loaded because of hardware switch");
+			else if (!load_settings())
+				Serial.println("Failed to load settings");
+		}
+		else {
+			Serial.println("SD card not found");
+			Monitor.println("No SD card");
+		}
 	}
-	clock_synchronized = true;
-}
-
-static DateTime get_time(void) {
-	if (external_clock_available) {
-		DEVICE_LOCK(device_lock);
-		return external_clock.now();
-	}
-	else
-		return internal_clock.now();
-}
-
-static String show_time(DateTime const *const datetime) {
-	if (datetime->isValid())
-		return datetime->timestamp();
-	else
-		return String("?");
-}
-
-static DateTime round_up_time(DateTime const *const datetime, unsigned long int const interval = measure_interval) {
-	uint64_t shifted = (uint64_t)datetime->unixtime() * 1000 + (interval >> 1);
-	return DateTime((shifted - shifted % interval) / 1000);
 }
 
 /* *************************************************************************** / ************************************ */
 /* Measurement */
 
-static Adafruit_SHT4x SHT4x = Adafruit_SHT4x();;
-
 static size_t const records_max_size = 60;
-static std::deque<Data> data_records;
-static std::deque<GPS> gps_records;
+static std::deque<struct Data> data_records;
+static std::deque<struct GPS>  gps_records;
 
 static DateTime measure(void) {
 	Data data;
-	if (clock_available())
-		data.device_time = get_time();
-	else
-		data.device_time = DateTime(0, 0, 0) + TimeSpan(millis() / 1000);
-	if (use_assigned_device_time) {
-		data.time = assigned_device_time;
-		use_assigned_device_time = false;
-	}
-	else
-		data.time = round_up_time(&data.device_time);
+	data.measure();
 
-	#if SENSOR == SENSOR_SHT40
-	{
-		DEVICE_LOCK(device_lock);
-		sensors_event_t temperature_event, humidity_event;
-		SHT4x.getEvent(&humidity_event, &temperature_event);
-		data.temperature = temperature_event.temperature * temperature_slop + temperature_intercept;
-		data.humidity = humidity_event.relative_humidity;
-	}
-	#endif
-
-	String const data_string = CSV_Data(&data);
+	String const data_string = data.to_CSV();
 	Serial.print("INFO: Measure ");
 	Serial.println(data_string);
 
@@ -326,12 +416,12 @@ static DateTime measure(void) {
 		data_records.pop_front();
 	data_records.push_back(data);
 
-	if (SD_card_exist) {
+	if (SD_card::exist) {
 		SDCARD_LOCK(sdcard_lock);
-		File file = SD.open(data_filename, "a", true);
+		File file = SD.open(SD_card::data_filename, "a", true);
 		try {
 			if (!file.position())
-				file.println(data_header);
+				file.println(SD_card::data_header);
 			file.println(data_string);
 		}
 		catch (...) {
@@ -341,7 +431,7 @@ static DateTime measure(void) {
 	}
 
 	redraw_display(true);
-	return data.device_time;
+	return data.get_device_time();
 }
 
 static void wait_to_measure(DateTime const now) {
@@ -352,7 +442,7 @@ static void wait_to_measure(DateTime const now) {
 }
 
 static void measure_thread(void) {
-	wait_to_measure(get_time());
+	wait_to_measure(Clock::get_time());
 	for (;;)
 		try {
 			wait_to_measure(measure());
@@ -1251,9 +1341,9 @@ R"HTML(
 		stream.print("\",\r\n\t\t\tmeasure_interval: \"");
 		stream.print(measure_interval);
 		stream.print("\",\r\n\t\t\tdata_file: \"");
-		stream.print(javascript_escape(data_filename));
+		stream.print(javascript_escape(SD_card::data_filename));
 		stream.print("\",\r\n\t\t\tgps_file: \"");
-		stream.print(javascript_escape(gps_filename));
+		stream.print(javascript_escape(SD_card::gps_filename));
 		stream.print("\",\r\n\t\t\tmonitor_URL: \"");
 		stream.print(javascript_escape(monitor_URL));
 		stream.print("\",\r\n\t\t\tupload_URL: \"");
@@ -1263,7 +1353,7 @@ R"HTML(
 		stream.print("\",\r\n\t\t\tupload_password: \"");
 		stream.print(javascript_escape(upload_password));
 		stream.print("\",\r\n\t\t\tdata_fields: ");
-		stream_print_fields(&stream, &data_fields);
+		stream_print_fields(&stream, &Data::fields);
 		stream.print(",\r\n\t\t\tgps_fields: ");
 		stream_print_fields(&stream, &gps_fields);
 		stream.print("\r\n");
@@ -1316,9 +1406,9 @@ R"HTML(
 		PsychicStreamResponse stream(response, "text/csv");
 		stream.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
 		stream.beginSend();
-		stream.println(data_header);
+		stream.println(SD_card::data_header);
 		for (Data const &record: data_records)
-			stream.println(CSV_Data(&record));
+			stream.println(record.to_CSV());
 		return stream.endSend();
 	}
 
@@ -1326,9 +1416,9 @@ R"HTML(
 		PsychicStreamResponse stream(response, "text/csv");
 		stream.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
 		stream.beginSend();
-		stream.println(data_header);
+		stream.println(SD_card::data_header);
 		if (!data_records.empty())
-			stream.println(CSV_Data(&data_records.back()));
+			stream.println(data_records.back().to_CSV());
 		return stream.endSend();
 	}
 
@@ -1336,7 +1426,7 @@ R"HTML(
 		PsychicStreamResponse stream(response, "text/csv");
 		stream.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
 		stream.beginSend();
-		stream.println(gps_header);
+		stream.println(SD_card::gps_header);
 		for (GPS const &record: gps_records)
 			stream.println(CSV_GPS(&record));
 		return stream.endSend();
@@ -1346,7 +1436,7 @@ R"HTML(
 		PsychicStreamResponse stream(response, "text/csv");
 		stream.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
 		stream.beginSend();
-		stream.println(gps_header);
+		stream.println(SD_card::gps_header);
 		if (!gps_records.empty())
 			stream.println(CSV_GPS(&gps_records.back()));
 		return stream.endSend();
@@ -1438,12 +1528,12 @@ R"HTML(
 			gps_records.pop_front();
 		gps_records.push_back(gps);
 
-		if (SD_card_exist) {
+		if (SD_card::exist) {
 			SDCARD_LOCK(sdcard_lock);
-			File file = SD.open(gps_filename, "a", true);
+			File file = SD.open(SD_card::gps_filename, "a", true);
 			try {
 				if (!file.position())
-					file.println(gps_header);
+					file.println(SD_card::gps_header);
 				file.println(GPS_string);
 			}
 			catch (...) {
@@ -1753,7 +1843,7 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 			Serial.println(parameter->value());
 			DateTime const datetime(parameter->value().c_str());
 			if (datetime.isValid())
-				set_time(&datetime);
+				Clock::set_time(&datetime);
 			else {
 				Serial.print("WARN: incorrect command time = ");
 				Serial.println(parameter->value());
@@ -1921,17 +2011,17 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 			data_records.clear();
 			gps_records.clear();
 			SDCARD_LOCK(sdcard_lock);
-			File data_file = SD.open(data_filename, "w", true);
+			File data_file = SD.open(SD_card::data_filename, "w", true);
 			try {
-				data_file.println(data_header);
+				data_file.println(SD_card::data_header);
 			}
 			catch (...) {
 				Serial.println("ERROR: failed to write header into data file");
 			}
 			data_file.close();
-			File gps_file = SD.open(gps_filename, "w", true);
+			File gps_file = SD.open(SD_card::gps_filename, "w", true);
 			try {
-				gps_file.println(gps_header);
+				gps_file.println(SD_card::gps_header);
 			}
 			catch (...) {
 				Serial.println("ERROR: failed to write header into GPS file");
@@ -1973,15 +2063,15 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 		HTTPSd.on("/setting.html",    HTTP_GET,  setting_handle);
 		HTTPd .on("/setting.exe",     HTTP_POST, command_handle);
 		HTTPSd.on("/setting.exe",     HTTP_POST, command_handle);
-		if (SD_card_exist) {
+		if (SD_card::exist) {
 			HTTPd .serveStatic("/", SD, "/", "max-age=604800");
 			HTTPSd.serveStatic("/", SD, "/", "max-age=604800");
 		}
 		else {
-			HTTPd .on(data_filename, HTTP_GET, data_recent_handle);
-			HTTPSd.on(data_filename, HTTP_GET, data_recent_handle);
-			HTTPd .on(gps_filename,  HTTP_GET, gps_recent_handle);
-			HTTPSd.on(gps_filename,  HTTP_GET, gps_recent_handle);
+			HTTPd .on(SD_card::data_filename, HTTP_GET, data_recent_handle);
+			HTTPSd.on(SD_card::data_filename, HTTP_GET, data_recent_handle);
+			HTTPd .on(SD_card::gps_filename,  HTTP_GET, gps_recent_handle);
+			HTTPSd.on(SD_card::gps_filename,  HTTP_GET, gps_recent_handle);
 		}
 
 		while (HTTPd.start() != ESP_OK) {
@@ -2014,7 +2104,7 @@ static void redraw_display(bool const start_over) {
 	if (section == 0 && data_records.size()) {
 		Data const *const data = &data_records.back();
 		char year[6], date[7], time[6];
-		String fulltime = show_time(&data->time);
+		String fulltime = data->show_time();
 		if (fulltime.length() == 19) {
 			memcpy(year, fulltime.c_str(), 5);
 			year[5] = 0;
@@ -2035,19 +2125,14 @@ static void redraw_display(bool const start_over) {
 		Monitor.println(time);
 		Monitor.drawLine(0, 64, 63, 64, SSD1306_WHITE);
 		Monitor.setCursor(0, 65 + FONT_0_OFFSET);
-		#if SENSOR == SENSOR_SHT40
-			Monitor.print(data->temperature, 1);
-			Monitor.println("C");
-			Monitor.print(data->humidity, 1);
-			Monitor.println("%");
-		#endif
+		data->display();
 		++section;
 	}
 	else {
 		Monitor.setRotation(0);
 		Monitor.setFont(&FONT_1);
 		Monitor.setCursor(0, FONT_1_OFFSET);
-		if (SD_card_exist)
+		if (SD_card::exist)
 			Monitor.println("SD card found");
 		else
 			Monitor.println("No SD card");
@@ -2078,7 +2163,7 @@ void loop(void) {
 	delay(1000);
 
 	if (need_save) {
-		save_settings();
+		SD_card::save_settings();
 		need_save = false;
 	}
 
@@ -2112,24 +2197,6 @@ static void set_pthread_stack_size(size_t const stack_size) {
 }
 
 void setup(void) {
-	/* Constants*/
-	data_header = data_fields[0].name;
-	if (data_fields[0].unit)
-		data_header = data_header + " (" + data_fields[0].unit + ')';
-	for (unsigned int i = 1; i < data_fields.size(); ++i) {
-		data_header = data_header + ',' + data_fields[i].name;
-		if (data_fields[i].unit)
-			data_header = data_header + " (" + data_fields[i].unit + ')';
-	}
-	gps_header = gps_fields[0].name;
-	if (gps_fields[0].unit)
-		gps_header = gps_header + " (" + gps_fields[0].unit + ')';
-	for (unsigned int i = 1; i < gps_fields.size(); ++i) {
-		gps_header = gps_header + ',' + gps_fields[i].name;
-		if (gps_fields[i].unit)
-			gps_header = gps_header + " (" + gps_fields[i].unit + ')';
-	}
-
 	/* Reset pin */
 	pinMode(reset_pin, INPUT);
 
@@ -2149,45 +2216,25 @@ void setup(void) {
 	delay(start_wait_time);
 
 	/* SD */
-	pinMode(SD_MISO, INPUT_PULLUP);
-	SPI.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
-	SD_card_exist = SD.begin(SD_CS, SPI);
-	if (SD_card_exist) {
-		Serial.println("SD card found");
-		Monitor.println("OK SD card");
-		if (digitalRead(reset_pin) == HIGH)
-			Serial.println("Setting is not loaded because of hardware switch");
-		else if (!load_settings())
-			Serial.println("Failed to load settings");
-	}
-	else {
-		Serial.println("SD card not found");
-		Monitor.println("No SD card");
-	}
+	SD_card::setup();
 
 	/* Clock */
-	external_clock_available = external_clock.begin();
-	if (external_clock_available) {
-		Serial.println("Clock found");
-		Monitor.println("OK clock");
-	}
-	else {
-		Serial.println("Clock not found");
-		Monitor.println("No clock");
-	}
+	Clock::setup();
 
 	/* Sensor */
-	while (!SHT4x.begin()) {
-		Serial.println("ERROR: SHT40 not found");
-		Monitor.println("No SHT40");
+	#if defined(ENABLE_SENSOR_SHT40)
+		while (!SHT4x.begin()) {
+			Serial.println("ERROR: SHT40 not found");
+			Monitor.println("No SHT40");
+			Monitor.display();
+			delay(reinitialize_interval);
+		}
+		SHT4x.setPrecision(SHT4X_HIGH_PRECISION);
+		SHT4x.setHeater(SHT4X_NO_HEATER);
+		Serial.println("SHT40 found");
+		Monitor.println("OK SHT40");
 		Monitor.display();
-		delay(reinitialize_interval);
-	}
-	SHT4x.setPrecision(SHT4X_HIGH_PRECISION);
-	SHT4x.setHeater(SHT4X_NO_HEATER);
-	Serial.println("SHT40 found");
-	Monitor.println("OK SHT40");
-	Monitor.display();
+	#endif
 
 	/* WiFi */
 	WIFI::setup();

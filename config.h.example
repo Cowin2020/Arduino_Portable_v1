@@ -1,7 +1,7 @@
 #ifndef INCLUDE_CONFIG_H
 #define INCLUDE_CONFIG_H
 
-#define SENSOR SENSOR_SHT40
+#define ENABLE_SENSOR_SHT40
 
 static String campaign_name = "123";
 static String organisation_name = "OrganisationName";
