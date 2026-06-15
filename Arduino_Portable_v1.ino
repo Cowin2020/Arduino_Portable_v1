@@ -56,10 +56,6 @@ static std::mutex mutex_data;
 static std::mutex wait_measure_mutex;
 static std::condition_variable wait_measure_condition;
 
-std::map<unsigned int, unsigned int> active_sensors;
-
-static bool use_assigned_device_time = false;
-static DateTime assigned_device_time;
 static bool need_save = false;
 static bool need_reboot = false;
 
@@ -163,12 +159,7 @@ Data::Data(void) {
 		device_time = Clock::get_time();
 	else
 		device_time = DateTime(0, 0, 0) + TimeSpan(millis() / 1000);
-	if (use_assigned_device_time) {
-		time = assigned_device_time;
-		use_assigned_device_time = false;
-	}
-	else
-		time = Clock::round_up_time(&device_time);
+	time = Clock::round_up_time(&device_time);
 }
 
 String Data::show_time(void) const {
@@ -1998,12 +1989,7 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 		}
 		parameter = request->getParam("measure");
 		if (parameter != nullptr) {
-			Serial.print("INFO: command measure = ");
-			Serial.println(parameter->value());
-			if (parameter->value().length()) {
-				use_assigned_device_time = true;
-				assigned_device_time = DateTime(parameter->value().c_str());
-			}
+			Serial.print("INFO: command measure");
 			wait_measure_condition.notify_all();
 		}
 		if (request->hasParam("delete")) {
