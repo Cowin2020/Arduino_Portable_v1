@@ -3,6 +3,10 @@
 
 #define ENABLE_SENSOR_SHT40
 
+#define DEFAULT_SENSORS { \
+	[SHT40] = 0 \
+}
+
 static String campaign_name = "123";
 static String organisation_name = "OrganisationName";
 static String device_name = "234";
@@ -24,6 +28,7 @@ static float temperature_intercept = 0.0;
 static unsigned int const display_refresh_interval = 5; /* seconds */
 static unsigned int const start_wait_time = 6000; /* milliseconds */
 static unsigned int const reboot_wait_time = 6000; /* milliseconds */
+static unsigned int const main_loop_delay = 1000; /* milliseconds */
 static unsigned int const WiFi_wait_time = 20000; /* milliseconds */
 static unsigned int const WiFi_check_interval = 10000; /* milliseconds */
 static unsigned int const serial_baudrate = 115200; /* milliseconds */

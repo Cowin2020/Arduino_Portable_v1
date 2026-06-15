@@ -1,7 +1,8 @@
+#include <climits>
 #include <stdlib.h>
-#include <array>
+#include <optional>
+#include <vector>
 #include <deque>
-#include <map>
 #include <chrono>
 #include <thread>
 #include <mutex>
@@ -30,6 +31,7 @@
 #include "config.h"
 
 /* *************************************************************************** / ************************************ */
+/* OLED display */
 
 static Adafruit_SSD1306 Monitor(128, 64);
 static void redraw_display(bool);
@@ -44,15 +46,65 @@ static void redraw_display(bool);
 	static Adafruit_SHT4x SHT4x;
 #endif
 
+struct DataField {
+	char const *name;
+	char const *title;
+	char const *unit;
+};
+
+namespace Sensor {
+	enum Identifier {
+		SHT40 = 0,
+		number
+	};
+
+	static std::optional<int> parameters[number] = DEFAULT_SENSORS;
+
+	struct Model {
+		char const *name;
+		std::vector<DataField> elements;
+	};
+
+	Model const models[number] = {
+		[SHT40] = {
+			"SHT40",
+			{
+				{"SHT40_temperature", "Temperature", "\u2103"},
+				{"SHT40_humidity", "Humidity", "%"}
+			}
+		}
+	};
+
+	void setup(void) {
+		#if defined(ENABLE_SENSOR_SHT40)
+			if (parameters[SHT40]) {
+				while (!SHT4x.begin()) {
+					Serial.println("ERROR: SHT40 not found");
+					Monitor.println("No SHT40");
+					Monitor.display();
+					delay(reinitialize_interval);
+				}
+				SHT4x.setPrecision(SHT4X_HIGH_PRECISION);
+				SHT4x.setHeater(SHT4X_NO_HEATER);
+				Serial.println("SHT40 found");
+				Monitor.println("OK SHT40");
+				Monitor.display();
+			}
+		#endif
+	}
+}
+
 /* *************************************************************************** / ************************************ */
 /* Locks and status */
 
-static std::mutex mutex_hardware;
-#define DISPLAY_LOCK(lock) std::lock_guard<std::mutex> lock(mutex_hardware)
-#define DEVICE_LOCK(lock) std::lock_guard<std::mutex> lock(mutex_hardware)
-#define SDCARD_LOCK(lock)
+static std::mutex mutex_I2C;
+static std::mutex mutex_SD;
+#define DISPLAY_LOCK(lock) std::lock_guard<std::mutex> lock(mutex_I2C)
+#define DEVICE_LOCK(lock) std::lock_guard<std::mutex> lock(mutex_I2C)
+#define SDCARD_LOCK(lock) std::lock_guard<std::mutex> lock(mutex_SD)
 static std::mutex mutex_data;
 #define DATA_LOCK(lock) std::lock_guard<std::mutex> lock(mutex_data)
+
 static std::mutex wait_measure_mutex;
 static std::condition_variable wait_measure_condition;
 
@@ -122,37 +174,43 @@ namespace Clock {
 /* *************************************************************************** / ************************************ */
 /* Data */
 
-struct Field {
-	char const *name;
-	char const *title;
-	char const *unit;
-};
-
 class Data {
 protected:
 	DateTime time;
 	DateTime device_time;
 	#if defined(ENABLE_SENSOR_SHT40)
-		float temperature;
-		float humidity;
+		float SHT40_temperature;
+		float SHT40_humidity;
 	#endif
 public:
-	static std::array<Field, 5> const fields;
+	static std::vector<DataField> fields;
+	static void update_fields(void);
+	static void setup(void);
+
 	Data(void);
-	DateTime get_device_time(void) const {return device_time;}
+	DateTime get_device_time(void) const;
 	String show_time(void) const;
 	String to_CSV(void) const;
 	void display(void) const;
 	void measure(void);
 };
 
-std::array<Field, 5> const Data::fields = {
-	Field{"time", nullptr, nullptr},
-	Field{"device_time", nullptr, nullptr},
-	Field{"clock_synchronized", nullptr, nullptr},
-	Field{"SHT40_temperature", "Temperature", "\u2103"},
-	Field{"SHT40_humidity", "Humidity", "%"}
-};
+std::vector<DataField> Data::fields;
+
+void Data::update_fields(void) {
+	fields.clear();
+	fields.push_back(DataField{"time", nullptr, nullptr});
+	fields.push_back(DataField{"device_time", nullptr, nullptr});
+	fields.push_back(DataField{"clock_synchronized", nullptr, nullptr});
+	for (size_t i = 0; i < Sensor::number; ++i)
+		if (Sensor::parameters[i])
+			for (DataField const &field: Sensor::models[i].elements)
+				fields.push_back(field);
+}
+
+void Data::setup(void) {
+	update_fields();
+}
 
 Data::Data(void) {
 	if (Clock::available())
@@ -162,70 +220,89 @@ Data::Data(void) {
 	time = Clock::round_up_time(&device_time);
 }
 
+DateTime Data::get_device_time(void) const {
+	return device_time;
+}
+
 String Data::show_time(void) const {
 	return Clock::show_time(&time);
 }
 
 String Data::to_CSV(void) const {
-	return show_time()
-		+ ',' + Clock::show_time(&device_time)
-		+ ',' + Clock::synchronized
-		#if defined(ENABLE_SENSOR_SHT40)
-			+ ',' + temperature
-			+ ',' + humidity
-		#endif
-		;
+	String s = show_time() + ',' + Clock::show_time(&device_time) + ',' + Clock::synchronized;
+	#if defined(ENABLE_SENSOR_SHT40)
+		if (Sensor::parameters[Sensor::SHT40])
+			s = s + ',' + SHT40_temperature + ',' + SHT40_humidity;
+	#endif
+	return s;
 }
 
 void Data::display(void) const {
 	#if defined(ENABLE_SENSOR_SHT40)
-		Monitor.print(temperature, 1);
-		Monitor.println("C");
-		Monitor.print(humidity, 1);
-		Monitor.println("%");
+		if (Sensor::parameters[Sensor::SHT40]) {
+			Monitor.print(SHT40_temperature, 1);
+			Monitor.println("C");
+			Monitor.print(SHT40_humidity, 1);
+			Monitor.println("%");
+		}
 	#endif
 }
 
 void Data::measure(void) {
 	DEVICE_LOCK(device_lock);
 	#if defined(ENABLE_SENSOR_SHT40)
-	{
-		sensors_event_t temperature_event, humidity_event;
-		SHT4x.getEvent(&humidity_event, &temperature_event);
-		temperature = temperature_event.temperature * temperature_slop + temperature_intercept;
-		humidity = humidity_event.relative_humidity;
-	}
+		if (Sensor::parameters[Sensor::SHT40]) {
+			sensors_event_t temperature_event, humidity_event;
+			SHT4x.getEvent(&humidity_event, &temperature_event);
+			SHT40_temperature = temperature_event.temperature * temperature_slop + temperature_intercept;
+			SHT40_humidity = humidity_event.relative_humidity;
+		}
 	#endif
 }
 
 /* *************************************************************************** / ************************************ */
 
-struct GPS {
+namespace WEB {
+	static esp_err_t gps_upload_handle(PsychicRequest *, PsychicResponse *);
+}
+
+class GPS {
+protected:
 	DateTime time;
 	DateTime browser_time;
 	DateTime position_time;
 	double latitude;
 	double longitude;
 	double altitude;
+public:
+	static std::vector<DataField> const fields;
+
+	GPS(void) :
+		time((uint32_t)0), browser_time((uint32_t)0), position_time((uint32_t)0),
+		latitude(NAN), longitude(NAN), altitude(NAN)
+		{}
+	String to_CSV(void) const;
+
+	friend esp_err_t WEB::gps_upload_handle(PsychicRequest *, PsychicResponse *);
 };
 
-static std::array<Field, 6> gps_fields = {
-	Field{"time", nullptr, nullptr},
-	Field{"browser_time", nullptr, nullptr},
-	Field{"position_time", nullptr, nullptr},
-	Field{"latitude", "Latitude", "\u00B0"},
-	Field{"longitude", "Longitude", "\u00B0"},
-	Field{"altitude", "Altitude", "m"}
-};
-
-static String CSV_GPS(struct GPS const *const gps) {
-	return Clock::show_time(&gps->time)
-		+ ',' + Clock::show_time(&gps->browser_time)
-		+ ',' + Clock::show_time(&gps->position_time)
-		+ ',' + String(gps->latitude,  7)
-		+ ',' + String(gps->longitude, 7)
-		+ ',' + String(gps->altitude,  7);
+String GPS::to_CSV(void) const {
+	return Clock::show_time(&time)
+		+ ',' + Clock::show_time(&browser_time)
+		+ ',' + Clock::show_time(&position_time)
+		+ ',' + String(latitude,  7)
+		+ ',' + String(longitude, 7)
+		+ ',' + String(altitude,  7);
 }
+
+std::vector<DataField> const GPS::fields{
+	{"time", nullptr, nullptr},
+	{"browser_time", nullptr, nullptr},
+	{"position_time", nullptr, nullptr},
+	{"latitude", "Latitude", "\u00B0"},
+	{"longitude", "Longitude", "\u00B0"},
+	{"altitude", "Altitude", "m"}
+};
 
 /* *************************************************************************** / ************************************ */
 /* SD card */
@@ -238,6 +315,58 @@ namespace SD_card {
 	static String gps_header;
 	static bool exist;
 
+	static void save_sensors(File *const file) {
+		bool first_pair = true;
+		for (size_t i = 0; i < Sensor::number; ++i) {
+			std::optional<int> const parameter = Sensor::parameters[i];
+			if (parameter) {
+				if (first_pair)
+					first_pair = false;
+				else
+					file->print(',');
+				file->print(i);
+				if (*parameter) {
+					file->print(':');
+					file->print(*parameter);
+				}
+			}
+		}
+		file->println();
+	}
+
+	static void load_sensors(File *const file) {
+		for (size_t i = 0; i < Sensor::number; ++i)
+			Sensor::parameters[i] = std::nullopt;
+		String const line = file->readStringUntil('\n');
+		char const *p = line.c_str();
+		if (*p) {
+			unsigned int k = 0;
+			unsigned int v = 0;
+			unsigned int *n = &k;
+			for (;;) {
+				char const c = *p;
+				if (c >= '0' && c <= '9') {
+					*n = *n * 10 + (c - '0');
+				}
+				else if (c == ':') {
+					v = 0;
+					n = &v;
+				}
+				else if (!c || c == ',') {
+					if (k < Sensor::number) {
+						Sensor::parameters[k] = v;
+						k = 0;
+						v = 0;
+						n = &k;
+					}
+					if (!c) break;
+				}
+				++p;
+			}
+		}
+		Data::update_fields();
+	}
+
 	static void save_settings(void) {
 		if (!exist) return;
 		SDCARD_LOCK(sdcard_lock);
@@ -246,6 +375,7 @@ namespace SD_card {
 			Serial.println("ERROR: failed to open setting file");
 			return;
 		}
+		save_sensors(&file);
 		file.println(campaign_name);
 		file.println(organisation_name);
 		file.println(device_name);
@@ -276,6 +406,9 @@ namespace SD_card {
 			Serial.println("Failed to open setting file");
 			return false;
 		}
+
+		/* Active sensors */
+		load_sensors(&file);
 
 		/* Campaign name */
 		campaign_name = file.readStringUntil('\n');
@@ -356,24 +489,24 @@ namespace SD_card {
 		data_header = Data::fields[0].name;
 		if (Data::fields[0].unit)
 			data_header = data_header + " (" + Data::fields[0].unit + ')';
-		for (unsigned int i = 1; i < Data::fields.size(); ++i) {
+		for (size_t i = 1; i < Data::fields.size(); ++i) {
 			data_header = data_header + ',' + Data::fields[i].name;
 			if (Data::fields[i].unit)
 				data_header = data_header + " (" + Data::fields[i].unit + ')';
 		}
-		gps_header = gps_fields[0].name;
-		if (gps_fields[0].unit)
-			gps_header = gps_header + " (" + gps_fields[0].unit + ')';
-		for (unsigned int i = 1; i < gps_fields.size(); ++i) {
-			gps_header = gps_header + ',' + gps_fields[i].name;
-			if (gps_fields[i].unit)
-				gps_header = gps_header + " (" + gps_fields[i].unit + ')';
+		gps_header = GPS::fields[0].name;
+		if (GPS::fields[0].unit)
+			gps_header = gps_header + " (" + GPS::fields[0].unit + ')';
+		for (size_t i = 1; i < GPS::fields.size(); ++i) {
+			gps_header = gps_header + ',' + GPS::fields[i].name;
+			if (GPS::fields[i].unit)
+				gps_header = gps_header + " (" + GPS::fields[i].unit + ')';
 		}
 
-		pinMode(SD_MISO, INPUT_PULLUP);
+		//	pinMode(SD_MISO, INPUT_PULLUP);
 		SPI.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
-		SD_card::exist = SD.begin(SD_CS, SPI);
-		if (SD_card::exist) {
+		exist = SD.begin(SD_CS, SPI);
+		if (exist) {
 			Serial.println("SD card found");
 			Monitor.println("OK SD card");
 			if (digitalRead(reset_pin) == HIGH)
@@ -403,9 +536,12 @@ static DateTime measure(void) {
 	Serial.print("INFO: Measure ");
 	Serial.println(data_string);
 
-	if (data_records.size() >= records_max_size)
-		data_records.pop_front();
-	data_records.push_back(data);
+	{
+		DATA_LOCK(data_lock);
+		if (data_records.size() >= records_max_size)
+			data_records.pop_front();
+		data_records.push_back(data);
+	}
 
 	if (SD_card::exist) {
 		SDCARD_LOCK(sdcard_lock);
@@ -1286,10 +1422,9 @@ R"HTML(
 </html>
 )HTML";
 
-	template <size_t N>
-	static void stream_print_fields(PsychicStreamResponse *const stream, std::array<Field, N> const *const fields) {
+	static void stream_print_fields(PsychicStreamResponse *const stream, std::vector<DataField> const *const fields) {
 		char const *prefix = "[";
-		for (Field const field: *fields) {
+		for (DataField const field: *fields) {
 			stream->print(prefix);
 			prefix = ", ";
 			stream->print("{name:\"");
@@ -1346,7 +1481,7 @@ R"HTML(
 		stream.print("\",\r\n\t\t\tdata_fields: ");
 		stream_print_fields(&stream, &Data::fields);
 		stream.print(",\r\n\t\t\tgps_fields: ");
-		stream_print_fields(&stream, &gps_fields);
+		stream_print_fields(&stream, &GPS::fields);
 		stream.print("\r\n");
 		stream.write(reinterpret_cast<uint8_t const *>(home_html_4), sizeof home_html_4 - 1);
 		return stream.endSend();
@@ -1398,6 +1533,7 @@ R"HTML(
 		stream.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
 		stream.beginSend();
 		stream.println(SD_card::data_header);
+		DATA_LOCK(data_lock);
 		for (Data const &record: data_records)
 			stream.println(record.to_CSV());
 		return stream.endSend();
@@ -1408,6 +1544,7 @@ R"HTML(
 		stream.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
 		stream.beginSend();
 		stream.println(SD_card::data_header);
+		DATA_LOCK(data_lock);
 		if (!data_records.empty())
 			stream.println(data_records.back().to_CSV());
 		return stream.endSend();
@@ -1418,8 +1555,9 @@ R"HTML(
 		stream.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
 		stream.beginSend();
 		stream.println(SD_card::gps_header);
+		DATA_LOCK(data_lock);
 		for (GPS const &record: gps_records)
-			stream.println(CSV_GPS(&record));
+			stream.println(record.to_CSV());
 		return stream.endSend();
 	}
 
@@ -1428,13 +1566,14 @@ R"HTML(
 		stream.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
 		stream.beginSend();
 		stream.println(SD_card::gps_header);
+		DATA_LOCK(data_lock);
 		if (!gps_records.empty())
-			stream.println(CSV_GPS(&gps_records.back()));
+			stream.println(gps_records.back().to_CSV());
 		return stream.endSend();
 	}
 
 	static esp_err_t gps_upload_handle(PsychicRequest *const request, PsychicResponse *const response) {
-		GPS gps = {.time = (uint32_t)0, .latitude = NAN, .longitude = NAN, .altitude = NAN};
+		GPS gps;
 		PsychicWebParameter *parameter;
 		parameter = request->getParam("time");
 		if (parameter != nullptr) {
@@ -1511,13 +1650,16 @@ R"HTML(
 				}
 			}
 		}
-		String const GPS_string = CSV_GPS(&gps);
+		String const GPS_string = gps.to_CSV();
 		Serial.print("INFO: GPS ");
 		Serial.println(GPS_string);
 
-		if (gps_records.size() >= records_max_size)
-			gps_records.pop_front();
-		gps_records.push_back(gps);
+		{
+			DATA_LOCK(data_lock);
+			if (gps_records.size() >= records_max_size)
+				gps_records.pop_front();
+			gps_records.push_back(gps);
+		}
 
 		if (SD_card::exist) {
 			SDCARD_LOCK(sdcard_lock);
@@ -1994,8 +2136,11 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 		}
 		if (request->hasParam("delete")) {
 			Serial.println("INFO: command delete");
-			data_records.clear();
-			gps_records.clear();
+			{
+				DATA_LOCK(data_lock);
+				data_records.clear();
+				gps_records.clear();
+			}
 			SDCARD_LOCK(sdcard_lock);
 			File data_file = SD.open(SD_card::data_filename, "w", true);
 			try {
@@ -2029,6 +2174,8 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 	}
 
 	static void setup(void) {
+		set_pthread_stack_size(16384);
+
 		HTTPd .on("/",                HTTP_GET,  home_handle);
 		HTTPSd.on("/",                HTTP_GET,  home_handle);
 		HTTPd .on("/operator",        HTTP_GET,  home_handle);
@@ -2087,6 +2234,7 @@ static void redraw_display(bool const start_over) {
 	if (start_over) section = 0;
 	DISPLAY_LOCK(display_lock);
 	Monitor.clearDisplay();
+	DATA_LOCK(data_lock);
 	if (section == 0 && data_records.size()) {
 		Data const *const data = &data_records.back();
 		char year[6], date[7], time[6];
@@ -2146,7 +2294,7 @@ static void redraw_display(bool const start_over) {
 void loop(void) {
 	static unsigned short int count = 0;
 
-	delay(1000);
+	delay(main_loop_delay);
 
 	if (need_save) {
 		SD_card::save_settings();
@@ -2201,40 +2349,17 @@ void setup(void) {
 	/* Start-up delay */
 	delay(start_wait_time);
 
-	/* SD */
+	/* Initialize modules */
+	Data::setup();
 	SD_card::setup();
-
-	/* Clock */
 	Clock::setup();
-
-	/* Sensor */
-	#if defined(ENABLE_SENSOR_SHT40)
-		while (!SHT4x.begin()) {
-			Serial.println("ERROR: SHT40 not found");
-			Monitor.println("No SHT40");
-			Monitor.display();
-			delay(reinitialize_interval);
-		}
-		SHT4x.setPrecision(SHT4X_HIGH_PRECISION);
-		SHT4x.setHeater(SHT4X_NO_HEATER);
-		Serial.println("SHT40 found");
-		Monitor.println("OK SHT40");
-		Monitor.display();
-	#endif
-
-	/* WiFi */
+	Sensor::setup();
 	WIFI::setup();
-
-	/* Web server */
-	set_pthread_stack_size(16384);
 	WEB::setup();
 
 	/* Spawn measurement thread */
 	set_pthread_stack_size(4096);
 	std::thread(measure_thread).detach();
-
-	/* Main loop delay */
-	delay(start_wait_time);
 }
 
 /* *************************************************************************** / ************************************ */
