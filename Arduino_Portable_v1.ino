@@ -254,7 +254,7 @@ void Data::measure(void) {
 		if (Sensor::parameters[Sensor::SHT40]) {
 			sensors_event_t temperature_event, humidity_event;
 			SHT4x.getEvent(&humidity_event, &temperature_event);
-			SHT40_temperature = temperature_event.temperature * temperature_slop + temperature_intercept;
+			SHT40_temperature = temperature_event.temperature * calibration_slop + calibration_intercept;
 			SHT40_humidity = humidity_event.relative_humidity;
 		}
 	#endif
@@ -389,8 +389,8 @@ namespace SD_card {
 		file.println(upload_URL);
 		file.println(upload_username);
 		file.println(upload_password);
-		file.println(temperature_slop);
-		file.println(temperature_intercept);
+		file.println(calibration_slop);
+		file.println(calibration_intercept);
 		file.close();
 	}
 
@@ -467,19 +467,19 @@ namespace SD_card {
 		upload_password = file.readStringUntil('\n');
 		upload_password.trim();
 
-		/* Temperature slop */
+		/* Calibration slop */
 		s = file.readStringUntil('\n');
 		s.trim();
 		f = strtof(s.c_str(), &e);
-		if (!*e && f >= temperature_slop_lowerbound && f <= temperature_slop_upperbound)
-			temperature_slop = f;
+		if (!*e && f >= calibration_slop_lowerbound && f <= calibration_slop_upperbound)
+			calibration_slop = f;
 
 		/* Temperature intercept */
 		s = file.readStringUntil('\n');
 		s.trim();
 		f = strtof(s.c_str(), &e);
-		if (!*e && f >= temperature_intercept_lowerbound && f <= temperature_intercept_upperbound)
-			temperature_intercept = f;
+		if (!*e && f >= calibration_intercept_lowerbound && f <= calibration_intercept_upperbound)
+			calibration_intercept = f;
 
 		file.close();
 		return true;
@@ -1909,17 +1909,17 @@ R"HTML(' />
 		setting_form(&stream, "set_temperature_slop");
 		stream.print(
 			"\t\tCalibrate temperature slop\r\n"
-			"\t\t<input type='text' name='temperature_slop' value='"
+			"\t\t<input type='text' name='calibration_slop' value='"
 		);
-		stream.print(temperature_slop);
+		stream.print(calibration_slop);
 		stream.print(
 			"' />\r\n"
 			"\t</label>\r\n"
 			"\t<label>\r\n"
 			"\t\tCalibrate temperature intercept\r\n"
-			"\t\t<input type='text' name='temperature_intercept' value='"
+			"\t\t<input type='text' name='calibration_intercept' value='"
 		);
-		stream.print(temperature_intercept);
+		stream.print(calibration_intercept);
 		setting_form_set(&stream);
 
 		setting_form(&stream, "do_measure");
@@ -2095,15 +2095,15 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 			upload_password = parameter->value();
 			need_save = true;
 		}
-		parameter = request->getParam("temperature_slop");
+		parameter = request->getParam("calibration_slop");
 		if (parameter != nullptr) {
 			char const *const value = parameter->value().c_str();
 			Serial.print("INFO: command temperature slop = ");
 			Serial.println(value);
 			char *end;
 			float const x = strtof(value, &end);
-			if (!*end && x >= temperature_slop_lowerbound && x <= temperature_slop_upperbound) {
-				temperature_slop = x;
+			if (!*end && x >= calibration_slop_lowerbound && x <= calibration_slop_upperbound) {
+				calibration_slop = x;
 				need_save = true;
 			}
 			else {
@@ -2112,15 +2112,15 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 				Serial.println('"');
 			}
 		}
-		parameter = request->getParam("temperature_intercept");
+		parameter = request->getParam("calibration_intercept");
 		if (parameter != nullptr) {
 			char const *const value = parameter->value().c_str();
 			Serial.print("INFO: command temperature intercept = ");
 			Serial.println(value);
 			char *end;
 			float const x = strtof(value, &end);
-			if (!*end && x >= temperature_intercept_lowerbound && x <= temperature_intercept_upperbound) {
-				temperature_intercept = x;
+			if (!*end && x >= calibration_intercept_lowerbound && x <= calibration_intercept_upperbound) {
+				calibration_intercept = x;
 				need_save = true;
 			}
 			else {
