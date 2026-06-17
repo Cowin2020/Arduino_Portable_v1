@@ -1686,28 +1686,39 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 <meta name='viewport' content='width=device-width, initial-scale=1' />
 <title>Settings</title>
 <link rel='icon' type='image/png' href='favicon.ico' />
-<link rel='stylesheet' type='text/css' href='style.css' />
 </head>
 <body>
 <style>
-	form.setting-form {
+	form.setting {
 		margin: 1ex;
 		border: solid thin;
 		padding: 1ex;
 	}
-	form.setting-form label {
+	form.setting > p:first-child {
+		margin-top: 0;
+	}
+	form.setting label {
 		display: flex;
 		justify-content: start;
 		column-gap: 0.5em;
 	}
-	form.setting-form label input {
+	form.setting label input[type="text"] ,
+	form.setting label input[type="number"] ,
+	form.setting label input[type="datetime-local"] {
 		flex-grow: 1;
 	}
-	form.setting-form label input[type="checkbox"] {
-		flex-grow: unset;
-	}
-	form.setting-form label:has(input[type="checkbox"]:not(:checked)) + button {
+	form.setting label:has(input[type="checkbox"]:not(:checked)) ~ button {
 		display: none;
+	}
+	form#set_wifi > label {
+		display: inline;
+	}
+	form#set_wifi > div {
+		margin-bottom: 1ex;
+	}
+	form#set_wifi > label:has(> input[type="radio"]:not(:checked)) + div {
+		background-color: lightgray;
+		filter: opacity(0.5);
 	}
 </style>
 <p><a href='operator'>&#x2190; Back</a></p>
@@ -1723,16 +1734,14 @@ R"HTML(
 
 	static PROGMEM char const setting_form_2[] =
 R"HTML('
-	class='setting-form'
+	class='setting'
 	action='setting.exe'
 	method='POST'
 >
-	<label>
 )HTML";
 
 	static PROGMEM char const setting_form_3[] =
-R"HTML(' />
-	</label>
+R"HTML(
 	<button type='submit'>Set</button>
 </form>
 )HTML";
@@ -1786,129 +1795,182 @@ R"HTML(' />
 
 		setting_form(&stream, "set_time");
 		stream.print(
-			"\t\tCurrent time \r\n"
-			"\t\t<input type='datetime-local' name='time' required='"
+			"\t<label>\r\n"
+			"\t\tSet clock\r\n"
+			"\t\t<input type='datetime-local' name='time' required='' />"
+			"\t</label>\r\n"
 		);
 		setting_form_set(&stream);
 
 		setting_form(&stream, "set_campaign");
 		stream.print(
+			"\t<label>\r\n"
 			"\t\tCampaign\r\n"
 			"\t\t<input type='text' name='campaign' required='' value='"
 		);
 		stream.print(XML_escape(campaign_name));
+		stream.print(
+			"' />\r\n"
+			"\t</label>\r\n"
+		);
 		setting_form_set(&stream);
 
 		setting_form(&stream, "set_organisation");
 		stream.print(
+			"\t<label>\r\n"
 			"\t\tOrganisation\r\n"
 			"\t\t<input type='text' name='organisation' required='' value='"
 		);
 		stream.print(XML_escape(organisation_name));
+		stream.print(
+			"' />\r\n"
+			"\t</label>\r\n"
+		);
 		setting_form_set(&stream);
 
 		setting_form(&stream, "set_device");
 		stream.print(
+			"\t<label>\r\n"
 			"\t\tDevice ID\r\n"
 			"\t\t<input type='text' name='device' required='' value='"
 		);
 		stream.print(XML_escape(device_name));
+		stream.print(
+			"' />\r\n"
+			"\t</label>\r\n"
+		);
 		setting_form_set(&stream);
 
 		setting_form(&stream, "set_interval");
 		stream.print(
-			"\t\tMeasure interval / seconds\r\n"
+			"\t<label>\r\n"
+			"\t\tMeasurement Interval (seconds)\r\n"
 			"\t\t<input type='number' name='interval' min='10' max='900' required='' value='"
 		);
 		stream.print(String(measure_interval / 1000));
+		stream.print(
+			"' />\r\n"
+			"\t</label>\r\n"
+		);
 		setting_form_set(&stream);
 
 		setting_form(&stream, "set_wifi");
 		stream.print(
-			"\t\tProvide WiFi\r\n"
-			"\t\t<select name='WiFi'>\r\n"
-			"\t\t\t<option value='AP'"
-		);
-		if (use_AP_mode) stream.print(" selected=''");
-		stream.print(
-			">\r\n"
-			"\t\t\t\tAccess point\r\n"
-			"\t\t\t</option>\r\n"
-			"\t\t\t<option value='STA'"
-		);
-		if (!use_AP_mode) stream.print(" selected=''");
-		stream.print(
-			">\r\n"
-			"\t\t\t\tStation\r\n"
-			"\t\t\t</option>\r\n"
-			"\t\t</select>\r\n"
-			"\t</label>\r\n"
+			"\t<p>Wi-Fi</p>\r\n"
 			"\t<label>\r\n"
-			"\t\tAP SSID\r\n"
-			"\t\t<input name='APSSID' value='"
+			"\t\t<input type='radio' name='WiFi' value='AP'"
+		);
+		if (use_AP_mode) stream.print(" checked=''");
+		stream.print(
+			" />\r\n"
+			"\t\tArduino Wi-Fi network\r\n"
+			"\t</label>\r\n"
+			"\t<div>\r\n"
+			"\t\t<label>\r\n"
+			"\t\t\tAP SSID\r\n"
+			"\t\t\t<input type='text' name='APSSID' value='"
 		);
 		stream.print(XML_escape(AP_SSID));
 		stream.print(
 			"' />\r\n"
-			"\t</label>\r\n"
-			"\t<label>\r\n"
-			"\t\tAP PASS\r\n"
-			"\t\t<input name='APPASS' value='"
+			"\t\t</label>\r\n"
+			"\t\t<label>\r\n"
+			"\t\t\tAP PASS\r\n"
+			"\t\t\t<input type='text' name='APPASS' value='"
 		);
 		stream.print(XML_escape(AP_PASS));
 		stream.print(
 			"' />\r\n"
-			"\t</label>\r\n"
+			"\t\t</label>\r\n"
+			"\t</div>\r\n"
 			"\t<label>\r\n"
-			"\t\tSTA SSID\r\n"
-			"\t\t<input name='STASSID' value='"
+			"\t\t<input type='radio' name='WiFi' value='STA'"
+		);
+		if (!use_AP_mode) stream.print(" checked=''");
+		stream.print(
+			" />\r\n"
+			"\t\tExternal Wi-Fi network\r\n"
+			"\t</label>\r\n"
+			"\t<div>\r\n"
+			"\t\t<label>\r\n"
+			"\t\t\tSTA SSID\r\n"
+			"\t\t\t<input type='text' name='STASSID' value='"
 		);
 		stream.print(XML_escape(STA_SSID));
 		stream.print(
 			"' />\r\n"
-			"\t</label>\r\n"
-			"\t<label>\r\n"
-			"\t\tSTA PASS\r\n"
-			"\t\t<input name='STAPASS' value='"
+			"\t\t</label>\r\n"
+			"\t\t<label>\r\n"
+			"\t\t\tSTA PASS\r\n"
+			"\t\t\t<input type='text' name='STAPASS' value='"
 		);
 		stream.print(XML_escape(STA_PASS));
+		stream.print(
+			"' />\r\n"
+			"\t\t</label>\r\n"
+			"\t</div>\r\n"
+		);
 		setting_form_set(&stream);
 
 		setting_form(&stream, "set_monitor");
 		stream.print(
-			"\t\tMonitor server URL\r\n"
+			"\t<p>Position</p>"
+			"\t<label>\r\n"
+			"\t\tServer URL\r\n"
 			"\t\t<input type='text' name='monitor' required='' value='"
 		);
 		stream.print(XML_escape(monitor_URL));
+		stream.print(
+			"' />\r\n"
+			"\t</label>\r\n"
+			"<p>* To allow position to be broadcasted to the server</p>\r\n"
+		);
 		setting_form_set(&stream);
 
 		setting_form(&stream, "set_upload");
 		stream.print(
-			"\t\tUpload host\r\n"
+			"\t<p>Upload host server information</p>"
+			"\t<label>\r\n"
+			"\t\tHost address\r\n"
 			"\t\t<input type='text' name='upload' required='' value='"
 		);
 		stream.print(XML_escape(upload_URL));
-		setting_form_set(&stream);
-
-		setting_form(&stream, "set_username");
 		stream.print(
-			"\t\tUpload username\r\n"
+			"' />\r\n"
+			"\t</label>\r\n"
+		);
+		stream.print(
+			"\t<label>\r\n"
+			"\t\tUsername\r\n"
 			"\t\t<input type='text' name='username' required='' value='"
 		);
 		stream.print(XML_escape(upload_username));
-		setting_form_set(&stream);
-
-		setting_form(&stream, "set_password");
 		stream.print(
-			"\t\tUpload password\r\n"
+			"' />\r\n"
+			"\t</label>\r\n"
+		);
+		stream.print(
+			"\t<label>\r\n"
+			"\t\tPassword\r\n"
 			"\t\t<input type='text' name='password' required='' value='"
 		);
 		stream.print(XML_escape(upload_password));
+		stream.print(
+			"' />\r\n"
+			"\t</label>\r\n"
+		);
 		setting_form_set(&stream);
 
-		setting_form(&stream, "set_temperature_slop");
+		setting_form(&stream, "set_calibration");
 		stream.print(
-			"\t\tCalibrate temperature slop\r\n"
+			"\t<p>Linear calibration</p>\r\n"
+			"\t<blockquote>\r\n"
+			"\t\t<math xmlns='http://www.w3.org/1998/Math/MathML'>\r\n"
+			"\t\t\t<mi>y</mi> <mo form='infix'>=</mo> <mi>m</mi> <mi>x</mi> <mo form='infix'>+</mo> <mi>c</mi>"
+			"\t\t</math>\r\n"
+			"\t</blockquote>\r\n"
+			"\t<label>\r\n"
+			"\t\tSlop <i>m</i>\r\n"
 			"\t\t<input type='text' name='calibration_slop' value='"
 		);
 		stream.print(calibration_slop);
@@ -1916,35 +1978,45 @@ R"HTML(' />
 			"' />\r\n"
 			"\t</label>\r\n"
 			"\t<label>\r\n"
-			"\t\tCalibrate temperature intercept\r\n"
+			"\t\tIntercept <i>c</i>\r\n"
 			"\t\t<input type='text' name='calibration_intercept' value='"
 		);
 		stream.print(calibration_intercept);
+		stream.print(
+			"' />\r\n"
+			"\t</label>\r\n"
+		);
 		setting_form_set(&stream);
 
 		setting_form(&stream, "do_measure");
 		stream.print(
+			"\t<label>\r\n"
 			"\t\tMeasure now\r\n"
 			"\t\t<input type='checkbox' name='measure' />\r\n"
 			"\t</label>\r\n"
+			"\t<p>* After checking, please press \"confirm\"</p>\r\n"
 			"\t<button type='submit'>Confirm</button>\r\n"
 			"</form>\r\n"
 		);
 
 		setting_form(&stream, "do_delete");
 		stream.print(
+			"\t<label>\r\n"
 			"\t\tDelete all data\r\n"
 			"\t\t<input type='checkbox' name='delete' />\r\n"
 			"\t</label>\r\n"
+			"\t<p>* After checking, please press \"confirm\"</p>\r\n"
 			"\t<button type='submit'>Confirm</button>\r\n"
 			"</form>\r\n"
 		);
 
 		setting_form(&stream, "do_reboot");
 		stream.print(
+			"\t<label>\r\n"
 			"\t\tReboot\r\n"
 			"\t\t<input type='checkbox' name='reboot' />\r\n"
 			"\t</label>\r\n"
+			"\t<p>* After checking, please press \"confirm\"</p>\r\n"
 			"\t<button type='submit'>Confirm</button>\r\n"
 			"</form>\r\n"
 		);
@@ -2131,7 +2203,7 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 		}
 		parameter = request->getParam("measure");
 		if (parameter != nullptr) {
-			Serial.print("INFO: command measure");
+			Serial.println("INFO: command measure");
 			wait_measure_condition.notify_all();
 		}
 		if (request->hasParam("delete")) {
