@@ -54,7 +54,7 @@ struct DataField {
 
 namespace Sensor {
 	enum Identifier {
-		SHT40 = 0,
+		SHT40 = 1,
 		number
 	};
 
@@ -66,6 +66,7 @@ namespace Sensor {
 	};
 
 	Model const models[number] = {
+		[0] = {"(PLACEHOLDER)", {}},
 		[SHT40] = {
 			"SHT40",
 			{
@@ -315,6 +316,52 @@ namespace SD_card {
 	static String gps_header;
 	static bool exist;
 
+	class Parser {
+	protected:
+		int number;
+		bool sign;
+		unsigned int state : 2;
+	public:
+		Parser(void);
+		void reset(void);
+		bool read(char character);
+		std::optional<int> result(void) const;
+	};
+
+	Parser::Parser(void) {
+		reset();
+	}
+
+	void Parser::reset(void) {
+		number = 0;
+		sign = false;
+		state = 0;
+	}
+
+	std::optional<int> Parser::result(void) const {
+		if (state != 2)
+			return std::nullopt;
+		else if (sign)
+			return std::optional(-number);
+		else
+			return std::optional(number);
+	}
+
+	bool Parser::read(char character) {
+		if (character >= '0' && character <= '9') {
+			number = number * 10 + (character - '0');
+			state = 2;
+			return true;
+		}
+		else if (character == '-' && state == 0) {
+			sign = !sign;
+			state = 1;
+			return true;
+		}
+		else
+			return false;
+	}
+
 	static void save_sensors(File *const file) {
 		bool first_pair = true;
 		for (size_t i = 0; i < Sensor::number; ++i) {
@@ -335,32 +382,42 @@ namespace SD_card {
 	}
 
 	static void load_sensors(File *const file) {
-		for (size_t i = 0; i < Sensor::number; ++i)
-			Sensor::parameters[i] = std::nullopt;
+		for (std::optional<int> &parameter: Sensor::parameters)
+			parameter = std::nullopt;
 		String const line = file->readStringUntil('\n');
 		char const *p = line.c_str();
 		if (*p) {
-			unsigned int k = 0;
-			unsigned int v = 0;
-			unsigned int *n = &k;
+			int key = 0;
+			int value = 0;
+			bool rhs = false;
+			Parser parser;
 			for (;;) {
 				char const c = *p;
-				if (c >= '0' && c <= '9') {
-					*n = *n * 10 + (c - '0');
-				}
-				else if (c == ':') {
-					v = 0;
-					n = &v;
-				}
-				else if (!c || c == ',') {
-					if (k < Sensor::number) {
-						Sensor::parameters[k] = v;
-						k = 0;
-						v = 0;
-						n = &k;
+				if (!c || c == ',') {
+					std::optional const x = parser.result();
+					if (x) {
+						if (rhs)
+							value = x.value();
+						else {
+							key = x.value();
+							value = 0;
+						}
+						if (key < Sensor::number)
+							Sensor::parameters[key] = value;
 					}
+					rhs = false;
+					parser.reset();
 					if (!c) break;
 				}
+				else if (c == ':') {
+					std::optional const x = parser.result();
+					if (!rhs && x)
+						key = x.value();
+					rhs = true;
+					parser.reset();
+				}
+				else
+					parser.read(c);
 				++p;
 			}
 		}

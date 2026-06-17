@@ -4,6 +4,7 @@
 #define ENABLE_SENSOR_SHT40
 
 #define DEFAULT_SENSORS { \
+	[0] = std::nullopt, \
 	[SHT40] = 0 \
 }
 

@@ -11,17 +11,25 @@ a simple example.  The procedure will be described step by step.
 option, such as:
 	#define ENABLE_SENSOR_XYZZY
 
-2. In file "Arduino_Portable_v1.ino" -> session of "Sensor", add "#include"
+2. In "config_device.h.example" and "config_device.h", add an entry in default
+parameter as DEFAULT_SENSORS, such as:
+	#define DEFAULT_SENSORS { \
+		[0] = std::nullopt, \
+		[SHT40] = 0, \
+		[XYZZY] = std::nullopt \
+	}
+
+3. In file "Arduino_Portable_v1.ino" -> session of "Sensor", add "#include"
 statements and defined variables for the libraries of the sensor.
 
-3. In namespace "Sensor" -> enum "Identifier", add identifier for the sensor.
+4. In namespace "Sensor" -> enum "Identifier", add identifier for the sensor.
 	enum Identifier {
-		SHT40 = 0,
-		XYZZY = 1,
+		SHT40 = 1,
+		XYZZY = 2,
 		number
 	};
 
-4. In namespace "Sensor" -> function "setup",
+5. In namespace "Sensor" -> function "setup",
 add initialization of the sensor if necessary.
 	#if defined(ENABLE_XYZZY)
 		if (parameters[XYZZY]) {
@@ -32,7 +40,7 @@ add initialization of the sensor if necessary.
 		}
 	#endif
 
-5. In struct "Data", add data fields for the sensor.
+6. In struct "Data", add data fields for the sensor.
 	class Data {
 	protected:
 		DateTime time;
@@ -46,13 +54,13 @@ add initialization of the sensor if necessary.
 			float XYZZY_value2;
 		#endif
 
-6. In method "Data::to_CSV", add writing values to CSV of the sensor.
+7. In method "Data::to_CSV", add writing values to CSV of the sensor.
 	#if defined(ENABLE_SENSOR_XYZZY)
 		if (Sensor::parameters[Sensor::XYZZY])
 			s = s + ',' + XYZZY_value1 + ',' + XYZZY_value2;
 	#endif
 
-6. In method "Data::display", display values to OLED display.
+8. In method "Data::display", display values to OLED display.
 	#if defined(ENABLE_SENSOR_XYZZY)
 		if (Sensor::parameters[Sensor::XYZZY]) {
 			Monitor.print(XYZZY_value1, 3);
@@ -62,7 +70,7 @@ add initialization of the sensor if necessary.
 		}
 	#endif
 
-7. In method "Data::measure", receive data from the sensor and store into member
+9. In method "Data::measure", receive data from the sensor and store into member
 variables of "Data" instance.
 	#if defined(ENABLE_SENSOR_SHT40)
 		if (Sensor::parameters[Sensor::SHT40]) {
