@@ -29,7 +29,30 @@ statements and defined variables for the libraries of the sensor.
 		number
 	};
 
-5. In namespace "Sensor" -> function "setup",
+5. In namespace "Sensor" -> array "models", add information of elements.
+	Model const models[number] = {
+		[0] = {"(PLACEHOLDER)", {}},
+		[SHT40] = {
+			"SHT40",
+			{
+				{"SHT40_temperature", "Temperature", "\u2103"},
+				{"SHT40_humidity", "Humidity", "%"}
+			}
+		},
+		[XYZZY] = {
+			"XYZZY",
+			{
+				{"XYZZY_value1", "Value One", "UnitA"},
+				{"XYZZY_value2", "Value Two", "UnitB"}
+			}
+		}
+	};
+In the above example, the first string in the [XYZZY] session is the name of
+the sensor. The first field of the following array ("XYZZY_value1" and
+"XYZZY_value2") are the upload name of the elements; the second field is the
+human-readable name of the element; and the third field is the unit.
+
+6. In namespace "Sensor" -> function "setup",
 add initialization of the sensor if necessary.
 	#if defined(ENABLE_XYZZY)
 		if (parameters[XYZZY]) {
@@ -40,7 +63,7 @@ add initialization of the sensor if necessary.
 		}
 	#endif
 
-6. In struct "Data", add data fields for the sensor.
+7. In struct "Data", add data fields for the sensor.
 	class Data {
 	protected:
 		DateTime time;
@@ -54,24 +77,24 @@ add initialization of the sensor if necessary.
 			float XYZZY_value2;
 		#endif
 
-7. In method "Data::to_CSV", add writing values to CSV of the sensor.
+8. In method "Data::to_CSV", add writing values to CSV of the sensor.
 	#if defined(ENABLE_SENSOR_XYZZY)
 		if (Sensor::parameters[Sensor::XYZZY])
 			s = s + ',' + XYZZY_value1 + ',' + XYZZY_value2;
 	#endif
 
-8. In method "Data::display", display values to OLED display.
+9. In method "Data::display", display values to OLED display.
 	#if defined(ENABLE_SENSOR_XYZZY)
 		if (Sensor::parameters[Sensor::XYZZY]) {
 			Monitor.print(XYZZY_value1, 3);
-			Monitor.println("Unit");
+			Monitor.println("UnitA");
 			Monitor.print(XYZZY_value2, 0);
-			Monitor.println("Unit");
+			Monitor.println("UnitB");
 		}
 	#endif
 
-9. In method "Data::measure", receive data from the sensor and store into member
-variables of "Data" instance.
+10. In method "Data::measure", receive data from the sensor and store into
+member variables of "Data" instance.
 	#if defined(ENABLE_SENSOR_SHT40)
 		if (Sensor::parameters[Sensor::SHT40]) {
 			int const parameter = parameters[XYZZY].value();
