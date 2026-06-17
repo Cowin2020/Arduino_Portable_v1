@@ -22,9 +22,9 @@ static String upload_password = "upload password";
 static unsigned int measure_interval = 60000;
 static bool use_AP_mode = true;
 
-/* calibrated = reading * slop + intercept */
-static float temperature_slop = 1.0;
-static float temperature_intercept = 0.0;
+/* calibrated = reading * slope + intercept */
+static float calibration_slope = 1.0;
+static float calibration_intercept = 0.0;
 
 static unsigned int const display_refresh_interval = 5; /* seconds */
 static unsigned int const start_wait_time = 6000; /* milliseconds */
@@ -38,9 +38,9 @@ static unsigned char const reset_pin = 34;
 
 static unsigned int const measure_interval_lowerbound = 15;
 static unsigned int const measure_interval_upperbound = 900;
-static float const temperature_slop_lowerbound = 0.75;
-static float const temperature_slop_upperbound = 1.25;
-static float const temperature_intercept_lowerbound = -10.0;
-static float const temperature_intercept_upperbound = 10.0;
+static float const calibration_slop_lowerbound = 0.75;
+static float const calibration_slop_upperbound = 1.25;
+static float const calibration_intercept_lowerbound = -10.0;
+static float const calibration_intercept_upperbound = 10.0;
 
 #endif /* INCLUDE_CONFIG_H */

@@ -255,7 +255,7 @@ void Data::measure(void) {
 		if (Sensor::parameters[Sensor::SHT40]) {
 			sensors_event_t temperature_event, humidity_event;
 			SHT4x.getEvent(&humidity_event, &temperature_event);
-			SHT40_temperature = temperature_event.temperature * calibration_slop + calibration_intercept;
+			SHT40_temperature = temperature_event.temperature * calibration_slope + calibration_intercept;
 			SHT40_humidity = humidity_event.relative_humidity;
 		}
 	#endif
@@ -446,7 +446,7 @@ namespace SD_card {
 		file.println(upload_URL);
 		file.println(upload_username);
 		file.println(upload_password);
-		file.println(calibration_slop);
+		file.println(calibration_slope);
 		file.println(calibration_intercept);
 		file.close();
 	}
@@ -524,12 +524,12 @@ namespace SD_card {
 		upload_password = file.readStringUntil('\n');
 		upload_password.trim();
 
-		/* Calibration slop */
+		/* Calibration slope */
 		s = file.readStringUntil('\n');
 		s.trim();
 		f = strtof(s.c_str(), &e);
 		if (!*e && f >= calibration_slop_lowerbound && f <= calibration_slop_upperbound)
-			calibration_slop = f;
+			calibration_slope = f;
 
 		/* Temperature intercept */
 		s = file.readStringUntil('\n');
@@ -2028,9 +2028,9 @@ R"HTML(
 			"\t</blockquote>\r\n"
 			"\t<label>\r\n"
 			"\t\tSlop <i>m</i>\r\n"
-			"\t\t<input type='text' name='calibration_slop' value='"
+			"\t\t<input type='text' name='calibration_slope' value='"
 		);
-		stream.print(calibration_slop);
+		stream.print(calibration_slope);
 		stream.print(
 			"' />\r\n"
 			"\t</label>\r\n"
@@ -2224,19 +2224,19 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 			upload_password = parameter->value();
 			need_save = true;
 		}
-		parameter = request->getParam("calibration_slop");
+		parameter = request->getParam("calibration_slope");
 		if (parameter != nullptr) {
 			char const *const value = parameter->value().c_str();
-			Serial.print("INFO: command temperature slop = ");
+			Serial.print("INFO: command calibration slope = ");
 			Serial.println(value);
 			char *end;
 			float const x = strtof(value, &end);
 			if (!*end && x >= calibration_slop_lowerbound && x <= calibration_slop_upperbound) {
-				calibration_slop = x;
+				calibration_slope = x;
 				need_save = true;
 			}
 			else {
-				Serial.print("WARN: incorrect command temperature slop = \"");
+				Serial.print("WARN: incorrect command calibration slope = \"");
 				Serial.print(value);
 				Serial.println('"');
 			}
@@ -2244,7 +2244,7 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 		parameter = request->getParam("calibration_intercept");
 		if (parameter != nullptr) {
 			char const *const value = parameter->value().c_str();
-			Serial.print("INFO: command temperature intercept = ");
+			Serial.print("INFO: command calibration intercept = ");
 			Serial.println(value);
 			char *end;
 			float const x = strtof(value, &end);
@@ -2253,7 +2253,7 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 				need_save = true;
 			}
 			else {
-				Serial.print("WARN: incorrect command temperature intercept = \"");
+				Serial.print("WARN: incorrect command calibration intercept = \"");
 				Serial.print(value);
 				Serial.println('"');
 			}
