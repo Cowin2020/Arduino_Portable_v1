@@ -39,11 +39,30 @@ static void redraw_display(bool);
 /* *************************************************************************** / ************************************ */
 /* Sensor */
 
+/* SPI pins */
+static unsigned char const SPI_SCLK = 4;
+static unsigned char const SPI_MOSI = 23;
+static unsigned char const SPI_MISO = 19;
+static unsigned char const SPI_NSS  = 25;
+
 #if defined(ENABLE_SENSOR_SHT40)
 	#include <Adafruit_Sensor.h>
 	#include <Adafruit_SHT4x.h>
 
 	static Adafruit_SHT4x SHT4x;
+#endif
+
+#if defined(ENABLE_SENSOR_BME280)
+	#include <Adafruit_BME280.h>
+
+	#if defined(SENSOR_BME280_I2C)
+		static Adafruit_BME280 BME280;
+	#elif defined(SENSOR_BME280_VSPI)
+		static SPIClass BME280_SPI(VSPI);
+		static Adafruit_BME280 BME280(SPI_NSS, &BME280_SPI);
+	#else
+		static Adafruit_BME280 BME280(SPI_NSS, SPI_MOSI, SPI_MISO, SPI_SCLK);
+	#endif
 #endif
 
 struct DataField {
@@ -55,6 +74,7 @@ struct DataField {
 namespace Sensor {
 	enum Identifier {
 		SHT40 = 1,
+		BME280 = 2,
 		number
 	};
 
@@ -72,6 +92,14 @@ namespace Sensor {
 			{
 				{"SHT40_temperature", "Temperature", "\u2103"},
 				{"SHT40_humidity", "Humidity", "%"}
+			}
+		},
+		[BME280] = {
+			"BME280",
+			{
+				{"BME280_temperature", "Temperature", "\u2103"},
+				{"BME280_humidity", "Humidity", "%"},
+				{"BME280_pressure", "Pressure", "Pa"}
 			}
 		}
 	};
@@ -93,6 +121,28 @@ namespace Sensor {
 				SHT4x.setHeater(SHT4X_NO_HEATER);
 				Serial.println("SHT40 found");
 				Monitor.println("OK SHT40");
+				Monitor.display();
+			}
+		#endif
+
+		#if defined(ENABLE_SENSOR_BME280)
+			if (parameters[BME280]) {
+				/* Turn off SPI of LoRa */
+				pinMode(LORA_CS, OUTPUT);
+				digitalWrite(LORA_CS, HIGH);
+
+				/* Initialize SPI and BME280 */
+				#if !defined(SENSOR_BME280_I2C) && defined(SENSOR_BME280_VSPI)
+					BME280_SPI.begin(SPI_SCLK, SPI_MISO, SPI_MOSI, SPI_NSS);
+				#endif
+				while (!::BME280.begin()) {
+					Serial.println("ERROR: BME280 not found");
+					Monitor.println("No BME280");
+					Monitor.display();
+					delay(reinitialize_interval);
+				}
+				Serial.println("BME280 found");
+				Monitor.println("OK BME280");
 				Monitor.display();
 			}
 		#endif
@@ -187,6 +237,11 @@ protected:
 		float SHT40_temperature;
 		float SHT40_humidity;
 	#endif
+	#if defined(ENABLE_SENSOR_BME280)
+		float BME280_temperature;
+		float BME280_humidity;
+		float BME280_pressure;
+	#endif
 public:
 	static std::vector<DataField> fields;
 	static void update_fields(void);
@@ -239,6 +294,10 @@ String Data::to_CSV(void) const {
 		if (Sensor::parameters[Sensor::SHT40])
 			s = s + ',' + SHT40_temperature + ',' + SHT40_humidity;
 	#endif
+	#if defined(ENABLE_SENSOR_SHT40)
+		if (Sensor::parameters[Sensor::BME280])
+			s = s + ',' + BME280_temperature + ',' + BME280_humidity + ',' + BME280_pressure;
+	#endif
 	return s;
 }
 
@@ -251,6 +310,16 @@ void Data::display(void) const {
 			Monitor.println("%");
 		}
 	#endif
+	#if defined(ENABLE_SENSOR_BME280)
+		if (Sensor::parameters[Sensor::BME280]) {
+			Monitor.print(BME280_temperature, 2);
+			Monitor.println("C");
+			Monitor.print(BME280_humidity, 1);
+			Monitor.println("%");
+			Monitor.print(BME280_pressure, 0);
+			Monitor.println("Pa");
+		}
+	#endif
 }
 
 void Data::measure(void) {
@@ -261,6 +330,13 @@ void Data::measure(void) {
 			SHT4x.getEvent(&humidity_event, &temperature_event);
 			SHT40_temperature = temperature_event.temperature * calibration_slope + calibration_intercept;
 			SHT40_humidity = humidity_event.relative_humidity;
+		}
+	#endif
+	#if defined(ENABLE_SENSOR_BME280)
+		if (Sensor::parameters[Sensor::BME280]) {
+			BME280_temperature = BME280.readTemperature() * calibration_slope + calibration_intercept;
+			BME280_humidity = BME280.readHumidity();
+			BME280_pressure = BME280.readPressure();
 		}
 	#endif
 }
