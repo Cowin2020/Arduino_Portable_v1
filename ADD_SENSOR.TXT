@@ -15,8 +15,8 @@ option, such as:
 parameter as DEFAULT_SENSORS, such as:
 	#define DEFAULT_SENSORS { \
 		[0] = std::nullopt, \
-		[SHT40] = 0, \
-		[XYZZY] = std::nullopt \
+		[SHT40] = std::nullopt, \
+		[XYZZY] = 12345 \
 	}
 
 3. In file "Arduino_Portable_v1.ino" -> session of "Sensor", add "#include"
