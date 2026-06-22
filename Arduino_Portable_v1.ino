@@ -77,6 +77,10 @@ namespace Sensor {
 	};
 
 	void setup(void) {
+		/* Turn off SPI of LoRa */
+		pinMode(LORA_CS, OUTPUT);
+		digitalWrite(LORA_CS, HIGH);
+
 		#if defined(ENABLE_SENSOR_SHT40)
 			if (parameters[SHT40]) {
 				while (!SHT4x.begin()) {
