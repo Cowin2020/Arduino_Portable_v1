@@ -142,10 +142,6 @@ namespace Sensor {
 
 		#if defined(ENABLE_SENSOR_BME280)
 			if (parameters[BME280]) {
-				/* Turn off SPI of LoRa */
-				pinMode(LORA_CS, OUTPUT);
-				digitalWrite(LORA_CS, HIGH);
-
 				/* Initialize SPI and BME280 */
 				#if !defined(SENSOR_BME280_I2C) && defined(SENSOR_BME280_VSPI)
 					BME280_SPI.begin(SPI_SCLK, SPI_MISO, SPI_MOSI, SPI_NSS);
@@ -164,12 +160,6 @@ namespace Sensor {
 
 		#if defined(ENABLE_SENSOR_PMS5003)
 			if (parameters[PMS5003]) {
-				Serial.println("DEBUG: PMS5003 setup");
-
-				/* Turn off SPI of LoRa */
-				pinMode(LORA_CS, OUTPUT);
-				digitalWrite(LORA_CS, HIGH);
-
 				/* Set the SET and RESET pin to high */
 				pinMode(25, OUTPUT);
 				digitalWrite(25, HIGH);
@@ -182,7 +172,6 @@ namespace Sensor {
 
 				delay(100);
 				PMS_serial.passiveMode();
-				//	PMS_serial.activeMode();
 			}
 		#endif
 	}
