@@ -7,11 +7,19 @@ understanding of C++ programming language can help modify this program.
 In the tutorial, we add a new sensor called "xyzzy" into the program for
 a simple example.  The procedure will be described step by step.
 
-1. In "config_device.h.example" and "config_device.h", add a configuration
+1. In file "Arduino_Portable_v1.ino" -> namespace "Sensor" -> enum "Identifier",
+add identifier for the sensor.
+	enum Identifier {
+		SHT40 = 1,
+		XYZZY = 2,
+		number
+	};
+
+2. In "config_device.h.example" and "config_device.h", add a configuration
 option, such as:
 	#define ENABLE_SENSOR_XYZZY
 
-2. In "config_device.h.example" and "config_device.h", add an entry in default
+3. In "config_device.h.example" and "config_device.h", add an entry in default
 parameter as DEFAULT_SENSORS, such as:
 	#define DEFAULT_SENSORS { \
 		[0] = std::nullopt, \
@@ -19,15 +27,8 @@ parameter as DEFAULT_SENSORS, such as:
 		[XYZZY] = 12345 \
 	}
 
-3. In file "Arduino_Portable_v1.ino" -> session of "Sensor", add "#include"
+4. In file "Arduino_Portable_v1.ino" -> session of "Sensor", add "#include"
 statements and defined variables for the libraries of the sensor.
-
-4. In namespace "Sensor" -> enum "Identifier", add identifier for the sensor.
-	enum Identifier {
-		SHT40 = 1,
-		XYZZY = 2,
-		number
-	};
 
 5. In namespace "Sensor" -> array "models", add information of elements.
 	Model const models[number] = {
