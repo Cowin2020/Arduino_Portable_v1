@@ -7,10 +7,15 @@
 //	#define SENSOR_BME280_I2C
 //	#define SENSOR_BME280_VSPI
 
+#define ENABLE_SENSOR_PMS5003
+#define SENSOR_PMS5003_RX 19
+#define SENSOR_PMS5003_TX 23
+
 #define DEFAULT_SENSORS { \
 	[0] = std::nullopt, \
+	[SHT40] = std::nullopt, \
 	[BME280] = std::nullopt, \
-	[SHT40] = 0 \
+	[PMS5003] = 0 \
 }
 
 static String campaign_name = "123";

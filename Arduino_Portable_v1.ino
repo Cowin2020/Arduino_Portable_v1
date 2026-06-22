@@ -65,6 +65,12 @@ static unsigned char const SPI_NSS  = 25;
 	#endif
 #endif
 
+#if defined(ENABLE_SENSOR_PMS5003)
+	#include <PMS.h>
+
+	static PMS PMS_serial(Serial1);
+#endif
+
 struct DataField {
 	char const *name;
 	char const *title;
@@ -75,6 +81,7 @@ namespace Sensor {
 	enum Identifier {
 		SHT40 = 1,
 		BME280 = 2,
+		PMS5003 = 3,
 		number
 	};
 
@@ -100,6 +107,14 @@ namespace Sensor {
 				{"BME280_temperature", "Temperature", "\u2103"},
 				{"BME280_humidity", "Humidity", "%"},
 				{"BME280_pressure", "Pressure", "Pa"}
+			}
+		},
+		[PMS5003] = {
+			"PMS5003",
+			{
+				{"PM_10", "PM 1.0", ""},
+				{"PM_25", "PM 2.5", ""},
+				{"PM_100", "PM 10", ""}
 			}
 		}
 	};
@@ -144,6 +159,30 @@ namespace Sensor {
 				Serial.println("BME280 found");
 				Monitor.println("OK BME280");
 				Monitor.display();
+			}
+		#endif
+
+		#if defined(ENABLE_SENSOR_PMS5003)
+			if (parameters[PMS5003]) {
+				Serial.println("DEBUG: PMS5003 setup");
+
+				/* Turn off SPI of LoRa */
+				pinMode(LORA_CS, OUTPUT);
+				digitalWrite(LORA_CS, HIGH);
+
+				/* Set the SET and RESET pin to high */
+				pinMode(25, OUTPUT);
+				digitalWrite(25, HIGH);
+				pinMode(04, OUTPUT);
+				digitalWrite(04, HIGH);
+
+				/* Initialize serial port */
+				Serial1.setPins(SENSOR_PMS5003_RX, SENSOR_PMS5003_TX);
+				Serial1.begin(PMS::BAUD_RATE);
+
+				delay(100);
+				PMS_serial.passiveMode();
+				//	PMS_serial.activeMode();
 			}
 		#endif
 	}
@@ -242,6 +281,11 @@ protected:
 		float BME280_humidity;
 		float BME280_pressure;
 	#endif
+	#if defined(ENABLE_SENSOR_PMS5003)
+		float PMS5003_PM10;
+		float PMS5003_PM25;
+		float PMS5003_PM100;
+	#endif
 public:
 	static std::vector<DataField> fields;
 	static void update_fields(void);
@@ -298,6 +342,10 @@ String Data::to_CSV(void) const {
 		if (Sensor::parameters[Sensor::BME280])
 			s = s + ',' + BME280_temperature + ',' + BME280_humidity + ',' + BME280_pressure;
 	#endif
+	#if defined(ENABLE_SENSOR_PMS5003)
+		if (Sensor::parameters[Sensor::PMS5003])
+			s = s + ',' + PMS5003_PM10 + ',' + PMS5003_PM25 + ',' + PMS5003_PM100;
+	#endif
 	return s;
 }
 
@@ -320,6 +368,13 @@ void Data::display(void) const {
 			Monitor.println("hPa");
 		}
 	#endif
+	#if defined(ENABLE_SENSOR_PMS5003)
+		if (Sensor::parameters[Sensor::PMS5003]) {
+			Monitor.println(PMS5003_PM10, 1);
+			Monitor.println(PMS5003_PM25, 1);
+			Monitor.println(PMS5003_PM100, 1);
+		}
+	#endif
 }
 
 void Data::measure(void) {
@@ -337,6 +392,22 @@ void Data::measure(void) {
 			BME280_temperature = BME280.readTemperature() * calibration_slope + calibration_intercept;
 			BME280_humidity = BME280.readHumidity();
 			BME280_pressure = BME280.readPressure();
+		}
+	#endif
+	#if defined(ENABLE_SENSOR_PMS5003)
+		if (Sensor::parameters[Sensor::PMS5003]) {
+			PMS::DATA data;
+			PMS_serial.requestRead();
+			if (!PMS_serial.readUntil(data)) {
+				PMS5003_PM10 = -1.;
+				PMS5003_PM25 = -1.;
+				PMS5003_PM100 = -1.;
+			}
+			else {
+				PMS5003_PM10 = data.PM_AE_UG_1_0;
+				PMS5003_PM25 = data.PM_AE_UG_2_5;
+				PMS5003_PM100 = data.PM_AE_UG_10_0;
+			}
 		}
 	#endif
 }
