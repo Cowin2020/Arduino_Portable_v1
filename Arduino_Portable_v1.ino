@@ -564,7 +564,6 @@ namespace SD_card {
 				gps_header = gps_header + " (" + GPS::fields[i].unit + ')';
 		}
 
-		//	pinMode(SD_MISO, INPUT_PULLUP);
 		SPI.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
 		exist = SD.begin(SD_CS, SPI);
 		if (exist) {
