@@ -359,9 +359,14 @@ void Data::display(void) const {
 	#endif
 	#if defined(ENABLE_SENSOR_PMS5003)
 		if (Sensor::parameters[Sensor::PMS5003]) {
-			Monitor.println(PMS5003_PM10, 0);
+			//	Monitor.println(PMS5003_PM10, 0);
+			//	Monitor.println(PMS5003_PM25, 0);
+			//	Monitor.println(PMS5003_PM100, 0);
+			Monitor.setCursor(0, 62 + FONT_0_OFFSET);
+			Monitor.println("PM2.5");
+			Monitor.print("   ");
 			Monitor.println(PMS5003_PM25, 0);
-			Monitor.println(PMS5003_PM100, 0);
+			Monitor.println("ug/m3");
 		}
 	#endif
 }
