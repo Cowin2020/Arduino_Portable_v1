@@ -161,10 +161,10 @@ namespace Sensor {
 		#if defined(ENABLE_SENSOR_PMS5003)
 			if (parameters[PMS5003]) {
 				/* Set the SET and RESET pin to high */
-				pinMode(25, OUTPUT);
-				digitalWrite(25, HIGH);
-				pinMode(04, OUTPUT);
-				digitalWrite(04, HIGH);
+				pinMode(SENSOR_PMS5003_RESET, OUTPUT);
+				digitalWrite(SENSOR_PMS5003_RESET, HIGH);
+				pinMode(SENSOR_PMS5003_SET, OUTPUT);
+				digitalWrite(SENSOR_PMS5003_SET, HIGH);
 
 				/* Initialize serial port */
 				Serial1.setPins(SENSOR_PMS5003_RX, SENSOR_PMS5003_TX);

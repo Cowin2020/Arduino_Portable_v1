@@ -8,8 +8,10 @@
 //	#define SENSOR_BME280_VSPI
 
 #define ENABLE_SENSOR_PMS5003
-#define SENSOR_PMS5003_RX 19
-#define SENSOR_PMS5003_TX 23
+static uint8_t const SENSOR_PMS5003_RX = 19;
+static uint8_t const SENSOR_PMS5003_TX = 23;
+static uint8_t const SENSOR_PMS5003_SET = 04;
+static uint8_t const SENSOR_PMS5003_RESET = 25;
 
 #define DEFAULT_SENSORS { \
 	[0] = std::nullopt, \
