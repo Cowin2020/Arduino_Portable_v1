@@ -112,9 +112,9 @@ namespace Sensor {
 		[PMS5003] = {
 			"PMS5003",
 			{
-				{"PM_10", "PM 1.0", ""},
-				{"PM_25", "PM 2.5", ""},
-				{"PM_100", "PM 10", ""}
+				{"PMS5003_PM1.0", "PM 1.0", "\u00b5g/m\u00b3"},
+				{"PMS5003_PM2.5", "PM 2.5", "\u00b5g/m\u00b3"},
+				{"PMS5003_PM10.0", "PM 10", "\u00b5g/m\u00b3"}
 			}
 		}
 	};
@@ -359,9 +359,9 @@ void Data::display(void) const {
 	#endif
 	#if defined(ENABLE_SENSOR_PMS5003)
 		if (Sensor::parameters[Sensor::PMS5003]) {
-			Monitor.println(PMS5003_PM10, 1);
-			Monitor.println(PMS5003_PM25, 1);
-			Monitor.println(PMS5003_PM100, 1);
+			Monitor.println(PMS5003_PM10, 0);
+			Monitor.println(PMS5003_PM25, 0);
+			Monitor.println(PMS5003_PM100, 0);
 		}
 	#endif
 }
