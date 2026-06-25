@@ -316,8 +316,8 @@ void Data::display(void) const {
 			Monitor.println("C");
 			Monitor.print(BME280_humidity, 1);
 			Monitor.println("%");
-			Monitor.print(BME280_pressure, 0);
-			Monitor.println("Pa");
+			Monitor.print(BME280_pressure / 100, 0);
+			Monitor.println("hPa");
 		}
 	#endif
 }
