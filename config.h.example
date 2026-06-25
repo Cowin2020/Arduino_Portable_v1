@@ -1,11 +1,11 @@
 #ifndef INCLUDE_CONFIG_H
 #define INCLUDE_CONFIG_H
 
-//	#define ENABLE_SENSOR_SHT40
+#define ENABLE_SENSOR_SHT40
 
-//	#define ENABLE_SENSOR_BME280
+#define ENABLE_SENSOR_BME280
 //	#define SENSOR_BME280_I2C
-//	#define SENSOR_BME280_VSPI
+#define SENSOR_BME280_VSPI
 
 #define ENABLE_SENSOR_PMS5003
 static uint8_t const SENSOR_PMS5003_RX = 19;
@@ -17,7 +17,7 @@ static uint8_t const SENSOR_PMS5003_RESET = 25;
 	[0] = std::nullopt, \
 	[SHT40] = std::nullopt, \
 	[BME280] = std::nullopt, \
-	[PMS5003] = 0 \
+	[PMS5003] = std::nullopt \
 }
 
 static String campaign_name = "123";
