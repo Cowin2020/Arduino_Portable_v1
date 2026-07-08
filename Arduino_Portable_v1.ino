@@ -1,5 +1,5 @@
 #include <climits>
-#include <stdlib.h>
+#include <cstdlib>
 #include <optional>
 #include <vector>
 #include <deque>
@@ -7,6 +7,7 @@
 #include <thread>
 #include <mutex>
 #include <condition_variable>
+#include <cstdio>
 
 #include <esp_pthread.h>
 #include <WiFi.h>
@@ -216,6 +217,26 @@ namespace Clock {
 		}
 	}
 
+	static String make_timezone_string(void) {
+		char buffer[10];
+		*buffer = 0;
+		std::div_t const d = std::div(timezone, 60);
+		signed char const hours = d.quot;
+		unsigned char const minutes = std::abs(d.rem);
+		std::snprintf(buffer, sizeof buffer, "%+03d:%02d", hours, minutes);
+		return String(buffer);
+	}
+
+	static String const *timezone_string(void) {
+		static signed int memo_timezone = timezone;
+		static String memo_string = make_timezone_string();
+		if (timezone != memo_timezone) {
+			memo_timezone = timezone;
+			memo_string = make_timezone_string();
+		}
+		return &memo_string;
+	}
+
 	static bool available(void) {
 		return external_available || internal_available;
 	}
@@ -243,7 +264,7 @@ namespace Clock {
 
 	static String show_time(DateTime const *const datetime) {
 		if (datetime->isValid())
-			return datetime->timestamp();
+			return datetime->timestamp() + *timezone_string();
 		else
 			return String("?");
 	}
@@ -281,8 +302,8 @@ public:
 	static void setup(void);
 
 	Data(void);
-	DateTime get_device_time(void) const;
-	String show_time(void) const;
+	DateTime const *get_time(void) const;
+	DateTime const *get_device_time(void) const;
 	String to_CSV(void) const;
 	void display(void) const;
 	void measure(void);
@@ -313,16 +334,16 @@ Data::Data(void) {
 	time = Clock::round_up_time(&device_time);
 }
 
-DateTime Data::get_device_time(void) const {
-	return device_time;
+inline DateTime const *Data::get_time(void) const {
+	return &time;
 }
 
-String Data::show_time(void) const {
-	return Clock::show_time(&time);
+DateTime const *Data::get_device_time(void) const {
+	return &device_time;
 }
 
 String Data::to_CSV(void) const {
-	String s = show_time() + ',' + Clock::show_time(&device_time) + ',' + Clock::synchronized;
+	String s = Clock::show_time(&time) + ',' + Clock::show_time(&device_time) + ',' + Clock::synchronized;
 	#if defined(ENABLE_SENSOR_SHT40)
 		if (Sensor::parameters[Sensor::SHT40])
 			s = s + ',' + SHT40_temperature + ',' + SHT40_humidity;
@@ -591,6 +612,7 @@ namespace SD_card {
 		file.println(upload_URL);
 		file.println(upload_username);
 		file.println(upload_password);
+		file.println(timezone);
 		file.println(calibration_slope);
 		file.println(calibration_intercept);
 		file.close();
@@ -628,10 +650,10 @@ namespace SD_card {
 		s = file.readStringUntil('\n');
 		s.trim();
 		u = strtoul(s.c_str(), &e, 10);
-
-		/* AP mode */
 		if (!*e && u >= measure_interval_lowerbound && u <= measure_interval_upperbound)
 			measure_interval = u * 1000;
+
+		/* AP mode */
 		s = file.readStringUntil('\n');
 		s.trim();
 		u = strtoul(s.c_str(), &e, 10);
@@ -669,6 +691,13 @@ namespace SD_card {
 		upload_password = file.readStringUntil('\n');
 		upload_password.trim();
 
+		/* Time zone */
+		s = file.readStringUntil('\n');
+		s.trim();
+		u = strtoul(s.c_str(), &e, 10);
+		if (!*e && u >= -24 * 60 && u <= 24 * 60)
+			timezone = u;
+
 		/* Calibration slope */
 		s = file.readStringUntil('\n');
 		s.trim();
@@ -676,7 +705,7 @@ namespace SD_card {
 		if (!*e && f >= calibration_slop_lowerbound && f <= calibration_slop_upperbound)
 			calibration_slope = f;
 
-		/* Temperature intercept */
+		/* Calibration intercept */
 		s = file.readStringUntil('\n');
 		s.trim();
 		f = strtof(s.c_str(), &e);
@@ -729,7 +758,7 @@ static size_t const records_max_size = 60;
 static std::deque<struct Data> data_records;
 static std::deque<struct GPS>  gps_records;
 
-static DateTime measure(void) {
+static Data measure(void) {
 	Data data;
 	data.measure();
 
@@ -759,7 +788,7 @@ static DateTime measure(void) {
 	}
 
 	redraw_display(true);
-	return data.get_device_time();
+	return data;
 }
 
 static void wait_to_measure(DateTime const now) {
@@ -773,7 +802,8 @@ static void measure_thread(void) {
 	wait_to_measure(Clock::get_time());
 	for (;;)
 		try {
-			wait_to_measure(measure());
+			Data const data = measure();
+			wait_to_measure(*data.get_device_time());
 		}
 		catch (...) {
 			Serial.println("ERROR: exception in measurement");
@@ -2511,8 +2541,8 @@ static void redraw_display(bool const start_over) {
 	if (section == 0 && data_records.size()) {
 		Data const *const data = &data_records.back();
 		char year[6], date[7], time[6];
-		String fulltime = data->show_time();
-		if (fulltime.length() == 19) {
+		String fulltime = Clock::show_time(data->get_time());
+		if (fulltime.length() == 25) {
 			memcpy(year, fulltime.c_str(), 5);
 			year[5] = 0;
 			memcpy(date, fulltime.c_str() + 5, 5);
