@@ -3,19 +3,23 @@
 
 #define ENABLE_SENSOR_SHT40
 
-#define ENABLE_SENSOR_BME280
-//	#define SENSOR_BME280_I2C
-#define SENSOR_BME280_VSPI
+//	#define ENABLE_SENSOR_BME280
+#if defined(ENABLE_SENSOR_BME280)
+	//	#define SENSOR_BME280_I2C
+	//	#define SENSOR_BME280_VSPI
+#endif
 
-#define ENABLE_SENSOR_PMS5003
-static uint8_t const SENSOR_PMS5003_RX = 19;
-static uint8_t const SENSOR_PMS5003_TX = 23;
-static uint8_t const SENSOR_PMS5003_SET = 04;
-static uint8_t const SENSOR_PMS5003_RESET = 25;
+//	#define ENABLE_SENSOR_PMS5003
+#if defined(ENABLE_SENSOR_PMS5003)
+	static uint8_t const SENSOR_PMS5003_RX = 19;
+	static uint8_t const SENSOR_PMS5003_TX = 23;
+	static uint8_t const SENSOR_PMS5003_SET = 04;
+	static uint8_t const SENSOR_PMS5003_RESET = 25;
+#endif
 
 #define DEFAULT_SENSORS { \
 	[0] = std::nullopt, \
-	[SHT40] = std::nullopt, \
+	[SHT40] = 0, \
 	[BME280] = std::nullopt, \
 	[PMS5003] = std::nullopt \
 }
