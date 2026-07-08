@@ -327,7 +327,7 @@ String Data::to_CSV(void) const {
 		if (Sensor::parameters[Sensor::SHT40])
 			s = s + ',' + SHT40_temperature + ',' + SHT40_humidity;
 	#endif
-	#if defined(ENABLE_SENSOR_SHT40)
+	#if defined(ENABLE_SENSOR_BME280)
 		if (Sensor::parameters[Sensor::BME280])
 			s = s + ',' + BME280_temperature + ',' + BME280_humidity + ',' + BME280_pressure;
 	#endif
