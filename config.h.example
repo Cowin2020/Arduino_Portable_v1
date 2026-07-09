@@ -37,12 +37,12 @@ static String upload_username = "upload username";
 static String upload_password = "upload password";
 static unsigned int measure_interval = 60000;
 static bool use_AP_mode = true;
+static signed int timezone = 8 * 60; /* minutes */
 
 /* calibrated = reading * slope + intercept */
 static float calibration_slope = 1.0;
 static float calibration_intercept = 0.0;
 
-static signed int const timezone = 8 * 60; /* minutes */
 static unsigned int const display_refresh_interval = 5; /* seconds */
 static unsigned int const start_wait_time = 6000; /* milliseconds */
 static unsigned int const reboot_wait_time = 6000; /* milliseconds */
