@@ -7,13 +7,14 @@ Board
 
 Libraries:
 	RTClib (2.1.4)
-	Adafruit BusIO (1.17.4)
+		Adafruit BusIO (1.17.4)
 	Adafruit SSD1306 (2.5.16)
 		Adafruit GFX Library (1.12.4)
-	Adafruit BME280 (2.3.0) optional
 	Adafruit SHT4x Library (1.0.5) optional
 		Adafruit SH11x Library (2.1.14)
 		Adafruit Unified Sensor (1.1.15)
+	Adafruit BME280 Library (2.3.0) optional
+	PMS Library (1.1.0) optional
 	PsychicHttp (2.1.1)
 		UrlEncode (1.0.1)
 		ArduinoJson (7.4.2)
