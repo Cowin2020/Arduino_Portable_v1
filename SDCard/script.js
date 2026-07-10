@@ -89,7 +89,12 @@ function Dashboard() {
 		]),
 		this.$datetime = $E("div", {"class": "datetime"}, [
 			this.$date = $E("span"),
-			this.$time = $E("span")
+			this.$time = $E("span"),
+			$E("span", null, [
+				$T("("),
+				this.$timezone = $E("span"),
+				$T(")")
+			])
 		]),
 		this.$items = $E("div", {"class": "items"},
 			Application.data_fields
@@ -131,9 +136,12 @@ Dashboard.prototype = {
 			this.$nodata.hidden = true;
 			this.$datetime.hidden = false;
 			this.$items.hidden = false;
-			var date_time = row[0].split("T");
-			this.$date.textContent = date_time[0];
-			this.$time.textContent = date_time[1];
+			//	var date_time = row[0].split("T");
+			//	this.$date.textContent = date_time[0];
+			//	this.$time.textContent = date_time[1];
+			this.$date.textContent = row[0].substring(0, 10);
+			this.$time.textContent = row[0].substring(11, 19);
+			this.$timezone.textContent = row[0].substring(19);
 			this.$item_list.forEach(
 				function ($item, index) {
 					if ($item != null)
@@ -188,7 +196,7 @@ document.body.appendChild(
 var $refresh, $auto_refresh, $auto_report, $upload;
 $refresh = $E("form", {"class": "refresh"}, [
 	$E("label", null, [
-		$auto_refresh = $E("input", {"type": "checkbox", "checked": ""}),
+		$auto_refresh = $E("input", {"type": "checkbox"}),
 		$T("Auto refresh")
 	]),
 	$E("button", {"type": "submit"}, [$T("Refresh now")])

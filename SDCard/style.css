@@ -19,11 +19,17 @@
 	flex-direction: row;
 	flex-wrap: wrap;
 	justify-content: center;
+	align-items: end;
 	column-gap: 1.5ex;
 	margin: 1ex;
 	text-align: center;
 	font-size: 5ex;
 	color: #CFD;
+}
+
+.dashboard .datetime > span:last-child {
+	font-size: 0.85em;
+	color: #9CA;
 }
 
 .dashboard .items {
