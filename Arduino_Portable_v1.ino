@@ -1016,7 +1016,6 @@ namespace WIFI {
 /* Web server */
 
 namespace WEB {
-	static PsychicHttpServer HTTPd;
 	static PsychicHttpsServer HTTPSd;
 
 	static PROGMEM char const tls_key[] =
@@ -1117,21 +1116,22 @@ R"HTML(</head>
 <body>
 <noscript>Javascript is required for this web page.</noscript>
 <script type='text/javascript'>
-	(function(p){document.readyState!=="loading"?p():document.addEventListener("DOMContentLoaded",p)})(function(p){
-		window.Application = {
-			operator: location.pathname === "/operator",
+	(function(p){document.readyState==="complete"?p():document.addEventListener("readystatechange",p)})(function(p){
+		return function () {
+			if (document.readyState !== "complete") return;
+			window.Application = {
+				operator: location.pathname === "/operator",
 )HTML";
 
 	static PROGMEM char const home_html_4[] =
 R"HTML(
-		};
-		if (typeof Uint8Array.prototype.toBase64 !== "function") {
-			/* polyfill for compatible */
-			Uint8Array.prototype.toBase64 = function () {
-				return btoa(Array.from(this).map(function (c) {return String.fromCharCode(c);}).join(""));
+			};
+			if (typeof Uint8Array.prototype.toBase64 !== "function") {
+				/* polyfill for compatible */
+				Uint8Array.prototype.toBase64 = function () {
+					return btoa(Array.from(this).map(function (c) {return String.fromCharCode(c);}).join(""));
+				}
 			}
-		}
-		return function () {
 			import("./script.js").catch(p);
 		};
 	}(function (SD_load_error) {
@@ -1689,29 +1689,29 @@ R"HTML(
 		if (!use_AP_mode)
 			stream.write(reinterpret_cast<uint8_t const *>(home_html_2), sizeof home_html_2 - 1);
 		stream.write(reinterpret_cast<uint8_t const *>(home_html_3), sizeof home_html_3 - 1);
-		stream.print("\t\tcampaign: \"");
+		stream.print("\t\t\tcampaign: \"");
 		stream.print(javascript_escape(campaign_name));
-		stream.print("\",\r\n\t\t\t\torganisation: \"");
+		stream.print("\",\r\n\t\t\t\t\torganisation: \"");
 		stream.print(javascript_escape(organisation_name));
-		stream.print("\",\r\n\t\t\tdevice: \"");
+		stream.print("\",\r\n\t\t\t\tdevice: \"");
 		stream.print(javascript_escape(device_name));
-		stream.print("\",\r\n\t\t\tmeasure_interval: \"");
+		stream.print("\",\r\n\t\t\t\tmeasure_interval: \"");
 		stream.print(measure_interval);
-		stream.print("\",\r\n\t\t\tdata_file: \"");
+		stream.print("\",\r\n\t\t\t\tdata_file: \"");
 		stream.print(javascript_escape(SD_card::data_filename));
-		stream.print("\",\r\n\t\t\tgps_file: \"");
+		stream.print("\",\r\n\t\t\t\tgps_file: \"");
 		stream.print(javascript_escape(SD_card::gps_filename));
-		stream.print("\",\r\n\t\t\tmonitor_URL: \"");
+		stream.print("\",\r\n\t\t\t\tmonitor_URL: \"");
 		stream.print(javascript_escape(monitor_URL));
-		stream.print("\",\r\n\t\t\tupload_URL: \"");
+		stream.print("\",\r\n\t\t\t\tupload_URL: \"");
 		stream.print(javascript_escape(upload_URL));
-		stream.print("\",\r\n\t\t\tupload_username: \"");
+		stream.print("\",\r\n\t\t\t\tupload_username: \"");
 		stream.print(javascript_escape(upload_username));
-		stream.print("\",\r\n\t\t\tupload_password: \"");
+		stream.print("\",\r\n\t\t\t\tupload_password: \"");
 		stream.print(javascript_escape(upload_password));
-		stream.print("\",\r\n\t\t\tdata_fields: ");
+		stream.print("\",\r\n\t\t\t\tdata_fields: ");
 		stream_print_fields(&stream, &Data::fields);
-		stream.print(",\r\n\t\t\tgps_fields: ");
+		stream.print(",\r\n\t\t\t\tgps_fields: ");
 		stream_print_fields(&stream, &GPS::fields);
 		stream.print("\r\n");
 		stream.write(reinterpret_cast<uint8_t const *>(home_html_4), sizeof home_html_4 - 1);
@@ -2479,44 +2479,22 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 	static void setup(void) {
 		set_pthread_stack_size(16384);
 
-		HTTPd .on("/",                HTTP_GET,  home_handle);
 		HTTPSd.on("/",                HTTP_GET,  home_handle);
-		HTTPd .on("/operator",        HTTP_GET,  home_handle);
 		HTTPSd.on("/operator",        HTTP_GET,  home_handle);
-		HTTPd .on("/favicon.ico",     HTTP_GET,  icon_handle);
 		HTTPSd.on("/favicon.ico",     HTTP_GET,  icon_handle);
-		HTTPd .on("/data/recent.csv", HTTP_GET,  data_recent_handle);
 		HTTPSd.on("/data/recent.csv", HTTP_GET,  data_recent_handle);
-		HTTPd .on("/data/latest.csv", HTTP_GET,  data_latest_handle);
 		HTTPSd.on("/data/latest.csv", HTTP_GET,  data_latest_handle);
-		HTTPd .on("/gps/recent.csv",  HTTP_GET,  gps_recent_handle);
 		HTTPSd.on("/gps/recent.csv",  HTTP_GET,  gps_recent_handle);
-		HTTPd .on("/gps/latest.csv",  HTTP_GET,  gps_latest_handle);
 		HTTPSd.on("/gps/latest.csv",  HTTP_GET,  gps_latest_handle);
-		HTTPd .on("/gps/upload.exe",  HTTP_POST, gps_upload_handle);
 		HTTPSd.on("/gps/upload.exe",  HTTP_POST, gps_upload_handle);
-		HTTPd .on("/setting.html",    HTTP_GET,  setting_handle);
 		HTTPSd.on("/setting.html",    HTTP_GET,  setting_handle);
-		HTTPd .on("/setting.exe",     HTTP_POST, command_handle);
 		HTTPSd.on("/setting.exe",     HTTP_POST, command_handle);
-		if (SD_card::exist) {
-			HTTPd .serveStatic("/", SD, "/", "max-age=604800");
+		if (SD_card::exist)
 			HTTPSd.serveStatic("/", SD, "/", "max-age=604800");
-		}
 		else {
-			HTTPd .on(SD_card::data_filename, HTTP_GET, data_recent_handle);
 			HTTPSd.on(SD_card::data_filename, HTTP_GET, data_recent_handle);
-			HTTPd .on(SD_card::gps_filename,  HTTP_GET, gps_recent_handle);
 			HTTPSd.on(SD_card::gps_filename,  HTTP_GET, gps_recent_handle);
 		}
-
-		while (HTTPd.start() != ESP_OK) {
-			Serial.println("ERROR: failed to start HTTP server");
-			Monitor.println("Failed to start HTTP server");
-			Monitor.display();
-			delay(reinitialize_interval);
-		}
-		Serial.println("HTTP server started");
 
 		HTTPSd.setCertificate(tls_cert, tls_key);
 		while (HTTPSd.start() != ESP_OK) {
