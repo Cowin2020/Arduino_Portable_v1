@@ -1,23 +1,23 @@
 Board
 	Additional Boards Manager URLs:
 		https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_dev_index.json
-	Boards Manager: esp32 (3.1.0)
+	Boards Manager: esp32 (3.3.11)
 	Board: TTGo LoRa32-OLED
 	Board Revision: TTGo LoRa32-OLED (1.6.1)
 
 Libraries:
 	RTClib (2.1.4)
 		Adafruit BusIO (1.17.4)
-	Adafruit SSD1306 (2.5.16)
-		Adafruit GFX Library (1.12.4)
+	Adafruit SSD1306 (2.5.17)
+		Adafruit GFX Library (1.12.6)
 	Adafruit SHT4x Library (1.0.5) optional
 		Adafruit SH11x Library (2.1.14)
 		Adafruit Unified Sensor (1.1.15)
 	Adafruit BME280 Library (2.3.0) optional
 	PMS Library (1.1.0) optional
-	PsychicHttp (2.1.1)
+	PsychicHttp (3.1.2)
 		UrlEncode (1.0.1)
-		ArduinoJson (7.4.2)
+		ArduinoJson (7.4.3)
 
 Modified library:
 	For ESP32 (3.1.X) and PsychicHttp (1.2.1),

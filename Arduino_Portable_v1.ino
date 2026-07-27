@@ -1116,9 +1116,8 @@ R"HTML(</head>
 <body>
 <noscript>Javascript is required for this web page.</noscript>
 <script type='text/javascript'>
-	(function(p){document.readyState==="complete"?p():document.addEventListener("readystatechange",p)})(function(p){
+	(function(p){document.readyState!=="loading"?p():document.addEventListener("DOMContentLoaded",p)})(function(p){
 		return function () {
-			if (document.readyState !== "complete") return;
 			window.Application = {
 				operator: location.pathname === "/operator",
 )HTML";
@@ -2477,7 +2476,7 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 	}
 
 	static void setup(void) {
-		set_pthread_stack_size(16384);
+		set_pthread_stack_size(12288);
 
 		HTTPSd.on("/",                HTTP_GET,  home_handle);
 		HTTPSd.on("/operator",        HTTP_GET,  home_handle);
