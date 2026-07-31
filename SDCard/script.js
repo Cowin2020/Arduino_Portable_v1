@@ -204,7 +204,7 @@ void function () {
 			$E("p", {"class": "timers"}, [
 				$refresh,
 				$E("label", {"class": "report"}, [
-					$auto_report = $E("input", {"type": "checkbox", "checked": ""}),
+					$auto_report = $E("input", {"type": "checkbox"}),
 					$T("Report position")
 				]),
 				$upload = $E("button", {"type": "button"}, [
@@ -579,6 +579,8 @@ RefreshTimer.prototype = {
 
 var refresh_timer = new RefreshTimer();
 $auto_refresh.addEventListener("change", refresh_timer.update.bind(refresh_timer));
+$auto_refresh.checked = true;
+refresh_timer.update();
 load_all();
 
 if (Application.operator) {
