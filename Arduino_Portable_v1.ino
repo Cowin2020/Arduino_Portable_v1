@@ -1136,7 +1136,7 @@ R"HTML(
 	}(function (SD_load_error) {
 		"use strict";
 		console.log("Failed to load script from SD card:", SD_load_error);
-		var GPS_watch = false;
+		var GPS_watch = true;
 		function $T(string) {
 			return document.createTextNode(string);
 		}
@@ -1512,29 +1512,33 @@ R"HTML(
 						timeout: Application.measure_interval / 4,
 						enableHighAccuracy: true
 					};
-					function GPS_request() {
-						var now_plus_half =
-							Date.now()
-								- MILLISECONDS_FROM_1970_TO_2000
-								+ Application.measure_interval / 2;
-						var planned_time =
-							string_from_Date(
-								now_plus_half
-									- now_plus_half % Application.measure_interval
-									+ MILLISECONDS_FROM_1970_TO_2000,
-								"T"
-							);
-						navigator.geolocation.getCurrentPosition(GPS_record.bind(this, planned_time), GPS_error, GPS_options)
+					if (GPS_watch) {
+						function GPS_callback(spacetime) {
+							GPS_record(string_from_Date(spacetime.timestamp), spacetime);
+						}
+						navigator.geolocation.watchPosition(GPS_callback, GPS_error, GPS_options);
 					}
-					function GPS_start() {
-						setInterval(GPS_request, Application.measure_interval);
+					else {
+						function GPS_request() {
+							var now_plus_half =
+								Date.now()
+									- MILLISECONDS_FROM_1970_TO_2000
+									+ Application.measure_interval / 2;
+							var planned_time =
+								string_from_Date(
+									now_plus_half
+										- now_plus_half % Application.measure_interval
+										+ MILLISECONDS_FROM_1970_TO_2000,
+									"T"
+								);
+							navigator.geolocation.getCurrentPosition(GPS_record.bind(this, planned_time), GPS_error, GPS_options)
+						}
+						function GPS_start() {
+							setInterval(GPS_request, Application.measure_interval);
+						}
+						setTimeout(GPS_start, (Date.now() - MILLISECONDS_FROM_1970_TO_2000) % Application.measure_interval);
+						setTimeout(GPS_request, 0);
 					}
-					setTimeout(GPS_start, (Date.now() - MILLISECONDS_FROM_1970_TO_2000) % Application.measure_interval);
-					setTimeout(GPS_request, 0);
-					function GPS_callback(spacetime) {
-						GPS_record(string_from_Date(spacetime.timestamp), spacetime);
-					}
-					if (GPS_watch) navigator.geolocation.watchPosition(GPS_callback, GPS_error, GPS_options);
 				}
 				void function () {
 					var subtle = null;

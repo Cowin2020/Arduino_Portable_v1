@@ -2,8 +2,6 @@ import "./plotly.min.js";
 
 /* Options */
 
-var GPS_watch = false;
-
 /* Constants */
 
 var data_recent = "data/recent.csv";
@@ -45,8 +43,6 @@ function string_from_Date(value, seperator = " ") {
 			+ date.getSeconds().toString().padStart(2, "0")
 	);
 }
-
-var MILLISECONDS_FROM_1970_TO_2000 = 946684800000; /* = Date.UTC(2000, 0, 1, 0, 0, 0, 0) */
 
 function Timer() {
 	this.interval = null;
@@ -618,8 +614,9 @@ if (Application.operator) {
 			fetch(Application.monitor_URL, {method: "POST", body: body})
 				.catch(function () {});
 		}
-
+		var GPS_busy = false;
 		function GPS_record(planned_time, spacetime) {
+			GPS_busy = false;
 			if (spacetime === null || typeof spacetime === "undefined") return;
 			var browser_time = string_from_Date(Date.now(), "T");
 			var position_time = string_from_Date(spacetime.timestamp, "T");
@@ -631,35 +628,32 @@ if (Application.operator) {
 				GPS_report(position_time, coords);
 		}
 		function GPS_error(error) {
+			GPS_busy = false;
 			console.error("GeoLocationError: ", error.message);
 		}
 		var GPS_options = {
-			timeout: Application.measure_interval / 4,
+			timeout: Application.measure_interval / 2,
 			enableHighAccuracy: true
 		};
-		function GPS_request() {
-			var now_plus_half =
-				Date.now()
-					- MILLISECONDS_FROM_1970_TO_2000
-					+ Application.measure_interval / 2;
-			var planned_time =
-				string_from_Date(
-					now_plus_half
-						- now_plus_half % Application.measure_interval
-						+ MILLISECONDS_FROM_1970_TO_2000,
-					"T"
-				);
-			navigator.geolocation.getCurrentPosition(GPS_record.bind(this, planned_time), GPS_error, GPS_options);
-		}
-		function GPS_start() {
-			setInterval(GPS_request, Application.measure_interval);
-		}
-		setTimeout(GPS_start, (Date.now() - MILLISECONDS_FROM_1970_TO_2000) % Application.measure_interval);
-		setTimeout(GPS_request, 0);
-		function GPS_callback(spacetime) {
-			GPS_record(string_from_Date(spacetime.timestamp), spacetime);
-		}
-		if (GPS_watch) navigator.geolocation.watchPosition(GPS_callback, GPS_error, GPS_options);
+		var GPS_worker = new Worker('GPS.js', {type: 'module'});
+		GPS_worker.addEventListener(
+			'message',
+			function message(event) {
+				if (GPS_busy) return;
+				GPS_busy = true;
+				var planned_time = string_from_Date(event.data, "T");
+				function GPS_callback(spacetime) {
+					GPS_record(planned_time, spacetime);
+				}
+				navigator.geolocation.getCurrentPosition(GPS_callback, GPS_error, GPS_options);
+			}
+		);
+		setTimeout(
+			function () {
+				GPS_worker.postMessage(Application.measure_interval);
+			},
+			0
+		);
 	}
 	void function () {
 		var subtle = null;
