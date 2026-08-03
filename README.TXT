@@ -1,7 +1,7 @@
 Board
 	Additional Boards Manager URLs:
 		https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_dev_index.json
-	Boards Manager: esp32 (3.3.11)
+	Boards Manager: esp32 (3.1.3)
 	Board: TTGo LoRa32-OLED
 	Board Revision: TTGo LoRa32-OLED (1.6.1)
 
