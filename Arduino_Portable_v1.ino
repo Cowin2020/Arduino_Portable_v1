@@ -600,7 +600,6 @@ namespace SD_card {
 		}
 		save_sensors(&file);
 		file.println(campaign_name);
-		file.println(organisation_name);
 		file.println(device_name);
 		file.println(measure_interval / 1000);
 		file.println(int(use_AP_mode));
@@ -637,10 +636,6 @@ namespace SD_card {
 		/* Campaign name */
 		campaign_name = file.readStringUntil('\n');
 		campaign_name.trim();
-
-		/* Organisation name */
-		organisation_name = file.readStringUntil('\n');
-		organisation_name.trim();
 
 		/* Device name */
 		device_name = file.readStringUntil('\n');
@@ -1176,12 +1171,10 @@ R"HTML(
 			$p = $E("p");
 			c_($p, $T("Campaign: "));
 			c_($p, $T(Application.campaign));
-			c_($p, $T(" | Organisation: "));
-			c_($p, $T(Application.organisation));
 			c_($p, $T(" | Device: "));
 			c_($p, $T(Application.device));
 			c_(document.body, $p);
-		}
+		}();
 		void function () {
 			var $p, $a;
 			function style_$a() {
@@ -1696,8 +1689,6 @@ R"HTML(
 		stream.write(reinterpret_cast<uint8_t const *>(home_html_3), sizeof home_html_3 - 1);
 		stream.print("\t\t\tcampaign: \"");
 		stream.print(javascript_escape(campaign_name));
-		stream.print("\",\r\n\t\t\t\t\torganisation: \"");
-		stream.print(javascript_escape(organisation_name));
 		stream.print("\",\r\n\t\t\t\tdevice: \"");
 		stream.print(javascript_escape(device_name));
 		stream.print("\",\r\n\t\t\t\tmeasure_interval: \"");
@@ -2056,19 +2047,6 @@ R"HTML(
 		);
 		setting_form_set(&stream);
 
-		setting_form(&stream, "set_organisation");
-		stream.print(
-			"\t<label>\r\n"
-			"\t\tOrganisation\r\n"
-			"\t\t<input type='text' name='organisation' required='' value='"
-		);
-		stream.print(XML_escape(organisation_name));
-		stream.print(
-			"' />\r\n"
-			"\t</label>\r\n"
-		);
-		setting_form_set(&stream);
-
 		setting_form(&stream, "set_device");
 		stream.print(
 			"\t<label>\r\n"
@@ -2300,13 +2278,6 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 			Serial.print("INFO: command campaign = ");
 			Serial.println(parameter->value());
 			campaign_name = parameter->value();
-			need_save = true;
-		}
-		parameter = request->getParam("organisation");
-		if (parameter != nullptr) {
-			Serial.print("INFO: command organisation = ");
-			Serial.println(parameter->value());
-			organisation_name = parameter->value();
 			need_save = true;
 		}
 		parameter = request->getParam("device");
