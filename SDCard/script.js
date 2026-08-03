@@ -2,6 +2,8 @@ import "./plotly.min.js";
 
 /* Options */
 
+var GPS_busy_limit = 180000; /* milliseconds */
+
 /* Constants */
 
 var data_recent = "data/recent.csv";
@@ -616,9 +618,9 @@ if (Application.operator) {
 			fetch(Application.monitor_URL, {method: "POST", body: body})
 				.catch(function () {});
 		}
-		var GPS_busy = false;
+		var GPS_busy = null;
 		function GPS_record(planned_time, spacetime) {
-			GPS_busy = false;
+			GPS_busy = null;
 			if (spacetime === null || typeof spacetime === "undefined") return;
 			var browser_time = string_from_Date(Date.now(), "T");
 			var position_time = string_from_Date(spacetime.timestamp, "T");
@@ -630,7 +632,7 @@ if (Application.operator) {
 				GPS_report(position_time, coords);
 		}
 		function GPS_error(error) {
-			GPS_busy = false;
+			GPS_busy = null;
 			console.error("GeoLocationError: ", error.message);
 		}
 		var GPS_options = {
@@ -641,8 +643,9 @@ if (Application.operator) {
 		GPS_worker.addEventListener(
 			'message',
 			function message(event) {
-				if (GPS_busy) return;
-				GPS_busy = true;
+				var now = new Date;
+				if (GPS_busy != null && now - GPS_busy < GPS_busy_limit) return;
+				GPS_busy = now;
 				var planned_time = string_from_Date(event.data, "T");
 				function GPS_callback(spacetime) {
 					GPS_record(planned_time, spacetime);
