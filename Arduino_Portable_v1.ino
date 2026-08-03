@@ -1102,7 +1102,8 @@ R"HTML(<link
 	rel='stylesheet'
 	href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'
 	integrity='sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY='
-	crossorigin='' />
+	crossorigin=''
+/>
 <script
 	type='text/javascript'
 	src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
@@ -1686,6 +1687,7 @@ R"HTML(
 
 	static esp_err_t home_handle(PsychicRequest *const request, PsychicResponse *const response) {
 		PsychicStreamResponse stream(response, XHTML_content_type);
+		stream.setCode(200);
 		stream.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
 		stream.beginSend();
 		stream.write(reinterpret_cast<uint8_t const *>(home_html_1), sizeof home_html_1 - 1);
@@ -1764,6 +1766,7 @@ R"HTML(
 
 	static esp_err_t data_recent_handle(PsychicRequest *const request, PsychicResponse *const response) {
 		PsychicStreamResponse stream(response, "text/csv");
+		stream.setCode(200);
 		stream.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
 		stream.beginSend();
 		stream.println(SD_card::data_header);
@@ -1775,6 +1778,7 @@ R"HTML(
 
 	static esp_err_t data_latest_handle(PsychicRequest *const request, PsychicResponse *const response) {
 		PsychicStreamResponse stream(response, "text/csv");
+		stream.setCode(200);
 		stream.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
 		stream.beginSend();
 		stream.println(SD_card::data_header);
@@ -1786,6 +1790,7 @@ R"HTML(
 
 	static esp_err_t gps_recent_handle(PsychicRequest *const request, PsychicResponse *const response) {
 		PsychicStreamResponse stream(response, "text/csv");
+		stream.setCode(200);
 		stream.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
 		stream.beginSend();
 		stream.println(SD_card::gps_header);
@@ -1797,6 +1802,7 @@ R"HTML(
 
 	static esp_err_t gps_latest_handle(PsychicRequest *const request, PsychicResponse *const response) {
 		PsychicStreamResponse stream(response, "text/csv");
+		stream.setCode(200);
 		stream.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
 		stream.beginSend();
 		stream.println(SD_card::gps_header);
@@ -2022,6 +2028,7 @@ R"HTML(
 
 	static esp_err_t setting_handle(PsychicRequest *const request, PsychicResponse *const response) {
 		PsychicStreamResponse stream(response, XHTML_content_type);
+		stream.setCode(200);
 		stream.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
 		stream.beginSend();
 
