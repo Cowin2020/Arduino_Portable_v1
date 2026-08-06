@@ -11,6 +11,7 @@
 
 #include <esp_pthread.h>
 #include <WiFi.h>
+#include <SD.h>
 //	#include <DNSServer.h>
 #include <PsychicHttp.h>
 #include <PsychicHttpServer.h>
@@ -20,7 +21,6 @@
 #include <PsychicStreamResponse.h>
 #include <RTClib.h>
 #include <Adafruit_SSD1306.h>
-#include <SD.h>
 
 #include <Fonts/FreeSans9pt7b.h>
 #define FONT_0 FreeSans9pt7b
