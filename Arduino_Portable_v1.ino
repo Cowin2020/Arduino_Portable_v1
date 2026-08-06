@@ -1132,6 +1132,7 @@ R"HTML(
 	}(function (SD_load_error) {
 		"use strict";
 		console.log("Failed to load script from SD card:", SD_load_error);
+		var upload_unsecure = false;
 		var GPS_watch = true;
 		function $T(string) {
 			return document.createTextNode(string);
@@ -1558,6 +1559,8 @@ R"HTML(
 						);
 					}
 					function upload(site, device, body) {
+						if (subtle == null && !upload_unsecure)
+							return Promise.reject("Web Crypto API is unsupported or forbidden by your web browser.");
 						var params = new URLSearchParams();
 						params.set("site", Application.campaign);
 						params.set("device", Application.device);
@@ -1629,7 +1632,7 @@ R"HTML(
 								},
 								function (e) {
 									console.error(e);
-									alert("Failed to upload data");
+									alert("Failed to upload data: ", e);
 								}
 							);
 						}
