@@ -2120,7 +2120,7 @@ static void redraw_display(bool const start_over) {
 void loop(void) {
 	static unsigned short int count = 0;
 
-	delay(main_loop_delay);
+	delay(1000);
 
 	if (need_save) {
 		SD_card::save_settings();

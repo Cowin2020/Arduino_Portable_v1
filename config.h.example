@@ -28,8 +28,8 @@
 }
 
 static String campaign_name = "123";
-static String organisation_name = "OrganisationName";
 static String device_name = "234";
+static bool use_AP_mode = true;
 static String AP_SSID = "Provide my WiFi SSID";
 static String AP_PASS = "Provide my WiFi password";
 static String STA_SSID = "Use this WiFi SSID";
@@ -39,7 +39,6 @@ static String upload_URL = "http://host2.example.com:80/path/to/upload";
 static String upload_username = "upload username";
 static String upload_password = "upload password";
 static unsigned int measure_interval = 60000;
-static bool use_AP_mode = true;
 static signed int timezone = 8 * 60; /* minutes */
 
 /* calibrated = reading * slope + intercept */
@@ -49,7 +48,6 @@ static float calibration_intercept = 0.0;
 static unsigned int const display_refresh_interval = 5; /* seconds */
 static unsigned int const start_wait_time = 6000; /* milliseconds */
 static unsigned int const reboot_wait_time = 6000; /* milliseconds */
-static unsigned int const main_loop_delay = 1000; /* milliseconds */
 static unsigned int const WiFi_wait_time = 20000; /* milliseconds */
 static unsigned int const WiFi_check_interval = 10000; /* milliseconds */
 static unsigned int const serial_baudrate = 115200; /* milliseconds */
