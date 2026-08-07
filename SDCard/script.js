@@ -1,4 +1,4 @@
-import "./plotly.min.js";
+import("./plotly.min.js").catch(function () {});
 
 /* Options */
 
@@ -300,6 +300,8 @@ function hide_plots() {
 }
 
 function data_plots(rows) {
+	if (!("Plotly" in window && window.Plotly))
+		return;
 	if (!Array.isArray(rows))
 		hide_plots();
 	else {
@@ -320,7 +322,7 @@ function data_plots(rows) {
 			var title = field.title;
 			if (field.unit != null)
 				title = title + " (" + field.unit + ")";
-			Plotly.react(
+			window.Plotly.react(
 				$plot,
 				{
 					data: [{x: time, y: rows.map(function (row) {return row[i];})}],
@@ -398,7 +400,7 @@ var GPS_index_latitude = Application.gps_fields.findIndex(function (field) {retu
 var GPS_index_longitude = Application.gps_fields.findIndex(function (field) {return field.name === "longitude";});
 var GPS_index_altitude = Application.gps_fields.findIndex(function (field) {return field.name === "altitude";});
 
-if ("L" in window) {
+if ("L" in window && window.L) {
 	/* initialize leaflet */
 	$GPS.plot.hidden = false;
 	$GPS.map =
@@ -410,18 +412,17 @@ if ("L" in window) {
 			}
 		);
 	$GPS.map.addLayer(
-		new L.TileLayer(
+		new window.L.TileLayer(
 			"https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
 			{
 				attribution: "Map data &#xA9; <a href='https://www.openstreetmap.org/about/'>OpenStreetMap</a>"
 			}
 		)
 	);
-	$GPS.plot.hidden = true;
 }
 
 function GPS_plot() {
-	if ("L" in window) {
+	if ("L" in window && window.L) {
 		/* use leaflet */
 		$GPS.plot.hidden = false;
 		if ("polyline" in $GPS) {
@@ -441,10 +442,10 @@ function GPS_plot() {
 			);
 		$GPS.map.addLayer($GPS.polyline);
 	}
-	else {
+	else if ("Plotly" in window && window.Plotly) {
 		/* use plotly */
 		$GPS.plot.hidden = false;
-		Plotly.react(
+		window.Plotly.react(
 			$GPS.plot,
 			{
 				data: [
@@ -493,6 +494,9 @@ function GPS_plot() {
 				}
 			}
 		);
+	}
+	else {
+		$GPS.plot.hidden = true;
 	}
 }
 
@@ -601,7 +605,7 @@ if (Application.operator) {
 			body.append("longitude",    coords.longitude);
 			body.append("altitude",     coords.altitude);
 			fetch("/gps/upload.exe", {method: "POST", body: body})
-				.catch(function () {});
+			.catch(function () {});
 		}
 		function GPS_report(timestamp, coords) {
 			var body = new URLSearchParams;
@@ -616,7 +620,7 @@ if (Application.operator) {
 				if (dashboard.data[i] != null)
 					body.append(Application.data_fields[i].name, dashboard.data[i]);
 			fetch(Application.monitor_URL, {method: "POST", body: body})
-				.catch(function () {});
+			.catch(function () {});
 		}
 		var GPS_busy = null;
 		function GPS_record(planned_time, spacetime) {
@@ -762,19 +766,22 @@ if (Application.operator) {
 			}
 		);
 	}();
-	void function () {
-		/* set device time */
-		var body = new URLSearchParams();
-		body.append("time", string_from_Date(Date.now(), "T"));
-		fetch(
-			"setting.exe",
-			{
-				method: "POST",
-				body: body,
-				redirect: "manual"
-			}
-		);
-	}();
+	setTimeout(
+		function () {
+			/* set device time */
+			var body = new URLSearchParams();
+			body.append("time", string_from_Date(Date.now(), "T"));
+			fetch(
+				"setting.exe",
+				{
+					method: "POST",
+					body: body,
+					redirect: "manual"
+				}
+			);
+		},
+		3000
+	);
 }
 
 /* ************************************************************************* */

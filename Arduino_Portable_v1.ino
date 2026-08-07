@@ -1143,7 +1143,7 @@ R"HTML(
 		}
 		document.body.textContent = "";
 		void function () {
-			var message = "Failed to load script from SD card: " + SD_load_error;
+			var message = "Failed to load javascript: " + SD_load_error;
 			console.log(message);
 			var $p;
 			$p = $E("p");
@@ -1152,6 +1152,12 @@ R"HTML(
 			$p = $E("p");
 			c_($p, $T("Please wait few seconds and reload this webpage"));
 			c_(document.body, $p);
+			setTimeout(
+				function () {
+					return location.reload();
+				},
+				10000
+			);
 		}();
 	}));
 </script>
@@ -1264,45 +1270,47 @@ R"HTML(
 		return response->send(200, "image/png", icon_data);
 	}
 
-	INCTXT(IncludeScript, __FILE__ "/../SDCard/script.js");
+	INCTXT(IncludeScript, EMBED_FILE_PATH "script.js");
 
 	static esp_err_t script_handle(PsychicRequest *const request, PsychicResponse *const response) {
 		return response->send(200, "text/javascript", gIncludeScriptData);
 	}
 
-	INCTXT(IncludeWorker, __FILE__ "/../SDCard/GPS.js");
+	INCTXT(IncludeWorker, EMBED_FILE_PATH "GPS.js");
 
 	static esp_err_t worker_handle(PsychicRequest *const request, PsychicResponse *const response) {
 		return response->send(200, "text/javascript", gIncludeWorkerData);
 	}
 
-	INCTXT(IncludeStyle, __FILE__ "/../SDCard/style.css");
+	INCTXT(IncludeStyle, EMBED_FILE_PATH "style.css");
 
 	static esp_err_t style_handle(PsychicRequest *const request, PsychicResponse *const response) {
 		return response->send(200, "text/css", gIncludeStyleData);
 	}
 
-	INCBIN(IncludePlotly, __FILE__ "/../SDCard/plotly.min.js.gz");
+	#if defined(EMBED_PLOTLY)
+		INCBIN(IncludePlotly, EMBED_FILE_PATH "plotly.min.js.gz");
 
-	static esp_err_t plotly_handle(PsychicRequest *const request, PsychicResponse *const response) {
-		return response->send(
-			200,
-			"text/javascript",
-			reinterpret_cast<uint8_t const *>(gIncludePlotlyData),
-			gIncludePlotlySize
-		);
-	}
+		static esp_err_t plotly_handle(PsychicRequest *const request, PsychicResponse *const response) {
+			return response->send(
+				200,
+				"text/javascript",
+				reinterpret_cast<uint8_t const *>(gIncludePlotlyData),
+				gIncludePlotlySize
+			);
+		}
 
-	INCBIN(IncludeMap, __FILE__ "/../SDCard/HK.jpg");
+		INCBIN(IncludeMap, EMBED_FILE_PATH "HK.jpg");
 
-	static esp_err_t map_handle(PsychicRequest *const request, PsychicResponse *const response) {
-		return response->send(
-			200,
-			"image/jpeg",
-			reinterpret_cast<uint8_t const *>(gIncludeMapData),
-			gIncludeMapSize
-		);
-	}
+		static esp_err_t map_handle(PsychicRequest *const request, PsychicResponse *const response) {
+			return response->send(
+				200,
+				"image/jpeg",
+				reinterpret_cast<uint8_t const *>(gIncludeMapData),
+				gIncludeMapSize
+			);
+		}
+	#endif
 
 	static esp_err_t data_recent_handle(PsychicRequest *const request, PsychicResponse *const response) {
 		PsychicStreamResponse stream(response, "text/csv");
@@ -2015,8 +2023,10 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 		HTTPSd.on("/script.js",       HTTP_GET,  script_handle);
 		HTTPSd.on("/GPS.js",          HTTP_GET,  worker_handle);
 		HTTPSd.on("/style.css",       HTTP_GET,  style_handle);
+		#if defined(EMBED_PLOTLY)
 		HTTPSd.on("/plotly.min.js",   HTTP_GET,  plotly_handle);
 		HTTPSd.on("/HK.jpg",          HTTP_GET,  map_handle);
+		#endif
 		HTTPSd.on("/data/recent.csv", HTTP_GET,  data_recent_handle);
 		HTTPSd.on("/data/latest.csv", HTTP_GET,  data_latest_handle);
 		HTTPSd.on("/gps/recent.csv",  HTTP_GET,  gps_recent_handle);
