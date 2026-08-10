@@ -38,7 +38,7 @@ static String monitor_URL = "http://host1.example.com:80/path/to/monitor";
 static String upload_URL = "http://host2.example.com:80/path/to/upload";
 static String upload_username = "upload username";
 static String upload_password = "upload password";
-static unsigned int measure_interval = 60000;
+static unsigned int measure_interval = 60000; /* milliseconds */
 static signed int timezone = 8 * 60; /* minutes */
 
 /* calibrated = reading * slope + intercept */
@@ -54,8 +54,8 @@ static unsigned int const serial_baudrate = 115200; /* milliseconds */
 static unsigned int const reinitialize_interval = 15000; /* milliseconds */
 static unsigned char const reset_pin = 34;
 
-static unsigned int const measure_interval_lowerbound = 15;
-static unsigned int const measure_interval_upperbound = 900;
+static unsigned int const measure_interval_lowerbound = 15; /* seconds */
+static unsigned int const measure_interval_upperbound = 900; /* seconds */
 static float const calibration_slop_lowerbound = 0.75;
 static float const calibration_slop_upperbound = 1.25;
 static float const calibration_intercept_lowerbound = -10.0;

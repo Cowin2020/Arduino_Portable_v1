@@ -1365,8 +1365,8 @@ R"HTML(
 		PsychicWebParameter *parameter;
 		parameter = request->getParam("time");
 		if (parameter != nullptr) {
-			String const &value = parameter->value();
-			DateTime const datetime(value.c_str());
+			char const *const value = parameter->valueCStr();
+			DateTime const datetime(value);
 			if (datetime.isValid())
 				gps.time = datetime;
 			else {
@@ -1376,8 +1376,8 @@ R"HTML(
 		}
 		parameter = request->getParam("browser_time");
 		if (parameter != nullptr) {
-			String const &value = parameter->value();
-			DateTime const datetime(value.c_str());
+			char const *const value = parameter->valueCStr();
+			DateTime const datetime(value);
 			if (datetime.isValid())
 				gps.browser_time = datetime;
 			else {
@@ -1387,8 +1387,8 @@ R"HTML(
 		}
 		parameter = request->getParam("position_time");
 		if (parameter != nullptr) {
-			String const &value = parameter->value();
-			DateTime const datetime(value.c_str());
+			char const *const value = parameter->valueCStr();
+			DateTime const datetime(value);
 			if (datetime.isValid())
 				gps.position_time = datetime;
 			else {
@@ -1398,10 +1398,10 @@ R"HTML(
 		}
 		parameter = request->getParam("latitude");
 		if (parameter != nullptr) {
-			String const &value = parameter->value();
+			char const *const value = parameter->valueCStr();
 			if (value != "null") {
 				char *end;
-				double const x = strtod(value.c_str(), &end);
+				double const x = strtod(value, &end);
 				if (!*end)
 					gps.latitude = x;
 				else {
@@ -1412,10 +1412,10 @@ R"HTML(
 		}
 		parameter = request->getParam("longitude");
 		if (parameter != nullptr) {
-			String const &value = parameter->value();
+			char const *const value = parameter->valueCStr();
 			if (value != "null") {
 				char *end;
-				double const x = strtod(value.c_str(), &end);
+				double const x = strtod(value, &end);
 				if (!*end)
 					gps.longitude = x;
 				else {
@@ -1426,10 +1426,10 @@ R"HTML(
 		}
 		parameter = request->getParam("altitude");
 		if (parameter != nullptr) {
-			String const &value = parameter->value();
+			char const *const value = parameter->valueCStr();
 			if (value != "null") {
 				char *end;
-				double const x = strtod(value.c_str(), &end);
+				double const x = strtod(value, &end);
 				if (!*end)
 					gps.altitude = x;
 				else {
@@ -1817,12 +1817,12 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 )HTML";
 
 	static esp_err_t command_handle(PsychicRequest *const request, PsychicResponse *const response) {
-		PsychicWebParameter *parameter;
+		PsychicWebParameter const *parameter;
 		parameter = request->getParam("time");
 		if (parameter != nullptr) {
 			Serial.print("INFO: command time = ");
 			Serial.println(parameter->value());
-			DateTime const datetime(parameter->value().c_str());
+			DateTime const datetime(parameter->valueCStr());
 			if (datetime.isValid())
 				Clock::set_time(&datetime);
 			else {
@@ -1846,7 +1846,7 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 		}
 		parameter = request->getParam("interval");
 		if (parameter != nullptr) {
-			char const *const value = parameter->value().c_str();
+			char const *const value = parameter->valueCStr();
 			Serial.print("INFO: command interval = ");
 			Serial.println(value);
 			char *end;
@@ -1857,7 +1857,7 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 			}
 			else {
 				Serial.print("WARN: incorrect command interval = \"");
-				Serial.print(value);
+				Serial.print(parameter->value());
 				Serial.println('"');
 			}
 		}
@@ -1938,7 +1938,7 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 		}
 		parameter = request->getParam("calibration_slope");
 		if (parameter != nullptr) {
-			char const *const value = parameter->value().c_str();
+			char const *const value = parameter->valueCStr();
 			Serial.print("INFO: command calibration slope = ");
 			Serial.println(value);
 			char *end;
@@ -1955,7 +1955,7 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 		}
 		parameter = request->getParam("calibration_intercept");
 		if (parameter != nullptr) {
-			char const *const value = parameter->value().c_str();
+			char const *const value = parameter->valueCStr();
 			Serial.print("INFO: command calibration intercept = ");
 			Serial.println(value);
 			char *end;
