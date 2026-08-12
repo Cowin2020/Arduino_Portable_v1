@@ -1,0 +1,52 @@
+Data format
+-----------
+
+This document describes the protocol/API to upload data to data server.  The
+upload procedure is "function upload(site, device, body)" in file "script.js"
+in directory "SDCard".  Change the function if customization is needed.
+
+The data is upload using HTTP or HTTPS.  The URL can be set on the setting page,
+which can be accessed from the operator page.
+
+The data is be sent using POST method.
+
+The site/campaign number and device number are sent as query string of keys
+"site" and "device" respectively.
+
+The measured data and location data is sent in the body of the HTTP request in
+CSV format that is exactly same as "dava.csv" and "gps.csv".
+
+The first row of the CSV data is the header of name of data fields, and may
+be optionally appended by " (" + unit + ")".
+
+The first field must be the time of the data record in ISO-8601 with time zone.
+
+Once the user click "upload data" on operator page, measured data and location
+data is sent individually in two HTTP/HTTPS requests.  Both sets of the data
+should be merged together in the data server using field "time".
+
+Authorization
+-------------
+
+HTTP authorization is used. Header "AUTHORIZATION" is sent in HTTP/HTTPS
+request in the format similar to "basic" scheme in RFC 7617, but different
+meaning of the "user-id" and "password".
+
+	authorization = "BASIC " + BASE64(user-id + ":" + password)
+
+where "+" represents string concatenation.
+
+The "password" part is straight forward using the "Password" in "Upload host
+server information" part on the setting page (or default value as defined by
+variable "upload_password" in file "config.h").  The "user-id" part is a fixed
+size binary bytes of SHA-256 hash of upload content, and "Username" in "Upload
+host server information" part on the setting page (or default value as defined
+by variable "upload_username" in file "config.h").  The "user-id" is defined
+
+	user-id = SHA256(username + path + body + username)
+
+where "usename" is the value in variable "upload_username", "path" is the path
+and query parts of request URL (everything after host and port), and "body" is
+the body of the HTTP request.  The length of the user-id is fixed to 256 bits
+or 32 bytes. Unlike RFC 7617, any byte/character values are possible here,
+including ":", NUL, space, CR, LF.
