@@ -196,6 +196,12 @@ static std::condition_variable wait_measure_condition;
 static bool need_save = false;
 static bool need_reboot = false;
 
+static void set_pthread_stack_size(size_t const stack_size) {
+	static esp_pthread_cfg_t esp_pthread_cfg = esp_pthread_get_default_config();
+	esp_pthread_cfg.stack_size = stack_size;
+	esp_pthread_set_cfg(&esp_pthread_cfg);
+}
+
 /* *************************************************************************** / ************************************ */
 /* Real-time clock */
 
@@ -751,10 +757,10 @@ namespace SD_card {
 /* Measurement */
 
 static size_t const records_max_size = 60;
-static std::deque<struct Data> data_records;
-static std::deque<struct GPS>  gps_records;
+static std::deque<class Data> data_records;
+static std::deque<class GPS>  gps_records;
 
-static Data measure(void) {
+static class Data measure(void) {
 	Data data;
 	data.measure();
 
@@ -1001,10 +1007,10 @@ namespace WIFI {
 				Monitor.display();
 				delay(reinitialize_interval);
 			}
-			/* Spawn WiFi thread */
-			set_pthread_stack_size(4096);
-			std::thread(thread).detach();
 		}
+		/* Spawn WiFi thread */
+		//	set_pthread_stack_size(4096);
+		//	std::thread(thread).detach();
 	}
 }
 
@@ -2148,12 +2154,6 @@ void loop(void) {
 		count = 0;
 		redraw_display(false);
 	}
-}
-
-static void set_pthread_stack_size(size_t const stack_size) {
-	static esp_pthread_cfg_t esp_pthread_cfg = esp_pthread_get_default_config();
-	esp_pthread_cfg.stack_size = stack_size;
-	esp_pthread_set_cfg(&esp_pthread_cfg);
 }
 
 void setup(void) {
