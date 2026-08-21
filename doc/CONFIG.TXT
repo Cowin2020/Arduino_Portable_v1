@@ -1,9 +1,29 @@
 Meaning of variables in "config.h" file:
 	EMBED_FILE_PATH
-		The path of SDCard directory
+		The path of SDCard directory,
+		or undefined for not embed files into the ROM.
 
-		It can be absolute path or relatived to the working path of
-		the working directory of on compilation.
+		An absolute path is most guaranteed to work.
+		Depending on the software settings, relative path from the
+		working directory or sketch directory may work.
+
+	EMBED_PLOTLY
+		If defined, embed "Plotly" and map of Hong Kong into the ROM.
+
+		These files are big and unlikely to fit in default partition of
+		4M ROM chips.
+		Use file "partitions.csv" to assign more usable space.
+
+		For Arduino IDE on MS Windows, edit file "boards.txt" to add an
+		option of custom partition table.
+		The "boards.txt" can be found in directory
+		"AppData\Local\Arduino15\packages\esp32\hardware\esp32\3.1.3"
+		relative to your user home directory, where "3.1.3" is the
+		version of board library installed.
+
+		For Arduino CLI, add command-line options
+			--build-property='build.partitions=partitions'
+			--build-property='upload.maximum_size=4128768'
 
 	ENABLE_SENSOR_SHT40
 		If defined, SHT4x is supported.
