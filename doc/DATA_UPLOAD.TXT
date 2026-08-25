@@ -36,14 +36,14 @@ meaning of the "user-id" and "password".
 
 where "+" represents string concatenation.
 
-The "password" part is straight forward using the "Password" in "Upload host
+The "user-id" part is straight forward using the "Password" in "Upload host
 server information" part on the setting page (or default value as defined by
-variable "upload_password" in file "config.h").  The "user-id" part is a fixed
+variable "upload_password" in file "config.h").  The "password" part is a fixed
 size binary bytes of SHA-256 hash of upload content, and "Username" in "Upload
 host server information" part on the setting page (or default value as defined
-by variable "upload_username" in file "config.h").  The "user-id" is defined
+by variable "upload_username" in file "config.h").  The "password" is defined
 
-	user-id = SHA256(username + path + body + username)
+	password = SHA256(username + path + body + username)
 
 where "usename" is the value in variable "upload_username", "path" is the path
 and query parts of request URL (everything after host and port), and "body" is

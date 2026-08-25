@@ -85,6 +85,10 @@ Meaning of variables in "config.h" file:
 	upload_password
 		Username and password for uploading data to data server
 
+		The username should not contain colon ':' character following
+		description in RFC7617, which defines the 'basic' HTTP
+		authentication scheme.
+
 	measure_interval
 		The time period in milliseconds to measure data
 
