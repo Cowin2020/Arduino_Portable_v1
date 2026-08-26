@@ -1199,10 +1199,14 @@ R"HTML(
 		stream->print(']');
 	}
 
+	static void header_allow_CSP(PsychicStreamResponse *const stream) {
+		stream->addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
+	}
+
 	static esp_err_t home_handle(PsychicRequest *const request, PsychicResponse *const response) {
 		PsychicStreamResponse stream(response, XHTML_content_type);
 		stream.setCode(200);
-		stream.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
+		header_allow_CSP(&stream);
 		stream.beginSend();
 		stream.write(reinterpret_cast<uint8_t const *>(home_html_1), sizeof home_html_1 - 1);
 		if (!use_AP_mode)
@@ -1318,10 +1322,16 @@ R"HTML(
 		}
 	#endif
 
+	static void header_no_cache(PsychicStreamResponse *stream) {
+		stream->addHeader("AGE", "0");
+		stream->addHeader("CACHE-CONTROL", "no-cache");
+	}
+
 	static esp_err_t data_recent_handle(PsychicRequest *const request, PsychicResponse *const response) {
 		PsychicStreamResponse stream(response, "text/csv");
 		stream.setCode(200);
-		stream.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
+		header_allow_CSP(&stream);
+		header_no_cache(&stream);
 		stream.beginSend();
 		stream.println(SD_card::data_header);
 		DATA_LOCK(data_lock);
@@ -1333,7 +1343,8 @@ R"HTML(
 	static esp_err_t data_latest_handle(PsychicRequest *const request, PsychicResponse *const response) {
 		PsychicStreamResponse stream(response, "text/csv");
 		stream.setCode(200);
-		stream.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
+		header_allow_CSP(&stream);
+		header_no_cache(&stream);
 		stream.beginSend();
 		stream.println(SD_card::data_header);
 		DATA_LOCK(data_lock);
@@ -1345,7 +1356,8 @@ R"HTML(
 	static esp_err_t gps_recent_handle(PsychicRequest *const request, PsychicResponse *const response) {
 		PsychicStreamResponse stream(response, "text/csv");
 		stream.setCode(200);
-		stream.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
+		header_allow_CSP(&stream);
+		header_no_cache(&stream);
 		stream.beginSend();
 		stream.println(SD_card::gps_header);
 		DATA_LOCK(data_lock);
@@ -1357,7 +1369,8 @@ R"HTML(
 	static esp_err_t gps_latest_handle(PsychicRequest *const request, PsychicResponse *const response) {
 		PsychicStreamResponse stream(response, "text/csv");
 		stream.setCode(200);
-		stream.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
+		header_allow_CSP(&stream);
+		header_no_cache(&stream);
 		stream.beginSend();
 		stream.println(SD_card::gps_header);
 		DATA_LOCK(data_lock);
@@ -1583,7 +1596,7 @@ R"HTML(
 	static esp_err_t setting_handle(PsychicRequest *const request, PsychicResponse *const response) {
 		PsychicStreamResponse stream(response, XHTML_content_type);
 		stream.setCode(200);
-		stream.addHeader("CONTENT-SECURITY-POLICY", "connect-src *");
+		header_allow_CSP(&stream);
 		stream.beginSend();
 
 		stream.write(reinterpret_cast<uint8_t const *>(setting_html_1), sizeof setting_html_1 - 1);
@@ -2041,7 +2054,7 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 		HTTPSd.on("/setting.html",    HTTP_GET,  setting_handle);
 		HTTPSd.on("/setting.exe",     HTTP_POST, command_handle);
 		if (SD_card::exist)
-			HTTPSd.serveStatic("/", SD, "/", "max-age=604800");
+			HTTPSd.serveStatic("/", SD, "/", "no-cache, max-age=0");
 		else {
 			HTTPSd.on(SD_card::data_filename, HTTP_GET, data_recent_handle);
 			HTTPSd.on(SD_card::gps_filename,  HTTP_GET, gps_recent_handle);
