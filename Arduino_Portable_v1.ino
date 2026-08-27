@@ -1704,6 +1704,7 @@ R"HTML(
 			"' />\r\n"
 			"\t\t</label>\r\n"
 			"\t</div>\r\n"
+			"\t<p>* The device reboots after Wi-Fi settings changed.</p>\r\n"
 		);
 		setting_form_set(&stream);
 
@@ -1718,7 +1719,7 @@ R"HTML(
 		stream.print(
 			"' />\r\n"
 			"\t</label>\r\n"
-			"<p>* To allow position to be broadcasted to the server</p>\r\n"
+			"\t<p>* To allow position to be broadcasted to the server</p>\r\n"
 		);
 		setting_form_set(&stream);
 
@@ -1904,6 +1905,7 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 			Serial.print("INFO: command APSSID = ");
 			Serial.println(parameter->value());
 			AP_SSID = parameter->value();
+			need_reboot = true;
 			need_save = true;
 		}
 		parameter = request->getParam("APPASS");
@@ -1911,6 +1913,7 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 			Serial.print("INFO: command APPASS = ");
 			Serial.println(parameter->value());
 			AP_PASS = parameter->value();
+			need_reboot = true;
 			need_save = true;
 		}
 		parameter = request->getParam("STASSID");
@@ -1918,6 +1921,7 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 			Serial.print("INFO: command STASSID = ");
 			Serial.println(parameter->value());
 			STA_SSID = parameter->value();
+			need_reboot = true;
 			need_save = true;
 		}
 		parameter = request->getParam("STAPASS");
@@ -1925,6 +1929,7 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 			Serial.print("INFO: command STAPASS = ");
 			Serial.println(parameter->value());
 			STA_PASS = parameter->value();
+			need_reboot = true;
 			need_save = true;
 		}
 		parameter = request->getParam("monitor");
@@ -2023,7 +2028,6 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 			Serial.println("INFO: command reboot");
 			Serial.flush();
 			need_reboot = true;
-			need_save = false;
 		}
 
 		response->setCode(303);
@@ -2063,7 +2067,7 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 		HTTPSd.setCertificate(tls_cert, tls_key);
 		while (HTTPSd.start() != ESP_OK) {
 			Serial.println("ERROR: failed to start HTTPS server");
-			Monitor.println("Failed to start HTTPS server");
+			Monitor.println("Wait WiFi");
 			Monitor.display();
 			delay(reinitialize_interval);
 		}

@@ -51,7 +51,7 @@ static unsigned int const reboot_wait_time = 6000; /* milliseconds */
 static unsigned int const WiFi_wait_time = 20000; /* milliseconds */
 static unsigned int const WiFi_check_interval = 10000; /* milliseconds */
 static unsigned int const serial_baudrate = 115200; /* milliseconds */
-static unsigned int const reinitialize_interval = 15000; /* milliseconds */
+static unsigned int const reinitialize_interval = 10000; /* milliseconds */
 static unsigned char const reset_pin = 34;
 
 static unsigned int const measure_interval_lowerbound = 15; /* seconds */
