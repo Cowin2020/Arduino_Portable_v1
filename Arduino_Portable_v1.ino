@@ -121,6 +121,9 @@ namespace Sensor {
 		}
 	};
 
+	/*
+	Initialize sensors
+	*/
 	void setup(void) {
 		/* Turn off SPI of LoRa */
 		pinMode(LORA_CS, OUTPUT);
@@ -206,9 +209,14 @@ static void set_pthread_stack_size(size_t const stack_size) {
 /* Real-time clock */
 
 namespace Clock {
+	/* clock is synchronized by operator web page */
 	static bool synchronized = false;
+
+	/* internal clock in ESP32 chip */
 	static RTC_Millis internal;
 	static bool internal_available = false;
+
+	/* external clock DS3231 */
 	static RTC_DS3231 external;
 	static bool external_available = false;
 
@@ -224,6 +232,9 @@ namespace Clock {
 		}
 	}
 
+	/*
+	Create string of the time zone part of date time string.
+	*/
 	static String make_timezone_string(void) {
 		char buffer[10];
 		*buffer = 0;
@@ -234,6 +245,9 @@ namespace Clock {
 		return String(buffer);
 	}
 
+	/*
+	Memoized function of the time zone string.
+	*/
 	static String const *timezone_string(void) {
 		static signed int memo_timezone = timezone;
 		static String memo_string = make_timezone_string();
@@ -276,6 +290,9 @@ namespace Clock {
 			return String("?");
 	}
 
+	/*
+	Snap the time-stamp to an interval.
+	*/
 	static DateTime round_up_time(DateTime const *const datetime, unsigned long int const interval = measure_interval) {
 		uint64_t shifted = (uint64_t)datetime->unixtime() * 1000 + (interval >> 1);
 		return DateTime((shifted - shifted % interval) / 1000);
@@ -316,8 +333,12 @@ public:
 	void measure(void);
 };
 
+/* Data fields for enabled sensors */
 std::vector<DataField> Data::fields;
 
+/*
+Set Data::fields depends sensor settings.
+*/
 void Data::update_fields(void) {
 	fields.clear();
 	fields.push_back(DataField{"time", nullptr, nullptr});
@@ -349,6 +370,9 @@ DateTime const *Data::get_device_time(void) const {
 	return &device_time;
 }
 
+/*
+Generate a CSV row
+*/
 String Data::to_CSV(void) const {
 	String s = Clock::show_time(&time) + ',' + Clock::show_time(&device_time) + ',' + Clock::synchronized;
 	#if defined(ENABLE_SENSOR_SHT40)
@@ -366,6 +390,9 @@ String Data::to_CSV(void) const {
 	return s;
 }
 
+/*
+Show data on OLED display
+*/
 void Data::display(void) const {
 	#if defined(ENABLE_SENSOR_SHT40)
 		if (Sensor::parameters[Sensor::SHT40]) {
@@ -399,6 +426,9 @@ void Data::display(void) const {
 	#endif
 }
 
+/*
+Measure data from sensors
+*/
 void Data::measure(void) {
 	DEVICE_LOCK(device_lock);
 	#if defined(ENABLE_SENSOR_SHT40)
@@ -435,6 +465,7 @@ void Data::measure(void) {
 }
 
 /* *************************************************************************** / ************************************ */
+/* GPS */
 
 namespace WEB {
 	static esp_err_t gps_upload_handle(PsychicRequest *, PsychicResponse *);
@@ -489,6 +520,9 @@ namespace SD_card {
 	static String gps_header;
 	static bool exist;
 
+	/*
+	Parser of signed integer for settings
+	*/
 	class Parser {
 	protected:
 		int number;
@@ -756,7 +790,8 @@ namespace SD_card {
 /* *************************************************************************** / ************************************ */
 /* Measurement */
 
-static size_t const records_max_size = 60;
+/* In memory data storage */
+static size_t const records_max_size = 1440;
 static std::deque<class Data> data_records;
 static std::deque<class GPS>  gps_records;
 
@@ -800,6 +835,9 @@ static void wait_to_measure(DateTime const now) {
 	wait_measure_condition.wait_for(wait_lock, std::chrono::duration<unsigned int, std::milli>(t2));
 }
 
+/*
+Run in thread for data measurement
+*/
 static void measure_thread(void) {
 	wait_to_measure(Clock::get_time());
 	for (;;)
@@ -950,6 +988,9 @@ namespace WIFI {
 		return status;
 	}
 
+	/*
+	Run in thread for checking Wi-Fi status
+	*/
 	static void thread(void) {
 		for (;;)
 			try {
@@ -961,6 +1002,9 @@ namespace WIFI {
 			}
 	}
 
+	/*
+	Start up Wi-Fi
+	*/
 	static void setup(void) {
 		WiFi.disconnect();
 		WiFi.onEvent(handle_event);
@@ -1327,6 +1371,9 @@ R"HTML(
 		stream->addHeader("CACHE-CONTROL", "no-cache");
 	}
 
+	/*
+	Response measurement data stored in memory
+	*/
 	static esp_err_t data_recent_handle(PsychicRequest *const request, PsychicResponse *const response) {
 		PsychicStreamResponse stream(response, "text/csv");
 		stream.setCode(200);
@@ -1340,6 +1387,9 @@ R"HTML(
 		return stream.endSend();
 	}
 
+	/*
+	Response latest one data record stored in memory
+	*/
 	static esp_err_t data_latest_handle(PsychicRequest *const request, PsychicResponse *const response) {
 		PsychicStreamResponse stream(response, "text/csv");
 		stream.setCode(200);
@@ -1353,6 +1403,9 @@ R"HTML(
 		return stream.endSend();
 	}
 
+	/*
+	Response location data stored in memory
+	*/
 	static esp_err_t gps_recent_handle(PsychicRequest *const request, PsychicResponse *const response) {
 		PsychicStreamResponse stream(response, "text/csv");
 		stream.setCode(200);
@@ -1366,6 +1419,9 @@ R"HTML(
 		return stream.endSend();
 	}
 
+	/*
+	Response latest one location record stored in memory
+	*/
 	static esp_err_t gps_latest_handle(PsychicRequest *const request, PsychicResponse *const response) {
 		PsychicStreamResponse stream(response, "text/csv");
 		stream.setCode(200);
@@ -1379,6 +1435,9 @@ R"HTML(
 		return stream.endSend();
 	}
 
+	/*
+	Handle GPS data uploaded from operator page
+	*/
 	static esp_err_t gps_upload_handle(PsychicRequest *const request, PsychicResponse *const response) {
 		GPS gps;
 		PsychicWebParameter *parameter;
@@ -1553,6 +1612,9 @@ R"HTML(
 </form>
 )HTML";
 
+	/*
+	Escape string in XML
+	*/
 	static String XML_escape(char const *string) {
 		String result;
 		char c;
@@ -1583,6 +1645,9 @@ R"HTML(
 		return XML_escape(string.c_str());
 	}
 
+	/*
+	Helper of making form in setting page
+	*/
 	static void setting_form(PsychicStreamResponse *const stream, char const *const id) {
 		stream->write(reinterpret_cast<uint8_t const *>(setting_form_1), sizeof setting_form_1 - 1);
 		stream->print(XML_escape(id));
@@ -1593,6 +1658,9 @@ R"HTML(
 		stream->write(reinterpret_cast<uint8_t const *>(setting_form_3), sizeof setting_form_3 - 1);
 	}
 
+	/*
+	Response setting page
+	*/
 	static esp_err_t setting_handle(PsychicRequest *const request, PsychicResponse *const response) {
 		PsychicStreamResponse stream(response, XHTML_content_type);
 		stream.setCode(200);
@@ -1836,6 +1904,9 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 </html>
 )HTML";
 
+	/*
+	Handle request sent from setting page
+	*/
 	static esp_err_t command_handle(PsychicRequest *const request, PsychicResponse *const response) {
 		PsychicWebParameter const *parameter;
 		parameter = request->getParam("time");
@@ -2037,6 +2108,9 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 		return response->send();
 	}
 
+	/*
+	Set up web server
+	*/
 	static void setup(void) {
 		set_pthread_stack_size(12288);
 
@@ -2079,7 +2153,7 @@ R"HTML(<html xmlns='http://www.w3.org/1999/xhtml'>
 /* Main procedures */
 
 static void redraw_display(bool const start_over) {
-	static unsigned short int section = 0;
+	static unsigned short int section = 0; /* which page to show */
 	if (start_over) section = 0;
 	DISPLAY_LOCK(display_lock);
 	Monitor.clearDisplay();

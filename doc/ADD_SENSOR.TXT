@@ -11,7 +11,9 @@ a simple example.  The procedure will be described step by step.
 add identifier for the sensor.
 	enum Identifier {
 		SHT40 = 1,
-		XYZZY = 2,
+		BME280 = 2,
+		PMS5003 = 3,
+		XYZZY = 4,
 		number
 	};
 
@@ -24,6 +26,8 @@ parameter as DEFAULT_SENSORS, such as:
 	#define DEFAULT_SENSORS { \
 		[0] = std::nullopt, \
 		[SHT40] = std::nullopt, \
+		[BME280] = std::nullopt, \
+		[PMS5003] = std::nullopt \
 		[XYZZY] = 12345 \
 	}
 
@@ -40,6 +44,7 @@ statements and defined variables for the libraries of the sensor.
 				{"SHT40_humidity", "Humidity", "%"}
 			}
 		},
+	...skip...
 		[XYZZY] = {
 			"XYZZY",
 			{
@@ -73,6 +78,7 @@ add initialization of the sensor if necessary.
 			float SHT40_temperature;
 			float SHT40_humidity;
 		#endif
+	...skip...
 		#if defined(ENABLE_SENSOR_XYZZY)
 			float XYZZY_value1;
 			float XYZZY_value2;
